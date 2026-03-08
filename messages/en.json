@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "appointments": "Appointments",
+    "profile": "Profile",
+    "login": "Login",
+    "logout": "Logout",
+    "doctors": "Doctors",
+    "saved": "Saved"
+  },
+  "landing": {
+    "hero_title": "Your Health, Connected",
+    "hero_subtitle": "Connect with certified doctors and health professionals from the comfort of your home.",
+    "cta_join": "Join Now",
+    "cta_meet": "Meet Professionals",
+    "feature_1_title": "Expert Doctors",
+    "feature_1_desc": "Access verified specialists across every field of medicine.",
+    "feature_2_title": "Easy Appointments",
+    "feature_2_desc": "Book, reschedule, or cancel appointments in seconds.",
+    "feature_3_title": "Secure & Private",
+    "feature_3_desc": "Your medical data is encrypted and always under your control."
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "email": "Email Address",
+    "password": "Password",
+    "name": "Full Name",
+    "select_role": "I am a...",
+    "role_user": "Patient / User",
+    "role_doctor": "Doctor",
+    "role_professional": "Health Professional",
+    "no_account": "Don't have an account?",
+    "have_account": "Already have an account?"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "feed": "Health Feed",
+    "recommended": "Recommended Doctors",
+    "latest_posts": "Latest Posts"
+  },
+  "appointments": {
+    "title": "My Appointments",
+    "upcoming": "Upcoming",
+    "past": "Past",
+    "book": "Book Appointment"
+  },
+  "profile": {
+    "title": "My Profile",
+    "edit": "Edit Profile",
+    "save": "Save Changes",
+    "name": "Full Name",
+    "email": "Email",
+    "phone": "Phone",
+    "dob": "Date of Birth",
+    "bio": "Bio"
+  },
+  "doctors": {
+    "find": "Find a Doctor",
+    "available_now": "Available Now",
+    "book_appointment": "Book Appointment",
+    "join_now": "Join Now",
+    "view_profile": "View Profile",
+    "per_session": "per session"
+  },
+  "meeting": {
+    "in_call": "In Call",
+    "end_call": "End Call",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "chat": "Chat",
+    "share_screen": "Share Screen"
+  }
+}

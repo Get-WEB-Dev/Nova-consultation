@@ -1,0 +1,8 @@
+{
+  "/login/page": "app/login/page.js",
+  "/admin-login/page": "app/admin-login/page.js",
+  "/api/admin/verify/route": "app/api/admin/verify/route.js",
+  "/doctor-dashboard/patients/page": "app/doctor-dashboard/patients/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/doctors/page": "app/doctors/page.js"
+}

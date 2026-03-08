@@ -1,0 +1,315 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Sora:wght@400;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-outfit: "Outfit", sans-serif;
+  --font-sora: "Sora", sans-serif;
+  /* Nova brand tokens */
+  --nova-navy: #1B3A5C;
+  --nova-green: #2E8B3D;
+  --nova-gold: #E9A825;
+  --nova-navy-light: #eef4fa;
+  --nova-green-light: #edf7ef;
+  --nova-gold-light: #fdf7e8;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-800 font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+}
+
+/* ── Component Classes ──────────────────────────────────────────────────────── */
+
+@layer components {
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white font-semibold px-5 py-2.5 rounded-xl hover:shadow-lg hover:shadow-primary-600/25 active:scale-[0.98] transition-all duration-200 text-sm;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 bg-white text-primary-600 font-semibold px-5 py-2.5 rounded-xl border border-primary-200 hover:bg-primary-50 hover:border-primary-300 active:scale-[0.98] transition-all duration-200 text-sm;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 text-slate-600 font-medium px-4 py-2 rounded-xl hover:bg-slate-100 active:scale-[0.98] transition-all duration-200 text-sm;
+  }
+
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 bg-gradient-to-r from-accent-500 to-accent-400 text-white font-semibold px-5 py-2.5 rounded-xl hover:shadow-lg hover:shadow-accent-500/25 active:scale-[0.98] transition-all duration-200 text-sm;
+  }
+
+  .btn-gold {
+    @apply inline-flex items-center justify-center gap-2 bg-gradient-to-r from-gold-400 to-gold-500 text-white font-semibold px-5 py-2.5 rounded-xl hover:shadow-lg hover:shadow-gold-400/25 active:scale-[0.98] transition-all duration-200 text-sm;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white rounded-2xl shadow-card p-5 transition-all duration-300 hover:shadow-card-hover;
+  }
+
+  .glass {
+    @apply bg-white/80 backdrop-blur-xl border border-white/20;
+  }
+
+  .glass-card {
+    @apply bg-white/60 backdrop-blur-lg rounded-2xl border border-white/30 shadow-card;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full;
+  }
+
+  .badge-navy {
+    @apply badge bg-primary-50 text-primary-600;
+  }
+
+  .badge-green {
+    @apply badge bg-accent-50 text-accent-600;
+  }
+
+  .badge-gold {
+    @apply badge bg-gold-50 text-gold-600;
+  }
+
+  /* Inputs */
+  .input-field {
+    @apply w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-400/40 focus:border-primary-400 transition-all;
+  }
+
+  /* Status pulse dot */
+  .status-pulse {
+    @apply relative;
+  }
+
+  .status-pulse::after {
+    content: "";
+    @apply absolute inset-0 rounded-full animate-ping opacity-40;
+    background: inherit;
+  }
+
+  /* Nova brand gradient backgrounds */
+  .bg-nova-gradient {
+    @apply bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500;
+  }
+
+  .bg-nova-gradient-soft {
+    @apply bg-gradient-to-br from-primary-50 via-white to-accent-50/60;
+  }
+}
+
+/* ── Smooth scrolling ───────────────────────────────────────────────────────── */
+
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ── Animations ─────────────────────────────────────────────────────────────── */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.4s ease both;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease both;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(27, 58, 92, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px rgba(27, 58, 92, 0);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Gradient text utility — Nova brand */
+.text-gradient {
+  background: linear-gradient(135deg, #1B3A5C, #2E8B3D, #1B3A5C);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #E9A825, #d4941d);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Bottom nav safe area */
+.pb-safe-bottom {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Video call grid layout */
+.video-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+@media (min-width: 768px) {
+  .video-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Onboarding overlay */
+.onboarding-overlay {
+  background: rgba(27, 58, 92, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+/* Waiting room pulse */
+@keyframes waitingPulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+.animate-waiting-pulse {
+  animation: waitingPulse 2s ease-in-out infinite;
+}

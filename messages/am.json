@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "home": "መነሻ",
+    "dashboard": "ዳሽቦርድ",
+    "appointments": "ቀጠሮዎች",
+    "profile": "መገለጫ",
+    "login": "ግባ",
+    "logout": "ውጣ",
+    "doctors": "ዶክተሮች",
+    "saved": "የተቀመጡ"
+  },
+  "landing": {
+    "hero_title": "ጤናዎ፣ ተገናኝቷል",
+    "hero_subtitle": "ከቤትዎ ምቾት ጋር ከተረጋገጡ ዶክተሮች እና የጤና ባለሙያዎች ጋር ይገናኙ።",
+    "cta_join": "አሁን ይቀላቀሉ",
+    "cta_meet": "ባለሙያዎችን ይገናኙ",
+    "feature_1_title": "የባለሙያ ዶክተሮች",
+    "feature_1_desc": "በሁሉም የህክምና ዘርፎች የተረጋገጡ ስፔሻሊስቶችን ያግኙ።",
+    "feature_2_title": "ቀላል ቀጠሮዎች",
+    "feature_2_desc": "ቀጠሮ ይዙ፣ ያስተካክሉ ወይም በሰከንዶች ውስጥ ይሰርዙ።",
+    "feature_3_title": "ደህንነቱ የተጠበቀ",
+    "feature_3_desc": "የህክምና ውሂብዎ ተመስጥሮ ሁልጊዜ ቁጥጥር ስር ነው።"
+  },
+  "auth": {
+    "login": "ግባ",
+    "register": "ተመዝገብ",
+    "email": "ኢሜይል አድራሻ",
+    "password": "የይለፍ ቃል",
+    "name": "ሙሉ ስም",
+    "select_role": "እኔ ነኝ...",
+    "role_user": "ታካሚ / ተጠቃሚ",
+    "role_doctor": "ዶክተር",
+    "role_professional": "የጤና ባለሙያ",
+    "no_account": "መለያ የለዎትም?",
+    "have_account": "መለያ አለዎት?"
+  },
+  "dashboard": {
+    "title": "ዳሽቦርድ",
+    "feed": "የጤና ፊድ",
+    "recommended": "የሚመከሩ ዶክተሮች",
+    "latest_posts": "የቅርብ ጊዜ ልጥፎች"
+  },
+  "appointments": {
+    "title": "የእኔ ቀጠሮዎች",
+    "upcoming": "መጪ",
+    "past": "ያለፈ",
+    "book": "ቀጠሮ ይዙ"
+  },
+  "profile": {
+    "title": "የእኔ መገለጫ",
+    "edit": "መገለጫ አርም",
+    "save": "ለውጦችን አስቀምጥ",
+    "name": "ሙሉ ስም",
+    "email": "ኢሜይል",
+    "phone": "ስልክ",
+    "dob": "የትውልድ ቀን",
+    "bio": "ባዮ"
+  },
+  "doctors": {
+    "find": "ዶክተር ፈልግ",
+    "available_now": "አሁን ይገኛሉ",
+    "book_appointment": "ቀጠሮ ይያዙ",
+    "join_now": "አሁን ይቀላቀሉ",
+    "view_profile": "መግለጫ ይመልከቱ",
+    "per_session": "በሴሽን"
+  },
+  "meeting": {
+    "in_call": "በጥሪ ላይ",
+    "end_call": "ጥሪ ጨርስ",
+    "mute": "ድምጽ ዝጋ",
+    "unmute": "ድምጽ ክፈት",
+    "chat": "ወይይት",
+    "share_screen": "ስክሪን አጋራ"
+  }
+}
