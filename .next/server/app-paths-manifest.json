@@ -1,8 +1,12 @@
 {
-  "/login/page": "app/login/page.js",
-  "/admin-login/page": "app/admin-login/page.js",
-  "/api/admin/verify/route": "app/api/admin/verify/route.js",
-  "/doctor-dashboard/patients/page": "app/doctor-dashboard/patients/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/doctors/page": "app/doctors/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/posts/route": "app/api/posts/route.js",
+  "/api/saved-doctors/route": "app/api/saved-doctors/route.js",
+  "/api/doctors/route": "app/api/doctors/route.js",
+  "/doctor-dashboard/page": "app/doctor-dashboard/page.js",
+  "/doctors/page": "app/doctors/page.js",
+  "/doctor-dashboard/consultations/page": "app/doctor-dashboard/consultations/page.js",
+  "/doctor-dashboard/messages/page": "app/doctor-dashboard/messages/page.js",
+  "/doctor-dashboard/feed/page": "app/doctor-dashboard/feed/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }

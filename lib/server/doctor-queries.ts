@@ -45,7 +45,7 @@ export async function fetchDoctorPatients(doctorId: string) {
     // Deduplicate patients
     const seen = new Set<string>();
     const patients: any[] = [];
-    for (const row of data ?? []) {
+    for (const row of (data as any[]) ?? []) {
         if (!seen.has(row.patient_id)) {
             seen.add(row.patient_id);
             patients.push((row as any).users);
@@ -83,7 +83,7 @@ export async function updateConsultationStatus(
 
     const { data, error } = await admin
         .from('consultations')
-        .update(update)
+        .update(update as never)
         .eq('id', consultationId)
         .select()
         .single();
@@ -96,7 +96,7 @@ export async function updateDoctorStatus(doctorId: string, status: string) {
     const admin = createAdminClient();
     const { error } = await admin
         .from('doctor_profiles')
-        .update({ status } as any)
+        .update({ status } as never)
         .eq('id', doctorId);
     if (error) throw error;
 }
@@ -106,7 +106,7 @@ export async function updateDoctorProfile(doctorId: string, updates: Partial<Dat
     const admin = createAdminClient();
     const { error } = await admin
         .from('doctor_profiles')
-        .update(updates as any)
+        .update(updates as never)
         .eq('id', doctorId);
     if (error) throw error;
 }

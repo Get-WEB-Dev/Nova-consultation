@@ -16,22 +16,22 @@ export async function GET(
     if (!post) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({
-      id:              post.id,
-      doctorId:        post.doctor_id,
-      doctorName:      (post as any).users?.name              ?? '',
-      doctorAvatar:    (post as any).users?.avatar_url         ?? '',
+      id: post.id,
+      doctorId: post.doctor_id,
+      doctorName: (post as any).doctor_profiles?.users?.name ?? '',
+      doctorAvatar: (post as any).doctor_profiles?.users?.avatar_url ?? '',
       doctorSpecialty: (post as any).doctor_profiles?.specialty ?? '',
-      date:            post.published_at ?? post.created_at,
-      title:           post.title,
-      content:         post.content,
-      image:           post.cover_image   ?? null,
-      thumbnail:       post.thumbnail     ?? null,
-      video:           post.video_url     ?? null,
-      likes:           post.likes         ?? 0,
-      comments:        post.comment_count ?? 0,
-      tags:            post.tags          ?? [],
-      slug:            post.slug,
-      created_at:      post.created_at,
+      date: post.published_at ?? post.created_at,
+      title: post.title,
+      content: post.content,
+      image: post.cover_image ?? null,
+      thumbnail: post.thumbnail ?? null,
+      video: post.video_url ?? null,
+      likes: post.likes ?? 0,
+      comments: post.comment_count ?? 0,
+      tags: post.tags ?? [],
+      slug: post.slug,
+      created_at: post.created_at,
     });
   } catch (err: any) {
     console.error('[posts/[id] GET]', err.message);

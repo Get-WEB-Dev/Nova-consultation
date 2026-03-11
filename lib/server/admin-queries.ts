@@ -84,7 +84,7 @@ export async function updateUserRole(userId: string, role: string) {
     // Update shared users table
     const { error } = await admin
         .from('users')
-        .update({ role } as any)
+        .update({ role } as never)
         .eq('id', userId);
     if (error) throw error;
 
@@ -96,12 +96,12 @@ export async function updateUserRole(userId: string, role: string) {
     // Ensure role-specific profile exists
     if (role === 'patient') {
         await admin.from('patients').upsert(
-            { user_id: userId } as any,
+            { user_id: userId } as never,
             { onConflict: 'user_id', ignoreDuplicates: true }
         );
     } else if (role === 'admin') {
         await admin.from('admins').upsert(
-            { user_id: userId, permissions: ['all'], is_super_admin: false } as any,
+            { user_id: userId, permissions: ['all'], is_super_admin: false } as never,
             { onConflict: 'user_id', ignoreDuplicates: true }
         );
     }
@@ -125,7 +125,7 @@ export async function toggleDoctorPublished(doctorId: string, isPublished: boole
     const admin = createAdminClient();
     const { error } = await admin
         .from('doctor_profiles')
-        .update({ is_published: isPublished } as any)
+        .update({ is_published: isPublished } as never)
         .eq('id', doctorId);
     if (error) throw error;
 }
@@ -135,7 +135,7 @@ export async function toggleDoctorVerified(doctorId: string, isVerified: boolean
     const admin = createAdminClient();
     const { error } = await admin
         .from('doctor_profiles')
-        .update({ is_verified: isVerified } as any)
+        .update({ is_verified: isVerified } as never)
         .eq('id', doctorId);
     if (error) throw error;
 }

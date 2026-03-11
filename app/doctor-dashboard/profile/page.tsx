@@ -1,296 +1,163 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { getUser, type AuthUser } from "@/lib/supabase/auth";
 import {
-    User, Mail, DollarSign, Stethoscope, Building2, Clock,
-    Globe, Loader2, Save, CheckCircle2, AlertCircle, Camera,
-    Award, Star, BookOpen, MapPin, Phone, Edit3, X,
+    User, Mail, DollarSign, Stethoscope, Building2, Clock, Globe, Loader2, Save,
+    CheckCircle2, AlertCircle, Camera, Award, Star, BookOpen, X, Edit3, TrendingUp,
 } from "lucide-react";
 
-interface DoctorProfile {
-    id: string;
-    specialty: string;
-    status: string;
-    fee: number;
-    patients_served: number;
-    rating: number;
-    review_count: number;
-    consultation_duration_mins: number;
-    hospital: string | null;
-    experience_years: number;
-    languages: string[];
-    gender: string | null;
-    consultation_type: string;
-    slug: string | null;
-    bio?: string;
-}
+interface Profile { id: string; specialty: string; status: string; fee: number; patients_served: number; rating: number; review_count: number; consultation_duration_mins: number; hospital: string | null; experience_years: number; languages: string[]; gender: string | null; consultation_type: string; slug: string | null; }
 
-const SPECIALTIES = [
-    "General Practice", "Cardiology", "Dermatology", "Endocrinology",
-    "Gastroenterology", "Neurology", "Oncology", "Orthopedics",
-    "Pediatrics", "Psychiatry", "Pulmonology", "Radiology",
-    "Rheumatology", "Surgery", "Urology", "Other",
-];
+const SPECS = ["General Practice","Cardiology","Dermatology","Endocrinology","Gastroenterology","Neurology","Oncology","Orthopedics","Pediatrics","Psychiatry","Pulmonology","Surgery","Urology","Other"];
+const LANGS = ["English","Arabic","French","Spanish","Mandarin","Portuguese","German","Amharic","Tigrinya","Other"];
 
-const LANGUAGES = ["English", "Spanish", "French", "Arabic", "Mandarin", "Portuguese", "German", "Italian", "Other"];
-
-export default function DoctorProfilePage() {
+export default function ProfilePage() {
     const [user, setUser] = useState<AuthUser | null>(null);
-    const [profile, setProfile] = useState<DoctorProfile | null>(null);
+    const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-    const [activeSection, setActiveSection] = useState<"professional" | "practice" | "bio">("professional");
-
-    const [formData, setFormData] = useState({
-        specialty: "",
-        hospital: "",
-        experience_years: 0,
-        fee: 0,
-        consultation_duration_mins: 15,
-        languages: [] as string[],
-        consultation_type: "video",
-        bio: "",
-        gender: "",
+    const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+    const [tab, setTab] = useState<"info" | "practice" | "about">("info");
+    const [form, setForm] = useState({
+        specialty: "", hospital: "", experience_years: 0, fee: 0,
+        consultation_duration_mins: 15, languages: [] as string[],
+        consultation_type: "video", gender: "", bio: "",
     });
-
-    const [langInput, setLangInput] = useState("");
 
     useEffect(() => {
         const u = getUser();
         if (!u) return;
         setUser(u);
-
-        fetch(`/api/doctor/profile?doctorId=${u.id}`)
-            .then(r => r.json())
-            .then(json => {
-                if (json.data) {
-                    setProfile(json.data);
-                    setFormData({
-                        specialty: json.data.specialty || "",
-                        hospital: json.data.hospital || "",
-                        experience_years: json.data.experience_years || 0,
-                        fee: json.data.fee || 0,
-                        consultation_duration_mins: json.data.consultation_duration_mins || 15,
-                        languages: Array.isArray(json.data.languages) ? json.data.languages : ["English"],
-                        consultation_type: json.data.consultation_type || "video",
-                        bio: json.data.bio || "",
-                        gender: json.data.gender || "",
-                    });
-                }
-            })
-            .catch(err => console.error(err))
-            .finally(() => setLoading(false));
+        fetch(`/api/doctor/profile?doctorId=${u.id}`).then(r => r.json()).then(j => {
+            if (j.data) {
+                setProfile(j.data);
+                setForm({ specialty: j.data.specialty || "", hospital: j.data.hospital || "", experience_years: j.data.experience_years || 0, fee: j.data.fee || 0, consultation_duration_mins: j.data.consultation_duration_mins || 15, languages: Array.isArray(j.data.languages) ? j.data.languages : ["English"], consultation_type: j.data.consultation_type || "video", gender: j.data.gender || "", bio: j.data.bio || "" });
+            }
+        }).catch(() => {}).finally(() => setLoading(false));
     }, []);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const toggleLanguage = (lang: string) => {
-        setFormData(prev => ({
-            ...prev,
-            languages: prev.languages.includes(lang)
-                ? prev.languages.filter(l => l !== lang)
-                : [...prev.languages, lang],
-        }));
-    };
-
-    const handleSave = async () => {
+    const save = async () => {
         if (!profile) return;
-        setSaving(true);
-        setMessage(null);
-
+        setSaving(true); setMsg(null);
         try {
-            const res = await fetch("/api/doctor/profile", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    doctorId: profile.id,
-                    specialty: formData.specialty,
-                    hospital: formData.hospital,
-                    experience_years: Number(formData.experience_years),
-                    fee: Number(formData.fee),
-                    consultation_duration_mins: Number(formData.consultation_duration_mins),
-                    languages: formData.languages,
-                    consultation_type: formData.consultation_type,
-                    gender: formData.gender,
-                }),
-            });
-
-            if (!res.ok) throw new Error("Failed to save profile");
-            setMessage({ type: "success", text: "Profile updated successfully!" });
-        } catch (err: any) {
-            setMessage({ type: "error", text: err.message || "An error occurred" });
-        } finally {
-            setSaving(false);
-            setTimeout(() => setMessage(null), 4000);
-        }
+            const res = await fetch("/api/doctor/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorId: profile.id, specialty: form.specialty, hospital: form.hospital, experience_years: Number(form.experience_years), fee: Number(form.fee), consultation_duration_mins: Number(form.consultation_duration_mins), languages: form.languages, consultation_type: form.consultation_type, gender: form.gender }) });
+            if (!res.ok) { const j = await res.json(); throw new Error(j.error || "Save failed"); }
+            setMsg({ ok: true, text: "Profile updated!" });
+        } catch (e: any) { setMsg({ ok: false, text: e.message }); }
+        finally { setSaving(false); setTimeout(() => setMsg(null), 4000); }
     };
 
-    if (loading) {
-        return (
-            <div className="space-y-6 max-w-4xl">
-                <div className="h-8 bg-slate-200 rounded-xl w-48 animate-pulse" />
-                <div className="h-48 bg-slate-200 rounded-2xl animate-pulse" />
-                <div className="h-96 bg-slate-200 rounded-2xl animate-pulse" />
-            </div>
-        );
-    }
-
-    const sections = [
-        { key: "professional", label: "Professional Details", icon: Stethoscope },
-        { key: "practice", label: "Practice Info", icon: Building2 },
-        { key: "bio", label: "About & Languages", icon: BookOpen },
-    ] as const;
+    if (loading) return (
+        <div className="space-y-4 animate-pulse max-w-2xl">
+            <div className="h-44 bg-slate-200 rounded-3xl" />
+            <div className="h-80 bg-slate-200 rounded-2xl" />
+        </div>
+    );
 
     return (
-        <div className="space-y-6 animate-fade-up max-w-4xl">
-            {/* Header */}
+        <div className="space-y-5 animate-fade-up max-w-2xl">
             <div className="flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="font-display font-bold text-2xl text-slate-800">My Profile</h1>
-                    <p className="text-sm text-slate-500 mt-1">Manage your professional information and public profile</p>
+                    <h1 className="font-display font-bold text-xl text-slate-800">My Profile</h1>
+                    <p className="text-xs text-slate-500 mt-0.5">Manage your public doctor profile</p>
                 </div>
-                <button onClick={handleSave} disabled={saving}
-                    className="btn-primary flex items-center gap-2 flex-shrink-0">
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Save Changes
+                <button onClick={save} disabled={saving} className="btn-primary text-sm flex items-center gap-2 flex-shrink-0">
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save
                 </button>
             </div>
 
-            {/* Status message */}
-            {message && (
-                <div className={`flex items-center gap-3 p-4 rounded-2xl text-sm font-medium
-                    ${message.type === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
-                    {message.type === "success"
-                        ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-                        : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
-                    {message.text}
+            {msg && (
+                <div className={`flex items-center gap-2 p-3.5 rounded-2xl text-sm font-medium ${msg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
+                    {msg.ok ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+                    {msg.text}
                 </div>
             )}
 
-            {/* Profile hero card */}
-            <div className="card bg-gradient-to-br from-primary-700 via-primary-600 to-primary-500 text-white overflow-hidden relative">
-                <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -translate-y-24 translate-x-12" />
-                <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-5">
-                    {/* Avatar */}
+            {/* Profile hero */}
+            <div className="relative bg-gradient-to-br from-primary-700 via-primary-600 to-primary-500 rounded-3xl p-5 overflow-hidden">
+                <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 80% 20%, white 0%, transparent 50%)" }} />
+                <div className="relative flex items-center gap-4">
                     <div className="relative group flex-shrink-0">
-                        <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30">
-                            <span className="text-white font-bold text-3xl">{user?.name?.[0] || "D"}</span>
+                        <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center border-2 border-white/30">
+                            <span className="text-white font-bold text-2xl">{user?.name?.[0]}</span>
                         </div>
                         <div className="absolute inset-0 rounded-2xl bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                             <Camera className="w-5 h-5 text-white" />
                         </div>
                     </div>
-
                     <div className="flex-1 min-w-0">
-                        <h2 className="font-display font-bold text-xl text-white">{user?.name || "Doctor"}</h2>
-                        <p className="text-primary-200 mt-0.5">{formData.specialty || "General Practitioner"}</p>
-                        <p className="text-primary-200 text-sm mt-1 flex items-center gap-1.5">
-                            <Building2 className="w-3.5 h-3.5" />
-                            {formData.hospital || "Nova Health Clinic"}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-3 mt-3">
-                            <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-2.5 py-1 text-xs">
-                                <Award className="w-3.5 h-3.5" />
-                                {formData.experience_years} yrs experience
-                            </div>
-                            <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-2.5 py-1 text-xs">
-                                <Star className="w-3.5 h-3.5 fill-gold-300 text-gold-300" />
-                                {profile?.rating?.toFixed(1) || "N/A"} ({profile?.review_count || 0} reviews)
-                            </div>
-                            <div className="flex items-center gap-1.5 bg-white/15 rounded-lg px-2.5 py-1 text-xs">
-                                <DollarSign className="w-3.5 h-3.5" />
-                                ${formData.fee} / session
-                            </div>
+                        <h2 className="font-display font-bold text-white text-lg leading-tight">{user?.name}</h2>
+                        <p className="text-primary-200 text-sm">{form.specialty || "Doctor"}</p>
+                        <p className="text-primary-200 text-xs mt-1">{form.hospital || "Nova Health"}</p>
+                    </div>
+                </div>
+                <div className="relative grid grid-cols-3 gap-2 mt-4">
+                    {[
+                        { label: "Rating", value: profile?.rating?.toFixed(1) || "—" },
+                        { label: "Patients", value: profile?.patients_served || 0 },
+                        { label: "Reviews", value: profile?.review_count || 0 },
+                    ].map(({ label, value }) => (
+                        <div key={label} className="bg-white/15 rounded-xl p-2.5 text-center">
+                            <p className="font-bold text-white text-base leading-none">{value}</p>
+                            <p className="text-primary-200 text-[10px] mt-0.5">{label}</p>
                         </div>
-                    </div>
-
-                    <div className="text-right flex-shrink-0">
-                        <p className="text-primary-200 text-xs mb-1">Email</p>
-                        <p className="text-sm text-white">{user?.email}</p>
-                    </div>
+                    ))}
                 </div>
             </div>
 
             {/* Section tabs */}
             <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-                {sections.map(({ key, label, icon: Icon }) => (
-                    <button key={key} onClick={() => setActiveSection(key)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all flex-1 justify-center
-                            ${activeSection === key ? "bg-white text-primary-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-                        <Icon className="w-4 h-4" />
-                        <span className="hidden sm:inline">{label}</span>
-                    </button>
+                {[{ k: "info", l: "Professional" }, { k: "practice", l: "Practice" }, { k: "about", l: "About & Languages" }].map(({ k, l }) => (
+                    <button key={k} onClick={() => setTab(k as any)}
+                        className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${tab === k ? "bg-white text-primary-700 shadow-sm" : "text-slate-500"}`}>{l}</button>
                 ))}
             </div>
 
-            {/* Professional Details */}
-            {activeSection === "professional" && (
-                <div className="card space-y-5 animate-fade-up">
-                    <h2 className="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-3 flex items-center gap-2">
-                        <Stethoscope className="w-4 h-4 text-primary-500" />
-                        Professional Details
-                    </h2>
-                    <div className="grid sm:grid-cols-2 gap-5">
-                        <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block">Full Name</label>
-                            <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
-                                <User className="w-4 h-4 text-slate-400" />
-                                <span className="text-sm text-slate-600">{user?.name}</span>
-                                <span className="ml-auto text-[10px] text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full">Read-only</span>
+            {/* Professional Info */}
+            {tab === "info" && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4 animate-fade-up">
+                    {/* Read-only */}
+                    <div className="grid sm:grid-cols-2 gap-3">
+                        {[
+                            { label: "Full Name", value: user?.name, icon: User },
+                            { label: "Email", value: user?.email, icon: Mail },
+                        ].map(({ label, value, icon: Icon }) => (
+                            <div key={label}>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-1"><Icon className="w-3 h-3" />{label}</p>
+                                <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                                    <p className="text-sm text-slate-600 truncate flex-1">{value}</p>
+                                    <span className="text-[9px] text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded-full flex-shrink-0">Read-only</span>
+                                </div>
                             </div>
-                        </div>
+                        ))}
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block">Email</label>
-                            <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
-                                <Mail className="w-4 h-4 text-slate-400" />
-                                <span className="text-sm text-slate-600 truncate">{user?.email}</span>
-                                <span className="ml-auto text-[10px] text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full flex-shrink-0">Read-only</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block flex items-center gap-1">
-                                <Stethoscope className="w-3 h-3" /> Medical Specialty
-                            </label>
-                            <select name="specialty" value={formData.specialty} onChange={handleChange} className="input-field">
-                                <option value="">Select specialty...</option>
-                                {SPECIALTIES.map(s => <option key={s} value={s}>{s}</option>)}
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 block flex items-center gap-1"><Stethoscope className="w-3 h-3" /> Specialty</label>
+                            <select value={form.specialty} onChange={e => setForm(p => ({ ...p, specialty: e.target.value }))} className="input-field text-sm">
+                                <option value="">Select...</option>
+                                {SPECS.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                         </div>
-
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block">
-                                Gender
-                            </label>
-                            <select name="gender" value={formData.gender} onChange={handleChange} className="input-field">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 block">Gender</label>
+                            <select value={form.gender} onChange={e => setForm(p => ({ ...p, gender: e.target.value }))} className="input-field text-sm">
                                 <option value="">Prefer not to say</option>
                                 <option value="male">Male</option>
                                 <option value="female">Female</option>
                                 <option value="other">Other</option>
                             </select>
                         </div>
-
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block">
-                                Years of Experience
-                            </label>
-                            <input type="number" name="experience_years" value={formData.experience_years}
-                                onChange={handleChange} min="0" max="60" className="input-field"
-                                placeholder="e.g. 10" />
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 block flex items-center gap-1"><Award className="w-3 h-3" /> Years Experience</label>
+                            <input type="number" value={form.experience_years} onChange={e => setForm(p => ({ ...p, experience_years: parseInt(e.target.value) || 0 }))} min="0" className="input-field text-sm" />
                         </div>
-
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block">
-                                Consultation Type
-                            </label>
-                            <select name="consultation_type" value={formData.consultation_type} onChange={handleChange} className="input-field">
-                                <option value="video">Video Only</option>
-                                <option value="in-person">In-Person Only</option>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 block">Consultation Type</label>
+                            <select value={form.consultation_type} onChange={e => setForm(p => ({ ...p, consultation_type: e.target.value }))} className="input-field text-sm">
+                                <option value="video">Video</option>
+                                <option value="in-person">In-Person</option>
                                 <option value="both">Both</option>
                             </select>
                         </div>
@@ -298,119 +165,73 @@ export default function DoctorProfilePage() {
                 </div>
             )}
 
-            {/* Practice Info */}
-            {activeSection === "practice" && (
-                <div className="card space-y-5 animate-fade-up">
-                    <h2 className="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-3 flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-primary-500" />
-                        Practice Information
-                    </h2>
-                    <div className="grid sm:grid-cols-2 gap-5">
-                        <div className="sm:col-span-2">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block">
-                                Hospital / Clinic Name
-                            </label>
-                            <input type="text" name="hospital" value={formData.hospital}
-                                onChange={handleChange} className="input-field"
-                                placeholder="e.g. Nova Health Medical Center" />
-                        </div>
+            {/* Practice */}
+            {tab === "practice" && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4 animate-fade-up">
+                    <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 block flex items-center gap-1"><Building2 className="w-3 h-3" /> Hospital / Clinic</label>
+                        <input type="text" value={form.hospital} onChange={e => setForm(p => ({ ...p, hospital: e.target.value }))} placeholder="e.g. Nova Health Medical Center" className="input-field text-sm" />
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block flex items-center gap-1">
-                                <DollarSign className="w-3 h-3" /> Consultation Fee (USD)
-                            </label>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 block flex items-center gap-1"><DollarSign className="w-3 h-3" /> Fee (USD)</label>
                             <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold text-sm">$</span>
-                                <input type="number" name="fee" value={formData.fee}
-                                    onChange={handleChange} min="0" step="5" className="input-field pl-8"
-                                    placeholder="0" />
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-semibold">$</span>
+                                <input type="number" value={form.fee} onChange={e => setForm(p => ({ ...p, fee: parseFloat(e.target.value) || 0 }))} min="0" step="5" className="input-field text-sm pl-8" />
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> Session Duration (minutes)
-                            </label>
-                            <select name="consultation_duration_mins" value={formData.consultation_duration_mins}
-                                onChange={handleChange} className="input-field">
-                                {[10, 15, 20, 30, 45, 60].map(m => (
-                                    <option key={m} value={m}>{m} minutes</option>
-                                ))}
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 block flex items-center gap-1"><Clock className="w-3 h-3" /> Session Duration</label>
+                            <select value={form.consultation_duration_mins} onChange={e => setForm(p => ({ ...p, consultation_duration_mins: parseInt(e.target.value) }))} className="input-field text-sm">
+                                {[10,15,20,30,45,60].map(m => <option key={m} value={m}>{m} minutes</option>)}
                             </select>
                         </div>
                     </div>
 
                     {/* Stats (read-only) */}
                     <div className="grid grid-cols-3 gap-3 pt-2 border-t border-slate-100">
-                        <div className="bg-slate-50 rounded-xl p-3 text-center">
-                            <p className="font-display font-bold text-xl text-slate-800">{profile?.patients_served || 0}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">Patients served</p>
-                        </div>
-                        <div className="bg-slate-50 rounded-xl p-3 text-center">
-                            <p className="font-display font-bold text-xl text-slate-800">{profile?.rating?.toFixed(1) || "—"}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">Average rating</p>
-                        </div>
-                        <div className="bg-slate-50 rounded-xl p-3 text-center">
-                            <p className="font-display font-bold text-xl text-slate-800">{profile?.review_count || 0}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">Total reviews</p>
-                        </div>
+                        {[
+                            { label: "Patients Served", value: profile?.patients_served || 0 },
+                            { label: "Rating", value: profile?.rating?.toFixed(1) || "—" },
+                            { label: "Reviews", value: profile?.review_count || 0 },
+                        ].map(({ label, value }) => (
+                            <div key={label} className="bg-slate-50 rounded-xl p-3 text-center">
+                                <p className="font-bold text-slate-800 text-lg">{value}</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">{label}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
 
-            {/* Bio & Languages */}
-            {activeSection === "bio" && (
-                <div className="card space-y-5 animate-fade-up">
-                    <h2 className="text-sm font-semibold text-slate-700 border-b border-slate-100 pb-3 flex items-center gap-2">
-                        <BookOpen className="w-4 h-4 text-primary-500" />
-                        About & Languages
-                    </h2>
-
+            {/* About & Languages */}
+            {tab === "about" && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4 animate-fade-up">
                     <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2 block">
-                            Professional Bio
-                        </label>
-                        <textarea
-                            name="bio"
-                            value={formData.bio}
-                            onChange={handleChange}
-                            rows={5}
-                            className="input-field resize-none"
-                            placeholder="Share your professional background, areas of expertise, and approach to patient care..."
-                        />
-                        <p className="text-xs text-slate-400 mt-1.5">This will be visible to patients on your profile page.</p>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 block flex items-center gap-1"><BookOpen className="w-3 h-3" /> Professional Bio</label>
+                        <textarea value={form.bio} onChange={e => setForm(p => ({ ...p, bio: e.target.value }))}
+                            rows={5} placeholder="Share your background, specialties, and approach to care..."
+                            className="input-field text-sm resize-none leading-relaxed" />
+                        <p className="text-[10px] text-slate-400 mt-1.5">Visible to patients on your public profile.</p>
                     </div>
-
                     <div>
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3 block">
-                            Languages Spoken
-                        </label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2 block flex items-center gap-1"><Globe className="w-3 h-3" /> Languages Spoken</label>
                         <div className="flex flex-wrap gap-2">
-                            {LANGUAGES.map(lang => (
-                                <button key={lang} onClick={() => toggleLanguage(lang)}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all
-                                        ${formData.languages.includes(lang)
-                                            ? "bg-primary-600 text-white shadow-sm"
-                                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-                                    <Globe className="w-3.5 h-3.5" />
-                                    {lang}
-                                    {formData.languages.includes(lang) && <X className="w-3 h-3 ml-0.5" />}
-                                </button>
-                            ))}
+                            {LANGS.map(lang => {
+                                const on = form.languages.includes(lang);
+                                return (
+                                    <button key={lang} onClick={() => setForm(p => ({ ...p, languages: on ? p.languages.filter(l => l !== lang) : [...p.languages, lang] }))}
+                                        className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all ${on ? "bg-primary-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                                        <Globe className="w-3 h-3" />{lang}
+                                        {on && <X className="w-3 h-3 ml-0.5" />}
+                                    </button>
+                                );
+                            })}
                         </div>
-                        <p className="text-xs text-slate-400 mt-2">
-                            Selected: {formData.languages.length > 0 ? formData.languages.join(", ") : "None selected"}
-                        </p>
+                        <p className="text-[10px] text-slate-400 mt-2">Selected: {form.languages.length > 0 ? form.languages.join(", ") : "None"}</p>
                     </div>
                 </div>
             )}
-
-            {/* Save button bottom */}
-            <div className="flex justify-end pb-4">
-                <button onClick={handleSave} disabled={saving}
-                    className="btn-primary flex items-center gap-2 px-8">
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Save All Changes
-                </button>
-            </div>
         </div>
     );
 }

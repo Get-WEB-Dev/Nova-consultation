@@ -15,7 +15,7 @@ import { createAdminClient } from '@/lib/supabase/client';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const patientId = searchParams.get('patientId');
-  const doctorId  = searchParams.get('doctorId');
+  const doctorId = searchParams.get('doctorId');
 
   if (!patientId || !doctorId) {
     return NextResponse.json({ active: false });
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     const { error } = await admin
       .from('remind_me')
       .upsert(
-        { patient_id: patientId, doctor_id: doctorId, notified: false },
+        { patient_id: patientId, doctor_id: doctorId, notified: false } as never,
         { onConflict: 'patient_id,doctor_id', ignoreDuplicates: true }
       );
 

@@ -62,9 +62,9 @@ export async function POST(req: NextRequest) {
       .from('messages')
       .insert({
         consultation_id: consultationId,
-        sender_id:       senderId,
-        sender_role:     senderRole ?? 'patient',
-        body:            text,
+        sender_id: senderId,
+        sender_role: senderRole ?? 'patient',
+        body: text,
       } as any)
       .select()
       .single();
@@ -72,6 +72,41 @@ export async function POST(req: NextRequest) {
     if (error) {
       console.error('[messages POST]', error.message);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Generate notification for the receiver
+    try {
+      const { createNotification } = await import('@/lib/server/queries');
+      // Get the consultation to determine the other party
+      const { data: consult } = await admin
+        .from('consultations')
+        .select('patient_id, doctor_id, doctor_profiles!doctor_id(user_id, users!user_id(name))')
+        .eq('id', consultationId)
+        .single();
+
+      if (consult) {
+        const isDoctorSender = senderRole === 'doctor';
+        const receiverUserId = isDoctorSender
+          ? (consult as any).patient_id
+          : (consult as any).doctor_profiles?.user_id;
+        const senderName = isDoctorSender
+          ? ((consult as any).doctor_profiles?.users?.name ?? 'Your doctor')
+          : 'A patient';
+
+        if (receiverUserId) {
+          await createNotification({
+            userId: receiverUserId,
+            type: 'chat',
+            title: `New message from ${senderName}`,
+            message: text.length > 60 ? text.substring(0, 60) + '...' : text,
+            doctorName: isDoctorSender ? senderName : undefined,
+            actionUrl: '/appointments',
+          });
+        }
+      }
+    } catch (notifErr) {
+      // Non-fatal
+      console.warn('[messages POST] notification error:', notifErr);
     }
 
     return NextResponse.json({ data }, { status: 201 });

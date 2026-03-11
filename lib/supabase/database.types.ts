@@ -134,6 +134,8 @@ export interface Database {
           duration_minutes: number | null;
           notes: string | null;
           summary: string | null;
+          symptoms: string | null;
+          duration_description: string | null;
           video_room_name: string | null;
           video_session_token: string | null;
           patient_rating: number | null;
@@ -218,7 +220,7 @@ export interface Database {
           created_at: string;
         };
         Insert: Omit<Database['public']['Tables']['notifications']['Row'], 'id' | 'created_at' | 'read'>;
-        Update: Partial<Database['public']['Tables']['notifications']['Insert']>;
+        Update: Partial<Database['public']['Tables']['notifications']['Insert']> & { read?: boolean };
       };
 
       reviews: {
@@ -285,6 +287,17 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['blog_comments']['Row'], 'id' | 'created_at'>;
         Update: Partial<Database['public']['Tables']['blog_comments']['Insert']>;
+      };
+
+      blog_likes: {
+        Row: {
+          id: string;
+          post_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['blog_likes']['Row'], 'id' | 'created_at'>;
+        Update: never;
       };
 
     };

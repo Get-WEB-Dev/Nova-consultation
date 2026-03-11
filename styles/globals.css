@@ -313,3 +313,30 @@ html {
 .animate-waiting-pulse {
   animation: waitingPulse 2s ease-in-out infinite;
 }
+/* ── Dark Mode ──────────────────────────────────────────────────────────────── */
+.dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+.animate-slide-in-left {
+  animation: slideInLeft 0.28s cubic-bezier(0.32,0.72,0,1) both;
+}
+
+@keyframes slideOutLeft {
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(-100%); opacity: 0; }
+}
+
+/* Notification slide from right */
+@keyframes slideInFromRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slide-in-from-right {
+  animation: slideInFromRight 0.28s cubic-bezier(0.32,0.72,0,1) both;
+}

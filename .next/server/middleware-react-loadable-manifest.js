@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{\"app/doctor-dashboard/layout.tsx -> @/lib/supabase/auth\":{\"id\":\"app/doctor-dashboard/layout.tsx -> @/lib/supabase/auth\",\"files\":[]}}"
+self.__REACT_LOADABLE_MANIFEST="{\"app/appointments/page.tsx -> @/lib/supabase/auth\":{\"id\":\"app/appointments/page.tsx -> @/lib/supabase/auth\",\"files\":[]}}"

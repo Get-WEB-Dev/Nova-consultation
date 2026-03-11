@@ -51,29 +51,12 @@ export async function PATCH(req: NextRequest) {
   const { notifId, userId, markAll } = body ?? {};
 
   try {
-    const admin = createAdminClient();
-
     if (markAll && userId) {
-      const { error } = await admin
-        .from('notifications')
-        .update({ read: true } as any)
-        .eq('user_id', userId)
-        .eq('read', false);
-
-      if (error) {
-        console.error('[notifications PATCH markAll]', error.message);
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
+      const { markAllNotificationsRead } = await import('@/lib/server/queries');
+      await markAllNotificationsRead(userId);
     } else if (notifId) {
-      const { error } = await admin
-        .from('notifications')
-        .update({ read: true } as any)
-        .eq('id', notifId);
-
-      if (error) {
-        console.error('[notifications PATCH markOne]', error.message);
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
+      const { markNotificationRead } = await import('@/lib/server/queries');
+      await markNotificationRead(notifId);
     } else {
       return NextResponse.json({ error: 'notifId or (userId + markAll) required' }, { status: 400 });
     }
@@ -84,3 +67,4 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+

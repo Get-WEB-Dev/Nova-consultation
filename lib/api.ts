@@ -259,3 +259,97 @@ export async function getDoctorReviews(doctorId: string) {
   const json = await res.json();
   return json.data ?? [];
 }
+
+// ─── Blog Comments ────────────────────────────────────────────────────────────
+
+export async function getPostComments(postId: string) {
+  try {
+    const res = await fetch(`/api/posts/${postId}/comments`);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data ?? [];
+  } catch { return []; }
+}
+
+export async function createComment(postId: string, authorId: string, text: string) {
+  const res = await fetch(`/api/posts/${postId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ authorId, body: text }),
+  });
+  if (!res.ok) throw new Error('Failed to create comment');
+  return res.json();
+}
+
+// ─── Blog Likes ───────────────────────────────────────────────────────────────
+
+export async function likePost(postId: string, userId: string) {
+  const res = await fetch(`/api/posts/${postId}/like`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) throw new Error('Failed to like post');
+  return res.json();
+}
+
+export async function unlikePost(postId: string, userId: string) {
+  const res = await fetch(`/api/posts/${postId}/like`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) throw new Error('Failed to unlike post');
+  return res.json();
+}
+
+export async function hasLikedPost(postId: string, userId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/posts/${postId}/like?userId=${userId}`);
+    if (!res.ok) return false;
+    const json = await res.json();
+    return json.liked ?? false;
+  } catch { return false; }
+}
+
+// ─── Consultations (with intake) ──────────────────────────────────────────────
+
+export async function createConsultation(params: {
+  doctorId: string;
+  patientId: string;
+  symptoms?: string;
+  duration?: string;
+  notes?: string;
+  isFollowUp?: boolean;
+  followUpScheduledAt?: string;
+}) {
+  const res = await fetch('/api/consultations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error('Failed to create consultation');
+  return res.json();
+}
+
+// ─── Follow-Ups ───────────────────────────────────────────────────────────────
+
+export async function getFollowUps(doctorId: string) {
+  try {
+    const res = await fetch(`/api/follow-ups?doctorId=${doctorId}`);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data ?? [];
+  } catch { return []; }
+}
+
+export async function createFollowUp(consultationId: string, scheduledAt: string) {
+  const res = await fetch('/api/follow-ups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ consultationId, scheduledAt }),
+  });
+  if (!res.ok) throw new Error('Failed to create follow-up');
+  return res.json();
+}
+

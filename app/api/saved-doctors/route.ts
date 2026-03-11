@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     const { error } = await admin
       .from('saved_doctors')
       .upsert(
-        { patient_id: patientId, doctor_id: doctorId },
+        { patient_id: patientId, doctor_id: doctorId } as never,
         { onConflict: 'patient_id,doctor_id', ignoreDuplicates: true }
       );
 

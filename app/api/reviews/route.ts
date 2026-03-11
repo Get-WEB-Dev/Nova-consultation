@@ -14,12 +14,12 @@ export async function GET(req: NextRequest) {
     const reviews = await fetchDoctorReviews(doctorId);
 
     const formatted = reviews.map((r: any) => ({
-      id:        r.id,
-      author:    r.patient_name ?? 'Anonymous',
-      rating:    r.rating,
-      text:      r.comment      ?? '',
-      date:      r.created_at,
-      avatar:    `https://ui-avatars.com/api/?name=${encodeURIComponent(r.patient_name ?? 'P')}&background=eef4fa&color=1B3A5C&size=40`,
+      id: r.id,
+      author: r.patient_name ?? 'Anonymous',
+      rating: r.rating,
+      text: r.comment ?? '',
+      date: r.created_at,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(r.patient_name ?? 'P')}&background=eef4fa&color=1B3A5C&size=40`,
       patientId: r.patient_id,
     }));
 
@@ -49,6 +49,32 @@ export async function POST(req: NextRequest) {
   try {
     const { submitReview } = await import('@/lib/server/queries');
     await submitReview({ consultationId, doctorId, patientId, rating, comment });
+
+    // Generate notification for the doctor
+    try {
+      const { createNotification } = await import('@/lib/server/queries');
+      const { createAdminClient } = await import('@/lib/supabase/client');
+      const admin = createAdminClient();
+
+      const { data: doctorProfile } = await admin
+        .from('doctor_profiles')
+        .select('user_id')
+        .eq('id', doctorId)
+        .single();
+
+      if (doctorProfile) {
+        await createNotification({
+          userId: (doctorProfile as any).user_id,
+          type: 'system',
+          title: 'New review received',
+          message: `A patient has left a ${rating}-star review on your profile.`,
+          actionUrl: '/doctor-dashboard',
+        });
+      }
+    } catch (notifErr) {
+      console.warn('[reviews POST] notification error:', notifErr);
+    }
+
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (err: any) {
     console.error('[reviews POST]', err.message);

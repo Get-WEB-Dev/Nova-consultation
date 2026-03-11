@@ -96,7 +96,19 @@ export async function PATCH(req: NextRequest) {
     userId, name, phone, dob, bio,
     bloodType, allergies, emergencyContact,
     medicalHistory, insuranceProvider, insuranceId,
-  } = body ?? {};
+  } = (body ?? {}) as {
+    userId: string;
+    name?: string;
+    phone?: string;
+    dob?: string;
+    bio?: string;
+    bloodType?: string;
+    allergies?: string;
+    emergencyContact?: string;
+    medicalHistory?: string;
+    insuranceProvider?: string;
+    insuranceId?: string;
+  };
 
   if (!userId) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 });
@@ -106,18 +118,19 @@ export async function PATCH(req: NextRequest) {
     const admin = createAdminClient();
 
     // Update shared users table (name, bio only — shared fields)
+    const updatePayload: any = {
+      phone: phone || null,
+      dob: dob || null,
+      bio: bio || null,
+      blood_type: bloodType || null,
+      allergies: allergies || null,
+      emergency_contact: emergencyContact || null,
+    };
+    if (name) updatePayload.name = name;
+
     const { error } = await admin
       .from('users')
-      .update({
-        name: name,
-        phone: phone || null,
-        dob: dob || null,
-        bio: bio || null,
-        blood_type: bloodType || null,
-        allergies: allergies || null,
-        emergency_contact: emergencyContact || null,
-        updated_at: new Date().toISOString(),
-      } as any)
+      .update(updatePayload as never)
       .eq('id', userId);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -145,7 +158,7 @@ export async function PATCH(req: NextRequest) {
 
       await admin
         .from('patients')
-        .upsert(patientFields, { onConflict: 'user_id' });
+        .upsert(patientFields as never, { onConflict: 'user_id' });
     }
 
     // Sync name to auth.users metadata
