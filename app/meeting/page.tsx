@@ -17,6 +17,7 @@ function MeetingFlow() {
   const doctorSpecialty = searchParams.get("specialty") || "General Practice";
   const doctorId = searchParams.get("doctorId") || "d-demo";
   const patientId = searchParams.get("patientId") || "p-demo";
+  const [consultationId, setConsultationId] = useState<string | null>(null);
 
   const [state, setState] = useState<MeetingState>("waiting");
 
@@ -28,14 +29,17 @@ function MeetingFlow() {
         doctorSpecialty={doctorSpecialty}
         patientId={patientId}
         doctorId={doctorId}
-        onStartCall={() => setState("in_call")}
+        onStartCall={(cid) => {
+          if (cid) setConsultationId(cid);
+          setState("in_call");
+        }}
         onLeave={() => router.push("/dashboard")}
       />
     );
   }
 
   if (state === "in_call") {
-    return <MeetingRoom />;
+    return <MeetingRoom consultationId={consultationId} />;
   }
 
   // state === "ended"

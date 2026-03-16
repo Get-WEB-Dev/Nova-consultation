@@ -1,12 +1,15 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/posts/route": "app/api/posts/route.js",
-  "/api/saved-doctors/route": "app/api/saved-doctors/route.js",
-  "/api/doctors/route": "app/api/doctors/route.js",
+  "/api/doctor/profile/route": "app/api/doctor/profile/route.js",
+  "/api/queue/route": "app/api/queue/route.js",
+  "/api/doctor/consultations/route": "app/api/doctor/consultations/route.js",
+  "/api/messages/route": "app/api/messages/route.js",
+  "/api/consultations/route": "app/api/consultations/route.js",
+  "/api/consultations/status/route": "app/api/consultations/status/route.js",
+  "/admin-dashboard/doctors/page": "app/admin-dashboard/doctors/page.js",
   "/doctor-dashboard/page": "app/doctor-dashboard/page.js",
-  "/doctors/page": "app/doctors/page.js",
-  "/doctor-dashboard/consultations/page": "app/doctor-dashboard/consultations/page.js",
+  "/doctor/[id]/page": "app/doctor/[id]/page.js",
+  "/meeting/page": "app/meeting/page.js",
   "/doctor-dashboard/messages/page": "app/doctor-dashboard/messages/page.js",
-  "/doctor-dashboard/feed/page": "app/doctor-dashboard/feed/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/doctor-dashboard/consult/page": "app/doctor-dashboard/consult/page.js",
+  "/appointments/page": "app/appointments/page.js"
 }

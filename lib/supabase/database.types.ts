@@ -162,10 +162,27 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['consultation_queue']['Insert']>;
       };
 
+      
+      conversations: {
+        Row: {
+          id: string;
+          doctor_id: string;
+          patient_id: string;
+          last_message_preview: string | null;
+          last_message_time: string;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['conversations']['Row'], 'id' | 'created_at' | 'last_message_time' | 'last_message_preview'>;
+        Update: Partial<Database['public']['Tables']['conversations']['Insert']>;
+      };
+
       messages: {
         Row: {
           id: string;
-          consultation_id: string;
+          consultation_id: string | null;
+          conversation_id: string | null;
+          doctor_id: string | null;
+          patient_id: string | null;
           sender_id: string;
           sender_role: MessageSender;
           body: string | null;

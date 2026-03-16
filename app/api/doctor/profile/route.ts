@@ -28,7 +28,15 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
         }
 
-        const { updateDoctorProfile } = await import('@/lib/server/doctor-queries');
+        const { updateDoctorProfile, fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
+
+        // Resolve: doctorId might be auth user_id or doctor_profiles.id
+        // Try to fetch by user_id first; if found, use the profile's id
+        let resolvedId = doctorId;
+        const profile = await fetchDoctorProfileByUserId(doctorId) as any;
+        if (profile?.id) {
+            resolvedId = profile.id;
+        }
 
         // Build the update object, only including provided fields
         const updates: any = {};
@@ -41,7 +49,7 @@ export async function PATCH(req: NextRequest) {
         if (languages !== undefined) updates.languages = languages;
         if (consultation_type !== undefined) updates.consultation_type = consultation_type;
 
-        await updateDoctorProfile(doctorId, updates);
+        await updateDoctorProfile(resolvedId, updates);
         return NextResponse.json({ success: true });
     } catch (err: any) {
         console.error('[doctor/profile PATCH]', err.message);

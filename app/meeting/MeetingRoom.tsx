@@ -20,7 +20,11 @@ interface ChatMsg {
   time: string;
 }
 
-export default function MeetingRoom() {
+interface MeetingRoomProps {
+  consultationId?: string | null;
+}
+
+export default function MeetingRoom({ consultationId }: MeetingRoomProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const doctorName = searchParams.get("doctor") || "Dr. Sarah Johnson";
@@ -36,11 +40,35 @@ export default function MeetingRoom() {
   const [chatOpen, setChatOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [timeWarning, setTimeWarning] = useState(false);
-  const [messages, setMessages] = useState<ChatMsg[]>([
-    { id: "c1", from: "doctor", text: "Hello! I can see and hear you clearly. Let's begin.", time: "Now" },
-  ]);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [newMsg, setNewMsg] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync real-time messages
+  useEffect(() => {
+    if (!consultationId) return;
+    const fetchMsgs = async () => {
+      try {
+        const res = await fetch(`/api/messages?consultationId=${consultationId}`);
+        const json = await res.json();
+        if (json.data) {
+          const formatted = json.data.map((m: any) => ({
+            id: m.id,
+            from: m.sender_role === "patient" ? "me" : "doctor",
+            text: m.body || "",
+            time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            fileUrl: m.attachment_url,
+            fileName: m.attachment_name,
+            fileType: m.attachment_type === 'image' ? 'image' : 'file',
+          }));
+          setMessages(formatted);
+        }
+      } catch (e) { }
+    };
+    fetchMsgs();
+    const interval = setInterval(fetchMsgs, 3000);
+    return () => clearInterval(interval);
+  }, [consultationId]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -55,7 +83,7 @@ export default function MeetingRoom() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maxDurationSeconds]);
 
   useEffect(() => {
@@ -72,42 +100,83 @@ export default function MeetingRoom() {
     new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
   const sendMessage = () => {
-    if (!newMsg.trim()) return;
+    if (!newMsg.trim() || !consultationId) return;
+    const msgText = newMsg.trim();
+
+    // Optimistic UI update
     setMessages((prev) => [
       ...prev,
-      { id: `c-${Date.now()}`, from: "me", text: newMsg.trim(), time: nowTime() },
+      { id: `c-${Date.now()}`, from: "me", text: msgText, time: nowTime() },
     ]);
     setNewMsg("");
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `c-${Date.now()}-reply`,
-          from: "doctor",
-          text: "Thank you for sharing. Let me note that down.",
-          time: nowTime(),
-        },
-      ]);
-    }, 2500);
+
+    const patientId = searchParams.get("patientId") || "p-demo";
+    const doctorId = searchParams.get("doctorId") || "d-demo";
+
+    // POST to DB
+    fetch('/api/messages', {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        consultationId: consultationId,
+        doctorId,
+        patientId,
+        senderId: patientId,
+        senderRole: "patient",
+        body: msgText
+      })
+    }).catch(() => { });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !consultationId) return;
+
+    // Optimistic UI
     const isImage = file.type.startsWith("image/");
-    const url = URL.createObjectURL(file);
+    const tempUrl = URL.createObjectURL(file);
     setMessages((prev) => [
       ...prev,
       {
         id: `c-${Date.now()}`,
         from: "me",
-        fileUrl: url,
+        fileUrl: tempUrl,
         fileName: file.name,
         fileType: isImage ? "image" : "file",
         time: nowTime(),
       },
     ]);
-    e.target.value = "";
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+
+      const patientId = searchParams.get("patientId") || "p-demo";
+      const doctorId = searchParams.get("doctorId") || "d-demo";
+
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          consultationId: consultationId,
+          doctorId,
+          patientId,
+          senderId: patientId,
+          senderRole: "patient",
+          attachmentUrl: data.url,
+          attachmentName: data.name,
+          attachmentType: isImage ? "image" : "document",
+          attachmentSize: data.size,
+        }),
+      });
+    } catch (err) {
+      console.error("Upload error", err);
+    } finally {
+      e.target.value = "";
+    }
   };
 
   const endCall = () => {

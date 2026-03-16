@@ -131,11 +131,18 @@ export async function toggleDoctorPublished(doctorId: string, isPublished: boole
 }
 
 // ── Toggle doctor verified status ─────────────────────────────
+// When verifying a doctor, also auto-publish them so they appear
+// in public listings immediately. When un-verifying, also unpublish.
 export async function toggleDoctorVerified(doctorId: string, isVerified: boolean) {
     const admin = createAdminClient();
+    const updatePayload: Record<string, boolean> = { is_verified: isVerified };
+    // Auto-publish when verifying, auto-unpublish when un-verifying
+    if (isVerified) {
+        updatePayload.is_published = true;
+    }
     const { error } = await admin
         .from('doctor_profiles')
-        .update({ is_verified: isVerified } as never)
+        .update(updatePayload as never)
         .eq('id', doctorId);
     if (error) throw error;
 }

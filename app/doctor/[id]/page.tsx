@@ -60,6 +60,7 @@ export default function DoctorDetailPage() {
   const [inQueue, setInQueue] = useState(false);
   const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
   const [lang, setLang] = useState<Lang>("en");
+  const [chatConsultId, setChatConsultId] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const [chatOpen, setChatOpen] = useState(false);
@@ -111,6 +112,9 @@ export default function DoctorDetailPage() {
             (c: any) => c.doctorId === params.id && c.status === "completed"
           );
           setConsultHistory(doctorHistory);
+
+          const anyConsultation = consultations.find((c: any) => c.doctorId === params.id);
+          if (anyConsultation) setChatConsultId(anyConsultation.id);
         }
 
         // Load saved/remind state from Supabase
@@ -177,10 +181,9 @@ export default function DoctorDetailPage() {
   };
 
   const joinQueue = () => {
-    if (!isLoggedIn) { router.push("/login"); return; }
-    setInQueue(true);
-    // Simulate getting a position
-    setQueueInfo((prev) => prev ? { ...prev, position: (prev.total || 0) + 1 } : { position: 1, estimatedWait: 8, total: 1 });
+    const user = getUser();
+    if (!user) { router.push("/login"); return; }
+    router.push(`/meeting?doctor=${encodeURIComponent(doctor!.name)}&avatar=${encodeURIComponent(doctor!.avatar)}&duration=${doctor!.consultationDurationMinutes || 15}&doctorId=${doctor!.id}&patientId=${user.id}`);
   };
 
   const leaveQueue = () => setInQueue(false);
@@ -188,60 +191,109 @@ export default function DoctorDetailPage() {
   const openChat = async () => {
     if (!doctor) return;
     setChatOpen(true);
-    if (chatMessages.length === 0) {
-      setChatMessages([{ id: "c1", from: "doctor", text: `Hi! I'm ${doctor.name}. How can I help you today?`, time: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) }]);
-    }
-    // If there is an active consultation, load its messages
+
     const user = getUser();
-    if (user && consultHistory.length > 0) {
-      const latest = consultHistory[0];
-      try {
-        const res = await fetch(`/api/messages?consultationId=${latest.id}`);
-        if (res.ok) {
-          const json = await res.json();
-          const msgs = (json.data ?? []).map((m: any) => ({
-            id:   m.id,
-            from: m.sender_role === "patient" ? "me" as const : "doctor" as const,
-            text: m.body ?? "",
-            time: new Date(m.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
-          }));
-          if (msgs.length > 0) setChatMessages(msgs);
+    if (!user) return;
+
+    // Load unified history
+    try {
+      const res = await fetch(`/api/messages?doctorId=${doctor.id}&patientId=${user.id}`);
+      if (res.ok) {
+        const json = await res.json();
+        const msgs = (json.data ?? []).map((m: any) => ({
+          id: m.id,
+          from: m.sender_role === "patient" ? "me" as const : "doctor" as const,
+          text: m.body ?? "",
+          time: new Date(m.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+          fileUrl: m.attachment_url,
+          fileName: m.attachment_name,
+          fileType: m.attachment_type === 'image' ? 'image' : 'file',
+          createdAt: m.created_at,
+        }));
+
+        if (msgs.length === 0) {
+          setChatMessages([{ id: "c1", from: "doctor", text: `Hi! I'm ${doctor.name}. How can I help you today?`, time: "Now" }]);
+        } else {
+          setChatMessages(msgs);
         }
-      } catch { /* keep default greeting */ }
+      }
+    } catch {
+      setChatMessages([{ id: "c1", from: "doctor", text: `Hi! I'm ${doctor.name}. How can I help you today?`, time: "Now" }]);
     }
   };
 
   const sendMessage = async () => {
     if (!newMsg.trim() || !doctor) return;
-    const now = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const user = getUser();
+    if (!user) return;
+
     const txt = newMsg.trim();
-    setChatMessages((prev) => [...prev, { id: `cm-${Date.now()}`, from: "me", text: txt, time: now }]);
     setNewMsg("");
 
-    const user = getUser();
-    if (user && consultHistory.length > 0) {
-      try {
-        await fetch("/api/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            consultationId: consultHistory[0].id,
-            senderId: user.id,
-            senderRole: "patient",
-            body: txt,
-          }),
-        });
-      } catch { /* optimistic */ }
-    }
+    // Optimistic
+    const nowLocal = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    setChatMessages((prev) => [...prev, { id: `cm-${Date.now()}`, from: "me", text: txt, time: nowLocal }]);
+
+    try {
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctorId: doctor.id,
+          patientId: user.id,
+          senderId: user.id,
+          senderRole: "patient",
+          body: txt,
+        }),
+      });
+    } catch { /* optimistic */ }
   };
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const now = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-    setChatMessages((prev) => [...prev, { id: `cf-${Date.now()}`, from: "me", fileUrl: url, fileName: file.name, fileType: file.type.startsWith("image/") ? "image" : "file", time: now }]);
-    e.target.value = "";
+    if (!file || !doctor) return;
+    const user = getUser();
+    if (!user) return;
+
+    // Optimistic
+    const tempUrl = URL.createObjectURL(file);
+    const nowLocal = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const isImage = file.type.startsWith("image/");
+    setChatMessages((prev) => [...prev, {
+      id: `cf-${Date.now()}`,
+      from: "me",
+      fileUrl: tempUrl,
+      fileName: file.name,
+      fileType: isImage ? "image" : "file",
+      time: nowLocal
+    }]);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const uploadData = await uploadRes.json();
+
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctorId: doctor.id,
+          patientId: user.id,
+          senderId: user.id,
+          senderRole: "patient",
+          attachmentUrl: uploadData.url,
+          attachmentName: uploadData.name,
+          attachmentType: isImage ? "image" : "document",
+          attachmentSize: uploadData.size,
+        }),
+      });
+    } catch (err) {
+      console.error("Upload error", err);
+    } finally {
+      e.target.value = "";
+    }
   };
 
   if (loading) {
@@ -322,7 +374,7 @@ export default function DoctorDetailPage() {
               <div className="flex flex-wrap gap-2 mt-5">
                 {doctor.status === "available" && (
                   isLoggedIn ? (
-                    <Link href={`/meeting?doctor=${encodeURIComponent(doctor.name)}&avatar=${encodeURIComponent(doctor.avatar)}&duration=${doctor.consultationDurationMinutes || 15}`}
+                    <Link href={`/meeting?doctor=${encodeURIComponent(doctor.name)}&avatar=${encodeURIComponent(doctor.avatar)}&duration=${doctor.consultationDurationMinutes || 15}&doctorId=${doctor.id}&patientId=${getUser()?.id}`}
                       className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition-all shadow-md shadow-emerald-600/20">
                       <Zap className="w-4 h-4" /> Start Consultation Now
                     </Link>
@@ -333,27 +385,10 @@ export default function DoctorDetailPage() {
                   )
                 )}
 
-                {(doctor.status === "busy" || doctor.status === "in_consultation") && !inQueue && (
+                {(doctor.status === "busy" || doctor.status === "in_consultation") && (
                   <button onClick={joinQueue} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gold-500 hover:bg-gold-600 text-white font-semibold text-sm transition-all shadow-md shadow-gold-400/20">
                     <Users className="w-4 h-4" /> Join Waiting Queue
                   </button>
-                )}
-
-                {(doctor.status === "busy" || doctor.status === "in_consultation") && inQueue && queueInfo && (
-                  <div className="flex items-center gap-3 bg-gold-50 border border-gold-200 rounded-xl px-4 py-2.5">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-gold-600">#{queueInfo.position}</p>
-                      <p className="text-[10px] text-gold-600 font-medium">Queue</p>
-                    </div>
-                    <div className="w-px h-10 bg-gold-200" />
-                    <div>
-                      <p className="text-sm font-semibold text-slate-700">Est. {queueInfo.estimatedWait} min wait</p>
-                      <p className="text-xs text-slate-500">You'll be notified when it's your turn</p>
-                    </div>
-                    <button onClick={leaveQueue} className="text-rose-400 hover:text-rose-600 transition-colors ml-2" title="Leave queue">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
                 )}
 
                 {doctor.status === "offline" && (

@@ -25,11 +25,14 @@ export async function PATCH(req: Request) {
         } else if (action === 'verify') {
             const { toggleDoctorVerified } = await import('@/lib/server/admin-queries');
             await toggleDoctorVerified(doctorId, value ?? true);
+        } else {
+            return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
         }
 
+        console.log(`[admin/doctors PATCH] Action ${action} performed for doctor ${doctorId} to ${value}`);
         return NextResponse.json({ success: true });
     } catch (err: any) {
-        console.error('[admin/doctors PATCH]', err.message);
+        console.error('[admin/doctors PATCH] error:', err.message);
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }

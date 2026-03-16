@@ -46,29 +46,38 @@ export default function AdminDoctorsPage() {
 
     const togglePublish = async (doctorId: string, current: boolean) => {
         try {
-            await fetch("/api/admin/doctors", {
+            const res = await fetch("/api/admin/doctors", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ doctorId, action: "publish", value: !current }),
             });
+            if (!res.ok) throw new Error("Failed response");
             setDoctors(prev => prev.map(d => d.id === doctorId ? { ...d, is_published: !current } : d));
             showMsg("success", !current ? "Doctor published" : "Doctor unpublished");
-        } catch {
-            showMsg("error", "Failed to update");
+        } catch (e) {
+            console.error("Publish error:", e);
+            showMsg("error", "Failed to update status");
         }
     };
 
     const toggleVerify = async (doctorId: string, current: boolean) => {
         try {
-            await fetch("/api/admin/doctors", {
+            const res = await fetch("/api/admin/doctors", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ doctorId, action: "verify", value: !current }),
             });
-            setDoctors(prev => prev.map(d => d.id === doctorId ? { ...d, is_verified: !current } : d));
-            showMsg("success", !current ? "Doctor verified" : "Verification removed");
-        } catch {
-            showMsg("error", "Failed to update");
+            if (!res.ok) throw new Error("Failed response");
+            setDoctors(prev => prev.map(d => d.id === doctorId ? {
+                ...d,
+                is_verified: !current,
+                // Auto-publish when verifying (matches backend behavior)
+                ...(!current ? { is_published: true } : {}),
+            } : d));
+            showMsg("success", !current ? "Doctor verified & published" : "Verification removed");
+        } catch (e) {
+            console.error("Verify error:", e);
+            showMsg("error", "Failed to update status");
         }
     };
 
@@ -171,8 +180,8 @@ export default function AdminDoctorsPage() {
                                     <button
                                         onClick={() => toggleVerify(d.id, d.is_verified)}
                                         className={`p-2 rounded-lg transition-colors ${d.is_verified
-                                                ? "bg-green-50 text-green-600 hover:bg-green-100"
-                                                : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                                            ? "bg-green-50 text-green-600 hover:bg-green-100"
+                                            : "bg-slate-50 text-slate-400 hover:bg-slate-100"
                                             }`}
                                         title={d.is_verified ? "Remove verification" : "Verify doctor"}
                                     >
@@ -181,8 +190,8 @@ export default function AdminDoctorsPage() {
                                     <button
                                         onClick={() => togglePublish(d.id, d.is_published)}
                                         className={`p-2 rounded-lg transition-colors ${d.is_published
-                                                ? "bg-primary-50 text-primary-600 hover:bg-primary-100"
-                                                : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+                                            ? "bg-primary-50 text-primary-600 hover:bg-primary-100"
+                                            : "bg-slate-50 text-slate-400 hover:bg-slate-100"
                                             }`}
                                         title={d.is_published ? "Unpublish" : "Publish"}
                                     >

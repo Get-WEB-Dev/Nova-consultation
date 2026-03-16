@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
         status: "offline",
         slug: slug || null,
         is_verified: false,
-        is_published: true,
+        is_published: false,
         video_provider_identity: `dr-${slug}`,
       } as any);
     }

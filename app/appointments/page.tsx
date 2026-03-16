@@ -125,10 +125,29 @@ export default function ConsultationsPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, chatOpen]);
 
-  const grouped = useMemo(() => ({
-    active: sessions.filter((s) => s.status === "follow_up" || s.status === "active" || s.status === "waiting"),
-    history: sessions.filter((s) => s.status === "completed" || s.status === "missed"),
-  }), [sessions]);
+  const grouped = useMemo(() => {
+    const active = sessions.filter((s) => s.status === "follow_up" || s.status === "active" || s.status === "waiting");
+    const history = sessions.filter((s) => s.status === "completed" || s.status === "missed");
+
+    // Group history by doctorId to avoid duplicates in the main list
+    const docGroups: Record<string, ConsultationSession[]> = {};
+    for (const s of history) {
+      if (!docGroups[s.doctorId]) docGroups[s.doctorId] = [];
+      docGroups[s.doctorId].push(s);
+    }
+
+    const uniqueHistory = Object.values(docGroups).map(group => {
+      // Sort sessions by date (newest first)
+      const sorted = [...group].sort((a, b) => new Date((b.startedAt || (b as any).created_at) || '').getTime() - new Date((a.startedAt || (a as any).created_at) || '').getTime());
+      // Return the most recent one as the primary representative
+      return {
+        ...sorted[0],
+        allSessions: sorted // Attach all sessions for the detail view
+      };
+    }).sort((a, b) => new Date((b.startedAt || (b as any).created_at) || '').getTime() - new Date((a.startedAt || (a as any).created_at) || '').getTime());
+
+    return { active, history: uniqueHistory };
+  }, [sessions]);
 
   const handleJoin = (session: ConsultationSession) => {
     router.push(`/meeting?doctor=${encodeURIComponent(session.doctorName)}&avatar=${encodeURIComponent(session.doctorAvatar)}`);
@@ -139,62 +158,141 @@ export default function ConsultationsPage() {
     setMessages([]);
     setChatOpen(true);
 
-    // Load real message history from Supabase
+    const user = getUser();
+    if (!user) return;
+
+    // Load unified message history by doctor & patient pair
     try {
-      const res = await fetch(`/api/messages?consultationId=${session.id}`);
+      const res = await fetch(`/api/messages?doctorId=${session.doctorId}&patientId=${user.id}`);
       if (res.ok) {
         const json = await res.json();
         const msgs = (json.data ?? []).map((m: any) => ({
-          id:   m.id,
+          id: m.id,
           from: m.sender_role === "patient" ? "me" : "doctor",
           text: m.body ?? "",
           time: new Date(m.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+          fileUrl: m.attachment_url,
+          fileName: m.attachment_name,
+          fileType: m.attachment_type === 'image' ? 'image' : 'file',
+          createdAt: m.created_at,
         }));
+
         if (msgs.length === 0) {
           setMessages([{ id: `init-${session.id}`, from: "doctor", text: `Hi, this is ${session.doctorName}. How can I help you?`, time: "Now" }]);
         } else {
           setMessages(msgs);
         }
       }
-    } catch {
+    } catch (err) {
+      console.error("Failed to load messages", err);
       setMessages([{ id: `init-${session.id}`, from: "doctor", text: `Hi, this is ${session.doctorName}. How can I help you?`, time: "Now" }]);
     }
   };
 
   const sendMessage = async () => {
     if (!newMsg.trim() || !chatSession) return;
-    const now = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-    const localMsg = { id: `m-${Date.now()}`, from: "me" as const, text: newMsg.trim(), time: now };
-    setMessages((prev) => [...prev, localMsg]);
+    const user = getUser();
+    if (!user) return;
+
     const text = newMsg.trim();
     setNewMsg("");
 
-    // Persist message to Supabase
-    const user = getUser();
-    if (user) {
-      try {
-        await fetch("/api/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            consultationId: chatSession.id,
-            senderId: user.id,
-            senderRole: "patient",
-            body: text,
-          }),
-        });
-      } catch { /* optimistic — UI already updated */ }
+    // Optimistic UI update
+    const now = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const localId = `m-${Date.now()}`;
+    setMessages((prev) => [...prev, { id: localId, from: "me", text, time: now }]);
+
+    try {
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctorId: chatSession.doctorId,
+          patientId: user.id,
+          consultationId: chatSession.id,
+          senderId: user.id,
+          senderRole: "patient",
+          body: text,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to send message", err);
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
+    if (!file || !chatSession) return;
+
+    const user = getUser();
+    if (!user) return;
+
+    // Optimistic UI
+    const tempUrl = URL.createObjectURL(file);
     const now = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-    setMessages((prev) => [...prev, { id: `f-${Date.now()}`, from: "me", fileUrl: url, fileName: file.name, fileType: file.type.startsWith("image/") ? "image" : "file", text: "", time: now }]);
-    e.target.value = "";
+    const isImage = file.type.startsWith("image/");
+    const localId = `f-${Date.now()}`;
+
+    setMessages((prev) => [...prev, {
+      id: localId,
+      from: "me",
+      fileUrl: tempUrl,
+      fileName: file.name,
+      fileType: isImage ? "image" : "file",
+      text: "",
+      time: now
+    }]);
+
+    try {
+      // 1. Upload to storage
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      const uploadData = await uploadRes.json();
+
+      // 2. Clear temp URL and persist message
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctorId: chatSession.doctorId,
+          patientId: user.id,
+          consultationId: chatSession.id,
+          senderId: user.id,
+          senderRole: "patient",
+          attachmentUrl: uploadData.url,
+          attachmentName: uploadData.name,
+          attachmentType: isImage ? "image" : "document",
+          attachmentSize: uploadData.size,
+        }),
+      });
+    } catch (err) {
+      console.error("File upload error:", err);
+      // Optional: remove the optimistic message or show error
+    } finally {
+      e.target.value = "";
+    }
   };
+
+  const groupedMessages = useMemo(() => {
+    const groups: { date: string, items: any[] }[] = [];
+    messages.forEach((m: any) => {
+      const d = m.createdAt ? new Date(m.createdAt).toDateString() : 'Today';
+      const label = d === new Date().toDateString() ? 'Today' : d;
+      let group = groups.find(g => g.date === label);
+      if (!group) {
+        group = { date: label, items: [] };
+        groups.push(group);
+      }
+      group.items.push(m);
+    });
+    return groups;
+  }, [messages]);
 
   // ── Detail view ──
   if (detailSession) {
@@ -206,6 +304,24 @@ export default function ConsultationsPage() {
 
         <div className="bg-white rounded-2xl shadow-card overflow-hidden">
           <div className="h-2 bg-gradient-to-r from-primary-600 to-accent-500" />
+
+          {(detailSession as any).allSessions?.length > 1 && (
+            <div className="bg-slate-50 border-b border-slate-100 p-4">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Select Session</p>
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                {(detailSession as any).allSessions.map((s: any) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setDetailSession({ ...s, allSessions: (detailSession as any).allSessions })}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${detailSession.id === s.id ? "bg-primary-600 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"}`}
+                  >
+                    {formatDate(s.startedAt || s.created_at)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="p-6">
             <div className="flex items-start gap-4">
               <div className="relative w-16 h-16 rounded-2xl overflow-hidden flex-shrink-0">
@@ -300,20 +416,22 @@ export default function ConsultationsPage() {
           )}
         </div>
 
-        {detailSession.status === "completed" && (
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <Star className="w-4 h-4 text-gold-400 fill-gold-400" />
-              <h3 className="font-display font-semibold text-slate-800">{t.rateConsultation}</h3>
+        {
+          detailSession.status === "completed" && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-3">
+                <Star className="w-4 h-4 text-gold-400 fill-gold-400" />
+                <h3 className="font-display font-semibold text-slate-800">{t.rateConsultation}</h3>
+              </div>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} className="w-10 h-10 rounded-xl border border-slate-200 hover:bg-gold-50 hover:border-gold-300 transition-colors flex items-center justify-center text-lg">⭐</button>
+                ))}
+              </div>
             </div>
-            <div className="flex gap-2">
-              {[1,2,3,4,5].map((n) => (
-                <button key={n} className="w-10 h-10 rounded-xl border border-slate-200 hover:bg-gold-50 hover:border-gold-300 transition-colors flex items-center justify-center text-lg">⭐</button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+          )
+        }
+      </div >
     );
   }
 
@@ -347,7 +465,7 @@ export default function ConsultationsPage() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">{[1,2].map((i) => <div key={i} className="bg-white rounded-2xl p-5 animate-shimmer h-28" />)}</div>
+        <div className="space-y-3">{[1, 2].map((i) => <div key={i} className="bg-white rounded-2xl p-5 animate-shimmer h-28" />)}</div>
       ) : current.length === 0 ? (
         <div className="text-center py-16 animate-fade-up">
           <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center mx-auto mb-4">
@@ -451,23 +569,43 @@ export default function ConsultationsPage() {
                 <p className="text-xs text-accent-500 font-medium">● Online</p>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
-                  {msg.from !== "me" && (
-                    <div className="relative w-7 h-7 rounded-full overflow-hidden flex-shrink-0 mr-2 mt-1">
-                      <Image src={chatSession.doctorAvatar} alt="" fill className="object-cover" unoptimized />
-                    </div>
-                  )}
-                  <div className={`max-w-[80%] rounded-2xl ${msg.from === "me" ? "bg-primary-600 text-white rounded-br-md" : "bg-white text-slate-700 border border-slate-100 rounded-bl-md shadow-sm"}`}>
-                    {(msg as any).fileType === "image" && (msg as any).fileUrl ? (
-                      <div className="p-2"><img src={(msg as any).fileUrl} alt="" className="rounded-lg max-w-full max-h-48 object-contain" /><p className={`text-[10px] mt-1 ${msg.from==="me"?"text-white/60":"text-slate-400"}`}>{msg.time}</p></div>
-                    ) : (msg as any).fileType === "file" ? (
-                      <div className="px-4 py-2.5"><div className={`flex items-center gap-2 p-2 rounded-lg ${msg.from==="me"?"bg-white/10":"bg-slate-100"}`}><Paperclip className="w-4 h-4"/><span className="text-xs truncate max-w-[130px]">{(msg as any).fileName}</span></div><p className={`text-[10px] mt-1 ${msg.from==="me"?"text-white/60":"text-slate-400"}`}>{msg.time}</p></div>
-                    ) : (
-                      <div className="px-4 py-2.5"><p className="text-sm">{msg.text}</p><p className={`text-[10px] mt-1 ${msg.from==="me"?"text-white/60":"text-slate-400"}`}>{msg.time}</p></div>
-                    )}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+              {groupedMessages.map((group) => (
+                <div key={group.date} className="space-y-4">
+                  <div className="flex justify-center my-2">
+                    <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-500 px-3 py-1 rounded-full uppercase tracking-wider">{group.date}</span>
                   </div>
+                  {group.items.map((msg: any) => (
+                    <div key={msg.id} className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
+                      {msg.from !== "me" && (
+                        <div className="relative w-7 h-7 rounded-full overflow-hidden flex-shrink-0 mr-2 mt-1">
+                          <Image src={chatSession.doctorAvatar} alt="" fill className="object-cover" unoptimized />
+                        </div>
+                      )}
+                      <div className={`max-w-[80%] rounded-2xl ${msg.from === "me" ? "bg-primary-600 text-white rounded-br-md" : "bg-white text-slate-700 border border-slate-100 rounded-bl-md shadow-sm"}`}>
+                        {msg.fileType === "image" && msg.fileUrl ? (
+                          <div className="p-2">
+                            <img src={msg.fileUrl} alt="" className="rounded-lg max-w-full h-auto max-h-60 mb-1 object-contain" />
+                            {msg.text && <p className="text-sm px-1">{msg.text}</p>}
+                            <p className={`text-[10px] mt-1 ${msg.from === "me" ? "text-white/60" : "text-slate-400"}`}>{msg.time}</p>
+                          </div>
+                        ) : msg.fileType === "file" ? (
+                          <div className="px-4 py-2.5">
+                            <div className={`flex items-center gap-2 p-2 rounded-lg ${msg.from === "me" ? "bg-white/10" : "bg-slate-100"}`}>
+                              <Paperclip className="w-4 h-4" />
+                              <span className="text-xs truncate max-w-[130px]">{msg.fileName}</span>
+                            </div>
+                            <p className={`text-[10px] mt-1 ${msg.from === "me" ? "text-white/60" : "text-slate-400"}`}>{msg.time}</p>
+                          </div>
+                        ) : (
+                          <div className="px-4 py-2.5">
+                            <p className="text-sm">{msg.text}</p>
+                            <p className={`text-[10px] mt-1 ${msg.from === "me" ? "text-white/60" : "text-slate-400"}`}>{msg.time}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
               <div ref={messagesEndRef} />

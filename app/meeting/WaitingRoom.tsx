@@ -21,7 +21,7 @@ interface WaitingRoomProps {
     doctorSpecialty?: string;
     patientId: string;
     doctorId: string;
-    onStartCall: () => void;
+    onStartCall: (consultationId?: string) => void;
     onLeave: () => void;
 }
 
@@ -43,6 +43,7 @@ export default function WaitingRoom({
     const [leaving, setLeaving] = useState(false);
     const [consultationActive, setConsultationActive] = useState(false);
     const [elapsedWait, setElapsedWait] = useState(0);
+    const [consultationId, setConsultationId] = useState<string | null>(null);
 
     // Join queue on mount
     useEffect(() => {
@@ -58,6 +59,7 @@ export default function WaitingRoom({
                     const entry = json.data ?? json;
                     setYourPosition(entry.queue_position ?? entry.position ?? 1);
                     setEstimatedWait(entry.estimated_wait_mins ?? entry.estimatedWait ?? 5);
+                    if (entry.consultation_id) setConsultationId(entry.consultation_id);
                 }
             } catch (_) {
                 setYourPosition(1);
@@ -79,6 +81,7 @@ export default function WaitingRoom({
                     const json = await res.json();
                     setYourPosition(json.position ?? yourPosition);
                     setEstimatedWait(json.estimatedWait ?? estimatedWait);
+                    if (json.consultation_id) setConsultationId(json.consultation_id);
 
                     // Build queue display
                     const total = json.total ?? 1;
@@ -136,8 +139,8 @@ export default function WaitingRoom({
 
     const handleStartCall = useCallback(() => {
         setConsultationActive(true);
-        setTimeout(() => onStartCall(), 500);
-    }, [onStartCall]);
+        setTimeout(() => onStartCall(consultationId || undefined), 500);
+    }, [onStartCall, consultationId]);
 
     const formatWaitTime = (seconds: number) => {
         const m = Math.floor(seconds / 60);
@@ -177,17 +180,17 @@ export default function WaitingRoom({
                             <div
                                 key={p.id}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${p.isYou
-                                        ? "bg-primary-500/15 border border-primary-500/30 ring-1 ring-primary-500/20"
-                                        : "bg-slate-700/30 border border-transparent hover:bg-slate-700/50"
+                                    ? "bg-primary-500/15 border border-primary-500/30 ring-1 ring-primary-500/20"
+                                    : "bg-slate-700/30 border border-transparent hover:bg-slate-700/50"
                                     }`}
                             >
                                 {/* Position number */}
                                 <div
                                     className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${p.isYou
-                                            ? "bg-primary-500 text-white"
-                                            : p.position === 1
-                                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                                : "bg-slate-600/50 text-slate-300"
+                                        ? "bg-primary-500 text-white"
+                                        : p.position === 1
+                                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                            : "bg-slate-600/50 text-slate-300"
                                         }`}
                                 >
                                     {p.position}

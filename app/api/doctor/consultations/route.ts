@@ -10,8 +10,12 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const { fetchConsultationsByDoctor } = await import('@/lib/server/doctor-queries');
-        const data = await fetchConsultationsByDoctor(doctorId);
+        const { fetchConsultationsByDoctor, fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
+        // Resolve: doctorId might be auth user_id or doctor_profiles.id
+        let resolvedId = doctorId;
+        const profile = await fetchDoctorProfileByUserId(doctorId) as any;
+        if (profile?.id) resolvedId = profile.id;
+        const data = await fetchConsultationsByDoctor(resolvedId);
 
         const formatted = data.map((row: any) => ({
             id: row.id,

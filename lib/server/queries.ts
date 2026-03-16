@@ -10,19 +10,21 @@
  * API routes in Next.js + Supabase.
  */
 
-import { createAdminClient } from '@/lib/supabase/client';
-import type { Database } from '@/lib/supabase/database.types';
+import { createAdminClient } from "@/lib/supabase/client";
+import type { Database, ConsultStatus } from "@/lib/supabase/database.types";
 
-type DoctorRow = Database['public']['Tables']['doctor_profiles']['Row'];
-type ConsultRow = Database['public']['Tables']['consultations']['Row'];
-type QueueRow = Database['public']['Tables']['consultation_queue']['Row'];
-type MessageRow = Database['public']['Tables']['messages']['Row'];
-type BlogPostRow = Database['public']['Tables']['blog_posts']['Row'];
-type NotifRow = Database['public']['Tables']['notifications']['Row'];
-type ReviewRow = Database['public']['Tables']['reviews']['Row'];
+type DoctorRow = Database["public"]["Tables"]["doctor_profiles"]["Row"];
+type ConsultRow = Database["public"]["Tables"]["consultations"]["Row"];
+type QueueRow = Database["public"]["Tables"]["consultation_queue"]["Row"];
+type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
+type BlogPostRow = Database["public"]["Tables"]["blog_posts"]["Row"];
+type NotifRow = Database["public"]["Tables"]["notifications"]["Row"];
+type ReviewRow = Database["public"]["Tables"]["reviews"]["Row"];
 
 // ── Types with joined user name ───────────────────────────────
-export type DoctorWithName = DoctorRow & { users: { name: string; avatar_url: string | null } };
+export type DoctorWithName = DoctorRow & {
+  users: { name: string; avatar_url: string | null };
+};
 
 // ============================================================
 // DOCTORS — public, SEO-safe (no auth required)
@@ -35,10 +37,11 @@ export type DoctorWithName = DoctorRow & { users: { name: string; avatar_url: st
 export async function fetchDoctors(): Promise<DoctorWithName[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('doctor_profiles')
-    .select('*, users(name, avatar_url)')
+    .from("doctor_profiles")
+    .select("*, users(name, avatar_url)")
     .eq('is_published', true)
-    .order('status', { ascending: true });  // available first
+    .eq('is_verified', true)
+    .order("status", { ascending: true }); // available first
   if (error) throw error;
   return (data ?? []) as DoctorWithName[];
 }
@@ -47,15 +50,15 @@ export async function fetchDoctors(): Promise<DoctorWithName[]> {
  * Fetch a single doctor by UUID or slug for the profile page.
  */
 export async function fetchDoctorByIdOrSlug(
-  idOrSlug: string
+  idOrSlug: string,
 ): Promise<DoctorWithName | null> {
   const admin = createAdminClient();
   const isUuid = /^[0-9a-f-]{36}$/.test(idOrSlug);
   const filter = isUuid ? { id: idOrSlug } : { slug: idOrSlug };
 
   const { data, error } = await admin
-    .from('doctor_profiles')
-    .select('*, users(name, avatar_url)')
+    .from("doctor_profiles")
+    .select("*, users(name, avatar_url)")
     .match(filter)
     .eq('is_published', true)
     .maybeSingle();
@@ -70,15 +73,15 @@ export async function fetchDoctorByIdOrSlug(
 /**
  * Fetch all consultations for a patient.
  */
-export async function fetchConsultationsByPatient(
-  patientId: string
-) {
+export async function fetchConsultationsByPatient(patientId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('consultations')
-    .select('*, doctor_profiles!doctor_id(id, specialty, users!user_id(name, avatar_url))')
-    .eq('patient_id', patientId)
-    .order('created_at', { ascending: false });
+    .from("consultations")
+    .select(
+      "*, doctor_profiles!doctor_id(id, specialty, users!user_id(name, avatar_url))",
+    )
+    .eq("patient_id", patientId)
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
@@ -87,13 +90,13 @@ export async function fetchConsultationsByPatient(
  * Fetch a single consultation by ID.
  */
 export async function fetchConsultationById(
-  consultationId: string
+  consultationId: string,
 ): Promise<ConsultRow | null> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('consultations')
-    .select('*')
-    .eq('id', consultationId)
+    .from("consultations")
+    .select("*")
+    .eq("id", consultationId)
     .maybeSingle();
   if (error) throw error;
   return data ?? null;
@@ -114,7 +117,7 @@ export async function createConsultation(params: {
 }): Promise<ConsultRow> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('consultations')
+    .from("consultations")
     .insert({
       doctor_id: params.doctorId,
       patient_id: params.patientId,
@@ -123,12 +126,29 @@ export async function createConsultation(params: {
       symptoms: params.symptoms ?? null,
       duration_description: params.durationDescription ?? null,
       notes: params.notes ?? null,
-      status: 'waiting',
+      status: "waiting",
     } as any)
     .select()
     .single();
   if (error) throw error;
   return data;
+}
+
+
+
+/**
+ * Update consultation status (e.g., active -> completed).
+ */
+export async function updateConsultationStatus(
+  consultationId: string,
+  status: ConsultStatus
+): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("consultations")
+    .update({ status } as never)
+    .eq("id", consultationId);
+  if (error) throw error;
 }
 
 // ============================================================
@@ -141,11 +161,11 @@ export async function createConsultation(params: {
 export async function fetchQueue(doctorId: string): Promise<QueueRow[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('consultation_queue')
-    .select('*')
-    .eq('doctor_id', doctorId)
-    .eq('status', 'waiting')
-    .order('queue_position', { ascending: true });
+    .from("consultation_queue")
+    .select("*")
+    .eq("doctor_id", doctorId)
+    .eq("status", "waiting")
+    .order("queue_position", { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
@@ -155,15 +175,15 @@ export async function fetchQueue(doctorId: string): Promise<QueueRow[]> {
  */
 export async function fetchPatientQueueEntry(
   doctorId: string,
-  patientId: string
+  patientId: string,
 ): Promise<QueueRow | null> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('consultation_queue')
-    .select('*')
-    .eq('doctor_id', doctorId)
-    .eq('patient_id', patientId)
-    .eq('status', 'waiting')
+    .from("consultation_queue")
+    .select("*")
+    .eq("doctor_id", doctorId)
+    .eq("patient_id", patientId)
+    .eq("status", "waiting")
     .maybeSingle();
   if (error) throw error;
   return data ?? null;
@@ -176,36 +196,47 @@ export async function fetchPatientQueueEntry(
 export async function joinQueue(
   doctorId: string,
   patientId: string,
-  consultationId?: string
+  consultationId?: string,
 ): Promise<QueueRow> {
   const admin = createAdminClient();
 
+  // If no consultationId provided, create a consultation automatically so real-time chat can work
+  if (!consultationId) {
+    try {
+      const c = await createConsultation({ doctorId, patientId, isFollowUp: false });
+      consultationId = c.id;
+    } catch (err) {
+      console.error("[joinQueue] auto-create consultation failed", err);
+    }
+  }
+
   // Determine next position
   const { count } = await admin
-    .from('consultation_queue')
-    .select('*', { count: 'exact', head: true })
-    .eq('doctor_id', doctorId)
-    .eq('status', 'waiting');
+    .from("consultation_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("doctor_id", doctorId)
+    .eq("status", "waiting");
 
   const position = (count ?? 0) + 1;
 
   const { data: dpRow } = await admin
-    .from('doctor_profiles')
-    .select('consultation_duration_mins')
-    .eq('id', doctorId)
+    .from("doctor_profiles")
+    .select("consultation_duration_mins")
+    .eq("id", doctorId)
     .single();
 
-  const estimatedWait = (position - 1) * ((dpRow as any)?.consultation_duration_mins ?? 15);
+  const estimatedWait =
+    (position - 1) * ((dpRow as any)?.consultation_duration_mins ?? 15);
 
   const { data, error } = await admin
-    .from('consultation_queue')
+    .from("consultation_queue")
     .insert({
       doctor_id: doctorId,
       patient_id: patientId,
       consultation_id: consultationId ?? null,
       queue_position: position,
       estimated_wait_mins: estimatedWait,
-      status: 'waiting',
+      status: "waiting",
     } as any)
     .select()
     .single();
@@ -218,15 +249,15 @@ export async function joinQueue(
  */
 export async function leaveQueue(
   doctorId: string,
-  patientId: string
+  patientId: string,
 ): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin
-    .from('consultation_queue')
+    .from("consultation_queue")
     .delete()
-    .eq('doctor_id', doctorId)
-    .eq('patient_id', patientId)
-    .eq('status', 'waiting');
+    .eq("doctor_id", doctorId)
+    .eq("patient_id", patientId)
+    .eq("status", "waiting");
   if (error) throw error;
 }
 
@@ -235,23 +266,39 @@ export async function leaveQueue(
 // ============================================================
 
 /**
- * Fetch message history for a consultation (paginated).
+ * Fetch message history.
+ * Supports:
+ *   - consultationId: history for a specific session
+ *   - doctorId + patientId: unified history for the conversation
  */
-export async function fetchMessages(
-  consultationId: string,
-  limit = 50,
-  before?: string
-): Promise<MessageRow[]> {
+export async function fetchMessages(params: {
+  consultationId?: string,
+  doctorId?: string,
+  patientId?: string,
+  limit?: number,
+  before?: string,
+}): Promise<MessageRow[]> {
   const admin = createAdminClient();
   let query = admin
-    .from('messages')
-    .select('*')
-    .eq('consultation_id', consultationId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true })
-    .limit(limit);
+    .from("messages")
+    .select("*")
+    .is("deleted_at", null);
 
-  if (before) query = query.lt('created_at', before);
+  if (params.consultationId) {
+    query = query.eq("consultation_id", params.consultationId);
+  } else if (params.doctorId && params.patientId) {
+    query = query
+      .eq("doctor_id", params.doctorId)
+      .eq("patient_id", params.patientId);
+  } else {
+    return [];
+  }
+
+  query = query
+    .order("created_at", { ascending: true })
+    .limit(params.limit ?? 100);
+
+  if (params.before) query = query.lt("created_at", params.before);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -259,23 +306,66 @@ export async function fetchMessages(
 }
 
 /**
+ * Internal helper to resolve or create a conversation tracking record
+ */
+async function resolveConversation(admin: any, doctorId: string, patientId: string) {
+  // Try to find
+  const { data: existing } = await admin.from("conversations")
+    .select("id")
+    .eq("doctor_id", doctorId)
+    .eq("patient_id", patientId)
+    .maybeSingle();
+
+  if (existing?.id) {
+    // Update last_message_time
+    await admin.from("conversations")
+      .update({ last_message_time: new Date().toISOString() })
+      .eq("id", existing.id);
+    return existing.id;
+  }
+
+  // Create new
+  const { data: newConv } = await admin.from("conversations")
+    .insert({
+      doctor_id: doctorId,
+      patient_id: patientId,
+      last_message_time: new Date().toISOString()
+    })
+    .select("id")
+    .single();
+
+  return newConv?.id;
+}
+
+/**
  * Send a text message.
  */
 export async function sendMessage(params: {
-  consultationId: string;
+  consultationId?: string;
+  doctorId?: string;
+  patientId?: string;
   senderId: string;
-  senderRole: 'patient' | 'doctor';
+  senderRole: "patient" | "doctor";
   body: string;
 }): Promise<MessageRow> {
   const admin = createAdminClient();
+  const insertData: any = {
+    sender_id: params.senderId,
+    sender_role: params.senderRole,
+    body: params.body,
+  };
+
+  if (params.consultationId) insertData.consultation_id = params.consultationId;
+  if (params.doctorId) insertData.doctor_id = params.doctorId;
+  if (params.patientId) insertData.patient_id = params.patientId;
+
+  if (params.doctorId && params.patientId) {
+    insertData.conversation_id = await resolveConversation(admin, params.doctorId, params.patientId);
+  }
+
   const { data, error } = await admin
-    .from('messages')
-    .insert({
-      consultation_id: params.consultationId,
-      sender_id: params.senderId,
-      sender_role: params.senderRole,
-      body: params.body,
-    } as any)
+    .from("messages")
+    .insert(insertData)
     .select()
     .single();
   if (error) throw error;
@@ -286,27 +376,38 @@ export async function sendMessage(params: {
  * Send a message with an attachment (after uploading via storage).
  */
 export async function sendAttachmentMessage(params: {
-  consultationId: string;
+  consultationId?: string;
+  doctorId?: string;
+  patientId?: string;
   senderId: string;
-  senderRole: 'patient' | 'doctor';
+  senderRole: "patient" | "doctor";
   attachmentUrl: string;
   attachmentName: string;
-  attachmentType: 'image' | 'pdf' | 'document' | 'other';
+  attachmentType: "image" | "pdf" | "document" | "other";
   attachmentSize: number;
 }): Promise<MessageRow> {
   const admin = createAdminClient();
+  const insertData: any = {
+    sender_id: params.senderId,
+    sender_role: params.senderRole,
+    body: null,
+    attachment_url: params.attachmentUrl,
+    attachment_name: params.attachmentName,
+    attachment_type: params.attachmentType,
+    attachment_size: params.attachmentSize,
+  };
+
+  if (params.consultationId) insertData.consultation_id = params.consultationId;
+  if (params.doctorId) insertData.doctor_id = params.doctorId;
+  if (params.patientId) insertData.patient_id = params.patientId;
+
+  if (params.doctorId && params.patientId) {
+    insertData.conversation_id = await resolveConversation(admin, params.doctorId, params.patientId);
+  }
+
   const { data, error } = await admin
-    .from('messages')
-    .insert({
-      consultation_id: params.consultationId,
-      sender_id: params.senderId,
-      sender_role: params.senderRole,
-      body: null,
-      attachment_url: params.attachmentUrl,
-      attachment_name: params.attachmentName,
-      attachment_type: params.attachmentType,
-      attachment_size: params.attachmentSize,
-    } as any)
+    .from("messages")
+    .insert(insertData)
     .select()
     .single();
   if (error) throw error;
@@ -317,55 +418,69 @@ export async function sendAttachmentMessage(params: {
 // SAVED DOCTORS & REMIND ME
 // ============================================================
 
-export async function fetchSavedDoctorIds(patientId: string): Promise<string[]> {
+export async function fetchSavedDoctorIds(
+  patientId: string,
+): Promise<string[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('saved_doctors')
-    .select('doctor_id')
-    .eq('patient_id', patientId);
+    .from("saved_doctors")
+    .select("doctor_id")
+    .eq("patient_id", patientId);
   if (error) throw error;
   return (data ?? []).map((r: any) => r.doctor_id);
 }
 
-export async function saveDoctor(patientId: string, doctorId: string): Promise<void> {
+export async function saveDoctor(
+  patientId: string,
+  doctorId: string,
+): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin
-    .from('saved_doctors')
-    .upsert(
-      { patient_id: patientId, doctor_id: doctorId } as any,
-      { onConflict: 'patient_id,doctor_id', ignoreDuplicates: true }
-    );
+    .from("saved_doctors")
+    .upsert({ patient_id: patientId, doctor_id: doctorId } as any, {
+      onConflict: "patient_id,doctor_id",
+      ignoreDuplicates: true,
+    });
   if (error) throw error;
 }
 
-export async function unsaveDoctor(patientId: string, doctorId: string): Promise<void> {
+export async function unsaveDoctor(
+  patientId: string,
+  doctorId: string,
+): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin
-    .from('saved_doctors')
+    .from("saved_doctors")
     .delete()
-    .eq('patient_id', patientId)
-    .eq('doctor_id', doctorId);
+    .eq("patient_id", patientId)
+    .eq("doctor_id", doctorId);
   if (error) throw error;
 }
 
-export async function setRemindMe(patientId: string, doctorId: string): Promise<void> {
+export async function setRemindMe(
+  patientId: string,
+  doctorId: string,
+): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin
-    .from('remind_me')
+    .from("remind_me")
     .upsert(
       { patient_id: patientId, doctor_id: doctorId, notified: false } as any,
-      { onConflict: 'patient_id,doctor_id', ignoreDuplicates: true }
+      { onConflict: "patient_id,doctor_id", ignoreDuplicates: true },
     );
   if (error) throw error;
 }
 
-export async function clearRemindMe(patientId: string, doctorId: string): Promise<void> {
+export async function clearRemindMe(
+  patientId: string,
+  doctorId: string,
+): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin
-    .from('remind_me')
+    .from("remind_me")
     .delete()
-    .eq('patient_id', patientId)
-    .eq('doctor_id', doctorId);
+    .eq("patient_id", patientId)
+    .eq("doctor_id", doctorId);
   if (error) throw error;
 }
 
@@ -376,10 +491,10 @@ export async function clearRemindMe(patientId: string, doctorId: string): Promis
 export async function fetchNotifications(userId: string): Promise<NotifRow[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('notifications')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
+    .from("notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw error;
   return data ?? [];
@@ -388,19 +503,19 @@ export async function fetchNotifications(userId: string): Promise<NotifRow[]> {
 export async function markNotificationRead(notifId: string): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin
-    .from('notifications')
+    .from("notifications")
     .update({ read: true } as never)
-    .eq('id', notifId);
+    .eq("id", notifId);
   if (error) throw error;
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
   const admin = createAdminClient();
   const { error } = await admin
-    .from('notifications')
+    .from("notifications")
     .update({ read: true } as never)
-    .eq('user_id', userId)
-    .eq('read', false);
+    .eq("user_id", userId)
+    .eq("read", false);
   if (error) throw error;
 }
 
@@ -416,26 +531,32 @@ export async function fetchBlogPosts(params?: {
 }): Promise<BlogPostRow[]> {
   const admin = createAdminClient();
   let query = admin
-    .from('blog_posts')
-    .select('*, doctor_profiles!doctor_id(specialty, users!user_id(name, avatar_url))')
+    .from("blog_posts")
+    .select(
+      "*, doctor_profiles!doctor_id(specialty, users!user_id(name, avatar_url))",
+    )
     .eq('is_published', true)
-    .order('published_at', { ascending: false })
+    .order("published_at", { ascending: false })
     .limit(params?.limit ?? 20);
 
-  if (params?.doctorId) query = query.eq('doctor_id', params.doctorId);
-  if (params?.tag) query = query.contains('tags', [params.tag]);
+  if (params?.doctorId) query = query.eq("doctor_id", params.doctorId);
+  if (params?.tag) query = query.contains("tags", [params.tag]);
 
   const { data, error } = await query;
   if (error) throw error;
   return data ?? [];
 }
 
-export async function fetchBlogPostBySlug(slug: string): Promise<BlogPostRow | null> {
+export async function fetchBlogPostBySlug(
+  slug: string,
+): Promise<BlogPostRow | null> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('blog_posts')
-    .select('*, doctor_profiles!doctor_id(specialty, users!user_id(name, avatar_url))')
-    .eq('slug', slug)
+    .from("blog_posts")
+    .select(
+      "*, doctor_profiles!doctor_id(specialty, users!user_id(name, avatar_url))",
+    )
+    .eq("slug", slug)
     .eq('is_published', true)
     .maybeSingle();
   if (error) throw error;
@@ -446,14 +567,16 @@ export async function fetchBlogPostBySlug(slug: string): Promise<BlogPostRow | n
 // REVIEWS (public read)
 // ============================================================
 
-export async function fetchDoctorReviews(doctorId: string): Promise<ReviewRow[]> {
+export async function fetchDoctorReviews(
+  doctorId: string,
+): Promise<ReviewRow[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('reviews')
-    .select('*, users!patient_id(name)')
-    .eq('doctor_id', doctorId)
+    .from("reviews")
+    .select("*, users!patient_id(name)")
+    .eq("doctor_id", doctorId)
     .eq('is_published', true)
-    .order('created_at', { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(20);
   if (error) throw error;
   // Flatten joined patient name
@@ -471,15 +594,13 @@ export async function submitReview(params: {
   comment?: string;
 }): Promise<void> {
   const admin = createAdminClient();
-  const { error } = await admin
-    .from('reviews')
-    .insert({
-      consultation_id: params.consultationId,
-      doctor_id: params.doctorId,
-      patient_id: params.patientId,
-      rating: params.rating,
-      comment: params.comment ?? null,
-    } as any);
+  const { error } = await admin.from("reviews").insert({
+    consultation_id: params.consultationId,
+    doctor_id: params.doctorId,
+    patient_id: params.patientId,
+    rating: params.rating,
+    comment: params.comment ?? null,
+  } as any);
   if (error) throw error;
 }
 
@@ -490,16 +611,16 @@ export async function submitReview(params: {
 export async function fetchBlogComments(postId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('blog_comments')
-    .select('*, users!author_id(name, avatar_url)')
-    .eq('post_id', postId)
-    .eq('is_approved', true)
-    .order('created_at', { ascending: true })
+    .from("blog_comments")
+    .select("*, users!author_id(name, avatar_url)")
+    .eq("post_id", postId)
+    .eq("is_approved", true)
+    .order("created_at", { ascending: true })
     .limit(50);
   if (error) throw error;
   return (data ?? []).map((c: any) => ({
     ...c,
-    author_name: c.users?.name ?? 'Anonymous',
+    author_name: c.users?.name ?? "Anonymous",
     author_avatar: c.users?.avatar_url ?? null,
   }));
 }
@@ -511,7 +632,7 @@ export async function createBlogComment(params: {
 }) {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('blog_comments')
+    .from("blog_comments")
     .insert({
       post_id: params.postId,
       author_id: params.authorId,
@@ -523,15 +644,15 @@ export async function createBlogComment(params: {
 
   // Increment comment_count on the blog post
   const { data: postRow } = await admin
-    .from('blog_posts')
-    .select('comment_count')
-    .eq('id', params.postId)
+    .from("blog_posts")
+    .select("comment_count")
+    .eq("id", params.postId)
     .single();
   if (postRow) {
     await admin
-      .from('blog_posts')
+      .from("blog_posts")
       .update({ comment_count: (postRow as any).comment_count + 1 } as never)
-      .eq('id', params.postId);
+      .eq("id", params.postId);
   }
 
   return data;
@@ -544,57 +665,60 @@ export async function createBlogComment(params: {
 export async function likeBlogPost(postId: string, userId: string) {
   const admin = createAdminClient();
   const { error } = await admin
-    .from('blog_likes')
-    .upsert(
-      { post_id: postId, user_id: userId } as any,
-      { onConflict: 'post_id,user_id', ignoreDuplicates: true }
-    );
+    .from("blog_likes")
+    .upsert({ post_id: postId, user_id: userId } as any, {
+      onConflict: "post_id,user_id",
+      ignoreDuplicates: true,
+    });
   if (error) throw error;
 
   // Increment likes counter
   const { data: postRow } = await admin
-    .from('blog_posts')
-    .select('likes')
-    .eq('id', postId)
+    .from("blog_posts")
+    .select("likes")
+    .eq("id", postId)
     .single();
   if (postRow) {
     await admin
-      .from('blog_posts')
+      .from("blog_posts")
       .update({ likes: (postRow as any).likes + 1 } as never)
-      .eq('id', postId);
+      .eq("id", postId);
   }
 }
 
 export async function unlikeBlogPost(postId: string, userId: string) {
   const admin = createAdminClient();
   const { error } = await admin
-    .from('blog_likes')
+    .from("blog_likes")
     .delete()
-    .eq('post_id', postId)
-    .eq('user_id', userId);
+    .eq("post_id", postId)
+    .eq("user_id", userId);
   if (error) throw error;
 
   // Decrement likes counter
   const { data: postRow } = await admin
-    .from('blog_posts')
-    .select('likes')
-    .eq('id', postId)
+    .from("blog_posts")
+    .select("likes")
+    .eq("id", postId)
     .single();
   if (postRow && (postRow as any).likes > 0) {
     await admin
-      .from('blog_posts')
+      .from("blog_posts")
       .update({ likes: (postRow as any).likes - 1 } as never)
-      .eq('id', postId);
+      .eq("id", postId);
   }
 }
 
-export async function hasUserLikedPost(postId: string, userId: string): Promise<boolean> {
+export async function hasUserLikedPost(
+  postId: string,
+  userId: string,
+): Promise<boolean> {
   const admin = createAdminClient();
   const { data } = await admin
-    .from('blog_likes')
-    .select('id')
-    .eq('post_id', postId)
-    .eq('user_id', userId)
+    .from("blog_likes")
+    .select("id")
+    .eq("post_id", postId)
+    .eq("user_id", userId)
     .maybeSingle();
   return !!data;
 }
@@ -606,11 +730,11 @@ export async function hasUserLikedPost(postId: string, userId: string): Promise<
 export async function fetchFollowUps(doctorId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('consultations')
-    .select('*, users!patient_id(name, avatar_url)')
-    .eq('doctor_id', doctorId)
-    .eq('is_follow_up', true)
-    .order('follow_up_scheduled_at', { ascending: true });
+    .from("consultations")
+    .select("*, users!patient_id(name, avatar_url)")
+    .eq("doctor_id", doctorId)
+    .eq("is_follow_up", true)
+    .order("follow_up_scheduled_at", { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
@@ -621,13 +745,13 @@ export async function createFollowUp(params: {
 }) {
   const admin = createAdminClient();
   const { data, error } = await admin
-    .from('consultations')
+    .from("consultations")
     .update({
       is_follow_up: true,
       follow_up_scheduled_at: params.scheduledAt,
-      status: 'follow_up',
+      status: "follow_up",
     } as never)
-    .eq('id', params.consultationId)
+    .eq("id", params.consultationId)
     .select()
     .single();
   if (error) throw error;
@@ -649,17 +773,15 @@ export async function createNotification(params: {
   refTable?: string;
 }) {
   const admin = createAdminClient();
-  const { error } = await admin
-    .from('notifications')
-    .insert({
-      user_id: params.userId,
-      type: params.type,
-      title: params.title,
-      message: params.message,
-      doctor_name: params.doctorName ?? null,
-      action_url: params.actionUrl ?? null,
-      ref_id: params.refId ?? null,
-      ref_table: params.refTable ?? null,
-    } as any);
-  if (error) console.error('[createNotification]', error.message);
+  const { error } = await admin.from("notifications").insert({
+    user_id: params.userId,
+    type: params.type,
+    title: params.title,
+    message: params.message,
+    doctor_name: params.doctorName ?? null,
+    action_url: params.actionUrl ?? null,
+    ref_id: params.refId ?? null,
+    ref_table: params.refTable ?? null,
+  } as any);
+  if (error) console.error("[createNotification]", error.message);
 }

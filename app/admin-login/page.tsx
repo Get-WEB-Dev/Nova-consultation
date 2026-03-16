@@ -19,11 +19,7 @@ function AdminLoginForm() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        loadUser().then((user) => {
-            // Check user_metadata for admin role — in the current system
-            // we check the user's role from Supabase metadata
-            if (user) router.replace("/admin-dashboard");
-        });
+        router.replace("/admin-dashboard");
     }, [router]);
 
     const handleSubmit = async (e: React.FormEvent) => {

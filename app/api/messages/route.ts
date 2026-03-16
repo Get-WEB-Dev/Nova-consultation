@@ -13,27 +13,22 @@ import { createAdminClient } from '@/lib/supabase/client';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const consultationId = searchParams.get('consultationId');
+  const doctorId = searchParams.get('doctorId');
+  const patientId = searchParams.get('patientId');
 
-  if (!consultationId) {
-    return NextResponse.json({ data: [], error: 'consultationId is required' }, { status: 400 });
+  if (!consultationId && (!doctorId || !patientId)) {
+    return NextResponse.json({ data: [], error: 'Either consultationId or both doctorId and patientId are required' }, { status: 400 });
   }
 
   try {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('messages')
-      .select('*')
-      .eq('consultation_id', consultationId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: true })
-      .limit(100);
+    const { fetchMessages } = await import('@/lib/server/queries');
+    const data = await fetchMessages({
+      consultationId: consultationId ?? undefined,
+      doctorId: doctorId ?? undefined,
+      patientId: patientId ?? undefined,
+    });
 
-    if (error) {
-      console.error('[messages GET]', error.message);
-      return NextResponse.json({ data: [], error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ data: data ?? [] });
+    return NextResponse.json({ data });
   } catch (err: any) {
     console.error('[messages GET] unexpected:', err.message);
     return NextResponse.json({ data: [], error: 'Internal server error' }, { status: 500 });
@@ -48,68 +43,105 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { consultationId, senderId, senderRole, body: text } = body ?? {};
-  if (!consultationId || !senderId || !text) {
+  const {
+    consultationId,
+    doctorId,
+    patientId,
+    senderId,
+    senderRole,
+    body: text,
+    attachmentUrl,
+    attachmentName,
+    attachmentType,
+    attachmentSize
+  } = body ?? {};
+
+  if (!senderId || (!text && !attachmentUrl)) {
     return NextResponse.json(
-      { error: 'consultationId, senderId, and body are required' },
+      { error: 'senderId and either body or attachment are required' },
       { status: 400 }
     );
   }
 
   try {
-    const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('messages')
-      .insert({
-        consultation_id: consultationId,
-        sender_id: senderId,
-        sender_role: senderRole ?? 'patient',
-        body: text,
-      } as any)
-      .select()
-      .single();
+    const { sendMessage, sendAttachmentMessage } = await import('@/lib/server/queries');
+    let message: any;
 
-    if (error) {
-      console.error('[messages POST]', error.message);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (attachmentUrl) {
+      message = await sendAttachmentMessage({
+        consultationId,
+        doctorId,
+        patientId,
+        senderId,
+        senderRole: senderRole ?? 'patient',
+        attachmentUrl,
+        attachmentName: attachmentName ?? 'file',
+        attachmentType: attachmentType ?? 'other',
+        attachmentSize: attachmentSize ?? 0,
+      });
+    } else {
+      message = await sendMessage({
+        consultationId,
+        doctorId,
+        patientId,
+        senderId,
+        senderRole: senderRole ?? 'patient',
+        body: text,
+      });
     }
 
     // Generate notification for the receiver
     try {
       const { createNotification } = await import('@/lib/server/queries');
-      // Get the consultation to determine the other party
-      const { data: consult } = await admin
-        .from('consultations')
-        .select('patient_id, doctor_id, doctor_profiles!doctor_id(user_id, users!user_id(name))')
-        .eq('id', consultationId)
-        .single();
+      const admin = (await import('@/lib/supabase/client')).createAdminClient();
 
-      if (consult) {
-        const isDoctorSender = senderRole === 'doctor';
-        const receiverUserId = isDoctorSender
-          ? (consult as any).patient_id
-          : (consult as any).doctor_profiles?.user_id;
-        const senderName = isDoctorSender
-          ? ((consult as any).doctor_profiles?.users?.name ?? 'Your doctor')
-          : 'A patient';
+      let receiverUserId: string | null = null;
+      let senderName = 'Someone';
 
-        if (receiverUserId) {
-          await createNotification({
-            userId: receiverUserId,
-            type: 'chat',
-            title: `New message from ${senderName}`,
-            message: text.length > 60 ? text.substring(0, 60) + '...' : text,
-            doctorName: isDoctorSender ? senderName : undefined,
-            actionUrl: '/appointments',
-          });
+      if (consultationId) {
+        const { data: consult } = await admin
+          .from('consultations')
+          .select('patient_id, doctor_id, doctor_profiles!doctor_id(user_id, users!user_id(name))')
+          .eq('id', consultationId)
+          .single();
+
+        if (consult) {
+          const isDoctorSender = senderRole === 'doctor';
+          receiverUserId = isDoctorSender
+            ? (consult as any).patient_id
+            : (consult as any).doctor_profiles?.user_id;
+          senderName = isDoctorSender
+            ? ((consult as any).doctor_profiles?.users?.name ?? 'Your doctor')
+            : 'A patient';
+        }
+      } else if (doctorId && patientId) {
+        // Fallback if no consultationId
+        if (senderRole === 'doctor') {
+          receiverUserId = patientId;
+          const { data: d } = await admin.from('doctor_profiles').select('users(name)').eq('id', doctorId).single();
+          senderName = (d as any)?.users?.name ?? 'Your doctor';
+        } else {
+          const { data: d } = await admin.from('doctor_profiles').select('user_id').eq('id', doctorId).single();
+          receiverUserId = (d as any)?.user_id;
+          senderName = 'A patient';
         }
       }
+
+      if (receiverUserId) {
+        await createNotification({
+          userId: receiverUserId,
+          type: 'chat',
+          title: `New message from ${senderName}`,
+          message: text ? (text.length > 60 ? text.substring(0, 60) + '...' : text) : 'Sent an attachment',
+          doctorName: senderRole === 'doctor' ? senderName : undefined,
+          actionUrl: '/appointments',
+        });
+      }
     } catch (notifErr) {
-      // Non-fatal
       console.warn('[messages POST] notification error:', notifErr);
     }
 
-    return NextResponse.json({ data }, { status: 201 });
+    return NextResponse.json({ data: message }, { status: 201 });
   } catch (err: any) {
     console.error('[messages POST] unexpected:', err.message);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

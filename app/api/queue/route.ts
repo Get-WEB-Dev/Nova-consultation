@@ -7,7 +7,7 @@ import type { NextRequest } from 'next/server';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const doctorId  = searchParams.get('doctorId');
+  const doctorId = searchParams.get('doctorId');
   const patientId = searchParams.get('patientId');
 
   if (!doctorId) {
@@ -15,20 +15,39 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { fetchQueue, fetchPatientQueueEntry } = await import('@/lib/server/queries');
-    const queue = await fetchQueue(doctorId);
+    const { fetchPatientQueueEntry } = await import('@/lib/server/queries');
+    const { fetchDoctorProfileByUserId, fetchDoctorQueue } = await import('@/lib/server/doctor-queries');
+
+    // Resolve: doctorId might be auth user_id or doctor_profiles.id
+    let resolvedId = doctorId;
+    const profile = await fetchDoctorProfileByUserId(doctorId) as any;
+    if (profile?.id) resolvedId = profile.id;
+
+    const rawQueue = await fetchDoctorQueue(resolvedId);
+    // Format for frontend with patient names
+    const queue = rawQueue.map((e: any) => ({
+      id: e.id,
+      patient_id: e.patient_id,
+      patientName: e.users?.name ?? 'Patient',
+      patientAvatar: e.users?.avatar_url ?? null,
+      queue_position: e.queue_position,
+      estimated_wait_mins: e.estimated_wait_mins,
+      status: e.status,
+      joined_at: e.joined_at,
+      consultation_id: e.consultation_id,
+    }));
 
     if (patientId) {
-      const entry = await fetchPatientQueueEntry(doctorId, patientId);
+      const entry = await fetchPatientQueueEntry(resolvedId, patientId);
       return NextResponse.json({
-        position:      entry?.queue_position   ?? null,
+        position: entry?.queue_position ?? null,
         estimatedWait: entry?.estimated_wait_mins ?? null,
-        total:         queue.length,
-        inQueue:       !!entry,
+        total: queue.length,
+        inQueue: !!entry,
       });
     }
 
-    return NextResponse.json({ total: queue.length, queue });
+    return NextResponse.json({ total: queue.length, queue, data: queue });
   } catch (err: any) {
     console.error('[queue GET]', err.message);
     return NextResponse.json({ error: err.message, total: 0, queue: [] }, { status: 500 });
