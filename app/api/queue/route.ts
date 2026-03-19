@@ -92,10 +92,20 @@ export async function DELETE(req: NextRequest) {
 
   try {
     const { leaveQueue } = await import('@/lib/server/queries');
-    await leaveQueue(doctorId, patientId);
+    const { fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
+
+    // Resolve: doctorId might be auth user_id or doctor_profiles.id
+    let resolvedId = doctorId;
+    try {
+      const profile = await fetchDoctorProfileByUserId(doctorId) as any;
+      if (profile?.id) resolvedId = profile.id;
+    } catch (_) { /* already a profile ID */ }
+
+    await leaveQueue(resolvedId, patientId);
     return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error('[queue DELETE]', err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+

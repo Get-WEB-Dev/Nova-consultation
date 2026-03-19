@@ -1,0 +1,84 @@
+[
+  {
+    "id": "cs1",
+    "doctorId": "d1",
+    "doctorName": "Dr. Sarah Johnson",
+    "doctorSpecialty": "Cardiologist",
+    "doctorAvatar": "https://ui-avatars.com/api/?name=Sarah+Johnson&background=1B3A5C&color=fff&size=128",
+    "patientId": "u1",
+    "patientName": "You",
+    "status": "completed",
+    "startedAt": "2025-11-22T11:00:00Z",
+    "endedAt": "2025-11-22T11:18:00Z",
+    "durationMinutes": 18,
+    "notes": "Cardiology consultation",
+    "summary": "Reviewed recent ECG results — normal sinus rhythm. Blood pressure slightly elevated at 135/88. Discussed lifestyle modifications including reduced sodium intake and 30 minutes of daily walking. Prescribed low-dose antihypertensive. Follow-up recommended in 3 months.",
+    "isFollowUp": false,
+    "chatHistory": [
+      {"id":"sh1","from":"doctor","text":"I've reviewed your ECG. It looks mostly normal but I'd like to monitor your blood pressure closely.","time":"11:05 AM"},
+      {"id":"sh2","from":"me","text":"Should I be worried?","time":"11:06 AM"},
+      {"id":"sh3","from":"doctor","text":"Not at all. It's mild and very manageable with lifestyle changes. I'll send a prescription to your pharmacy.","time":"11:07 AM"},
+      {"id":"sh4","from":"me","text":"Thank you, that's reassuring.","time":"11:08 AM"}
+    ],
+    "created_at": "2025-11-22T11:00:00Z"
+  },
+  {
+    "id": "cs2",
+    "doctorId": "d4",
+    "doctorName": "Dr. Michael Chen",
+    "doctorSpecialty": "Neurologist",
+    "doctorAvatar": "https://ui-avatars.com/api/?name=Michael+Chen&background=1d4ed8&color=fff&size=128",
+    "patientId": "u1",
+    "patientName": "You",
+    "status": "completed",
+    "startedAt": "2025-10-05T15:00:00Z",
+    "endedAt": "2025-10-05T15:22:00Z",
+    "durationMinutes": 22,
+    "notes": "Headache evaluation",
+    "summary": "Patient reports recurring migraines 2–3 times per week for past month. Duration 4–6 hours each. Possible triggers identified: screen time, dehydration, irregular sleep. Recommended magnesium supplement and increased water intake. Prescribed sumatriptan for acute attacks.",
+    "isFollowUp": false,
+    "chatHistory": [
+      {"id":"mh1","from":"doctor","text":"Based on what you've described, these are classic tension-type migraines. Let's work on identifying your triggers.","time":"3:10 PM"},
+      {"id":"mh2","from":"me","text":"I think it gets worse when I use my laptop for long hours.","time":"3:11 PM"},
+      {"id":"mh3","from":"doctor","text":"That's very common. Take regular breaks every 30 minutes and use blue light glasses in the evenings.","time":"3:12 PM"}
+    ],
+    "created_at": "2025-10-05T15:00:00Z"
+  },
+  {
+    "id": "cs3",
+    "doctorId": "d1",
+    "doctorName": "Dr. Sarah Johnson",
+    "doctorSpecialty": "Cardiologist",
+    "doctorAvatar": "https://ui-avatars.com/api/?name=Sarah+Johnson&background=1B3A5C&color=fff&size=128",
+    "patientId": "u1",
+    "patientName": "You",
+    "status": "follow_up",
+    "isFollowUp": true,
+    "followUpScheduledAt": "2026-03-10T10:00:00Z",
+    "notes": "3-month follow-up after blood pressure consultation. Doctor-assigned private session.",
+    "summary": null,
+    "chatHistory": [],
+    "created_at": "2025-11-22T11:20:00Z"
+  },
+  {
+    "id": "cs4",
+    "doctorId": "d2",
+    "doctorName": "Dr. Abebe Girma",
+    "doctorSpecialty": "General Practitioner",
+    "doctorAvatar": "https://ui-avatars.com/api/?name=Abebe+Girma&background=0369a1&color=fff&size=128",
+    "patientId": "u1",
+    "patientName": "You",
+    "status": "completed",
+    "startedAt": "2025-12-10T09:00:00Z",
+    "endedAt": "2025-12-10T09:14:00Z",
+    "durationMinutes": 14,
+    "notes": "General wellness visit",
+    "summary": "Patient presented for routine general checkup. Blood pressure 120/80 mmHg, normal. Weight stable. No significant findings. Advised to maintain current diet and exercise routine.",
+    "isFollowUp": false,
+    "chatHistory": [
+      {"id":"ph1","from":"doctor","text":"Your vitals all look great today. Keep up the healthy habits!","time":"9:12 AM"},
+      {"id":"ph2","from":"me","text":"Thank you doctor!","time":"9:13 AM"}
+    ],
+    "created_at": "2025-12-10T09:00:00Z"
+  }
+]

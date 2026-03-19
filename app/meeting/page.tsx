@@ -39,7 +39,14 @@ function MeetingFlow() {
   }
 
   if (state === "in_call") {
-    return <MeetingRoom consultationId={consultationId} />;
+    return (
+      <MeetingRoom
+        consultationId={consultationId}
+        doctorId={doctorId}
+        patientId={patientId}
+        onEnd={() => setState("ended")}
+      />
+    );
   }
 
   // state === "ended"

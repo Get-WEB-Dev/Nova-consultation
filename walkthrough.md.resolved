@@ -1,0 +1,62 @@
+# Video Consultation Module — Fixes Walkthrough
+
+## Problem Summary
+The video consultation system had critical issues: doctor chat messages silently failed due to wrong ID usage, patient endCall had no cleanup, no end-call confirmation dialogs, and the video was stuck on "Connecting."
+
+## Root Cause
+
+The doctor consult page sent `doctorUserId` (auth UUID) as `doctorId` in message API calls, but `messages.doctor_id` references `doctor_profiles.id`. This caused all doctor-sent messages to fail silently.
+
+## Changes Made
+
+### 1. Doctor Consult Page — Complete Rewrite
+**File:** [page.tsx](file:///home/surafel/healthapp/app/doctor-dashboard/consult/page.tsx)
+
+- **ID fix**: All message/queue operations now use `doctorProfileId` (resolved from `doctor_profiles`) instead of auth UUID
+- **End-call dialog**: Confirmation with two options:
+  - "End Consultation" → marks as `completed`, removes from queue
+  - "Schedule Follow-up" → marks as `follow_up`, removes from queue
+- **Connection status**: Transitions from "Connecting…" to "In consultation — video simulated"
+- **Chat file attach**: Added paperclip button in chat input for inline file sharing
+
+---
+
+### 2. Patient Meeting Room — Complete Rewrite
+**File:** [MeetingRoom.tsx](file:///home/surafel/healthapp/app/meeting/MeetingRoom.tsx)
+
+- **Proper endCall**: Now updates consultation status to `completed` AND removes from queue
+- **End-call dialog**: Confirmation before ending
+- **Props**: Accepts `doctorId`, `patientId`, `onEnd` from parent for correct ID usage
+
+---
+
+### 3. Meeting Page — Updated Props
+**File:** [page.tsx](file:///home/surafel/healthapp/app/meeting/page.tsx)
+
+- Now passes `doctorId`, `patientId`, `onEnd` to MeetingRoom
+
+---
+
+### 4. Queue API — DELETE Fix
+**File:** [route.ts](file:///home/surafel/healthapp/app/api/queue/route.ts)
+
+- DELETE handler now resolves `doctorId` from auth UUID → `doctor_profiles.id` (same as GET)
+
+## Consultation Flow (After Fix)
+
+```mermaid
+flowchart TD
+    A["Patient joins queue<br/>POST /api/queue"] --> B["Auto-creates consultation"]
+    B --> C["Patient in WaitingRoom<br/>Polls position"]
+    C --> D["Position 1 → Start Call"]
+    D --> E["MeetingRoom: video + chat"]
+    E --> F{"End Call?"}
+    F -->|"End"| G["PATCH status → completed<br/>DELETE from queue"]
+    F -->|"Follow-up"| H["PATCH status → follow_up<br/>DELETE from queue"]
+    G --> I["Both dashboards updated"]
+    H --> I
+```
+
+## Verification
+- `npm run build` → **Exit code 0**, zero TypeScript errors
+- All routes compiled successfully
