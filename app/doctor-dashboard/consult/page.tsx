@@ -18,6 +18,7 @@ import {
   Users, Stethoscope, Activity, Plus, Download, CalendarPlus,
   Loader2
 } from "lucide-react";
+import JitsiWrapper from "@/app/components/JitsiWrapper";
 
 /* ── Types ── */
 interface Patient {
@@ -74,13 +75,8 @@ export default function ConsultPortal() {
   const [doctorUserId, setDoctorUserId] = useState<string | null>(null);
   const [doctorProfileId, setDoctorProfileId] = useState<string | null>(null);
 
-  // Jitsi
-  const jitsiContainerRef = useRef<HTMLDivElement>(null);
-  const jitsiApiRef = useRef<any>(null);
-  const [jitsiLoading, setJitsiLoading] = useState(true);
-  const [jitsiReady, setJitsiReady] = useState(false);
-  // Track which consultation Jitsi is connected to, to avoid re-init
-  const jitsiConsultationRef = useRef<string | null>(null);
+  // Computed Jitsi room name
+  const roomName = active?.consultation_id ? `NovaHealth_${active.consultation_id.replace(/-/g, "")}` : null;
 
   // ────────────────────────────────────────────
   // 1. Load doctor user
@@ -100,7 +96,7 @@ export default function ConsultPortal() {
       try {
         // Resolve profile ID
         if (!doctorProfileId) {
-          const profileRes = await fetch(`/api/doctor/profile?userId=${doctorUserId}`);
+          const profileRes = await fetch(`/api/doctor/profile?doctorId=${doctorUserId}`);
           const pData = await profileRes.json();
           if (pData.data?.id) setDoctorProfileId(pData.data.id);
         }
@@ -125,110 +121,17 @@ export default function ConsultPortal() {
     return () => clearInterval(interval);
   }, [doctorUserId, doctorProfileId]);
 
-  // ────────────────────────────────────────────
-  // 3. Jitsi — init when active patient changes
-  // ────────────────────────────────────────────
-  useEffect(() => {
-    if (!active?.consultation_id) return;
-    // Don't re-init if same consultation
-    if (jitsiConsultationRef.current === active.consultation_id) return;
-
-    const roomName = `NovaHealth_${active.consultation_id.replace(/-/g, "")}`;
-
-    // Dispose previous
-    if (jitsiApiRef.current) {
-      jitsiApiRef.current.dispose();
-      jitsiApiRef.current = null;
-    }
-
-    setJitsiLoading(true);
-    setJitsiReady(false);
-
-    const initJitsi = () => {
-      if (!jitsiContainerRef.current) return;
-      try {
-        const api = new window.JitsiMeetExternalAPI("meet.jit.si", {
-          roomName,
-          parentNode: jitsiContainerRef.current,
-          width: "100%",
-          height: "100%",
-          configOverrides: {
-            startWithAudioMuted: false,
-            startWithVideoMuted: false,
-            disableDeepLinking: true,
-            prejoinPageEnabled: false,
-            enableClosePage: false,
-            disableInviteFunctions: true,
-            toolbarButtons: [
-              "microphone", "camera", "desktop", "fullscreen",
-              "tileview", "settings", "filmstrip",
-            ],
-          },
-          interfaceConfigOverrides: {
-            SHOW_JITSI_WATERMARK: false,
-            SHOW_WATERMARK_FOR_GUESTS: false,
-            SHOW_BRAND_WATERMARK: false,
-            TOOLBAR_ALWAYS_VISIBLE: true,
-            DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
-            FILM_STRIP_MAX_HEIGHT: 120,
-            TOOLBAR_TIMEOUT: 10000,
-          },
-          userInfo: { displayName: "Doctor" },
-        });
-
-        api.addListener("videoConferenceJoined", () => {
-          setJitsiReady(true);
-          setJitsiLoading(false);
-        });
-
-        api.addListener("readyToClose", () => {
-          // Doctor closed Jitsi UI → end consultation
-          setShowEndDialog(true);
-        });
-
-        jitsiApiRef.current = api;
-        jitsiConsultationRef.current = active.consultation_id!;
-      } catch (e) {
-        console.error("Jitsi init error:", e);
-        setJitsiLoading(false);
-      }
-    };
-
-    // Load script if needed
-    if (window.JitsiMeetExternalAPI) {
-      initJitsi();
-    } else {
-      const script = document.createElement("script");
-      script.src = "https://meet.jit.si/external_api.js";
-      script.async = true;
-      script.onload = initJitsi;
-      script.onerror = () => { console.error("Failed to load Jitsi"); setJitsiLoading(false); };
-      document.head.appendChild(script);
-    }
-
-    return () => {
-      // Cleanup on unmount only
-    };
-  }, [active?.consultation_id]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (jitsiApiRef.current) {
-        jitsiApiRef.current.dispose();
-        jitsiApiRef.current = null;
-      }
-    };
-  }, []);
+  // (Jitsi initialization is now handled by JitsiWrapper)
 
   // ────────────────────────────────────────────
   // 4. Poll messages
   // ────────────────────────────────────────────
   useEffect(() => {
-    if (!active?.consultation_id) return;
+    if (!active || (!active.consultation_id && !doctorProfileId)) return;
     const fetchMsgs = async () => {
       try {
-        const res = await fetch(`/api/messages?consultationId=${active.consultation_id}`);
+        const queryParams = active.consultation_id ? `consultationId=${active.consultation_id}` : `doctorId=${doctorProfileId || doctorUserId}&patientId=${active.id}`;
+        const res = await fetch(`/api/messages?${queryParams}`);
         const json = await res.json();
         if (json.data) {
           setChats(json.data.map((m: any) => ({
@@ -254,14 +157,14 @@ export default function ConsultPortal() {
   // 5. Chat — send text (uses doctorProfileId!)
   // ────────────────────────────────────────────
   const sendChat = useCallback(() => {
-    if (!input.trim() || !active?.consultation_id || !doctorProfileId) return;
+    if (!input.trim() || !active || !doctorProfileId) return;
     const msgText = input.trim();
     setChats(p => [...p, { id: Date.now().toString(), from: "doctor", text: msgText, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }]);
     setInput("");
     fetch('/api/messages', {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        consultationId: active.consultation_id,
+        consultationId: active.consultation_id || undefined,
         doctorId: doctorProfileId, // ← profile ID, not auth UUID
         patientId: active.id,
         senderId: doctorUserId,
@@ -276,7 +179,7 @@ export default function ConsultPortal() {
   // ────────────────────────────────────────────
   const handleChatFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !active?.consultation_id || !doctorProfileId) return;
+    if (!file || !active || !doctorProfileId) return;
     const isImage = file.type.startsWith("image/");
     // Optimistic
     setChats(p => [...p, { id: Date.now().toString(), from: "doctor", text: "", attachment_url: URL.createObjectURL(file), attachment_name: file.name, attachment_type: isImage ? "image" : "document", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }]);
@@ -288,7 +191,7 @@ export default function ConsultPortal() {
       await fetch('/api/messages', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          consultationId: active.consultation_id,
+          consultationId: active.consultation_id || undefined,
           patientId: active.user_id || active.id,
           doctorId: doctorProfileId,
           senderId: doctorUserId,
@@ -311,12 +214,8 @@ export default function ConsultPortal() {
     setEnding(true);
     setShowEndDialog(false);
     try {
-      // Dispose Jitsi
-      if (jitsiApiRef.current) {
-        jitsiApiRef.current.dispose();
-        jitsiApiRef.current = null;
-        jitsiConsultationRef.current = null;
-      }
+      // (Jitsi disposal is handled by JitsiWrapper unmount)
+
       // Update status
       await fetch('/api/consultations/status', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -333,7 +232,7 @@ export default function ConsultPortal() {
     setTimeout(() => {
       const next = queue.filter((_, i) => i !== activeIdx);
       if (!next.length) { router.push("/doctor-dashboard"); return; }
-      setQueue(next); setActiveIdx(0); setEnding(false); setNotes(""); setChats([]); setNotesSaved(false); setJitsiReady(false); setJitsiLoading(true);
+      setQueue(next); setActiveIdx(0); setEnding(false); setNotes(""); setChats([]); setNotesSaved(false);
     }, 500);
   }, [queue, activeIdx, router, doctorUserId, doctorProfileId, active]);
 
@@ -416,26 +315,22 @@ export default function ConsultPortal() {
         {/* ── CENTER: Video ── */}
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 relative overflow-hidden bg-[#0A0E14]">
-            {/* Loading overlay */}
-            {(jitsiLoading || !active) && (
+            {!active ? (
               <div className="absolute inset-0 flex items-center justify-center bg-[#0A0E14] z-10">
-                {!active ? (
-                  <div className="text-center">
-                    <Users className="w-12 h-12 text-slate-700 mx-auto mb-3" />
-                    <p className="text-slate-500">No active consultation</p>
-                    <p className="text-slate-600 text-sm mt-1">Patients will appear when they join the queue</p>
-                    <button onClick={() => router.push("/doctor-dashboard")} className="text-primary-400 text-sm mt-3 hover:text-primary-300">Return to dashboard</button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="w-8 h-8 text-primary-400 animate-spin" />
-                    <p className="text-slate-400 text-sm">Loading video session…</p>
-                  </div>
-                )}
+                <div className="text-center">
+                  <Users className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+                  <p className="text-slate-500">No active consultation</p>
+                  <p className="text-slate-600 text-sm mt-1">Patients will appear when they join the queue</p>
+                  <button onClick={() => router.push("/doctor-dashboard")} className="text-primary-400 text-sm mt-3 hover:text-primary-300">Return to dashboard</button>
+                </div>
               </div>
-            )}
-            {/* Jitsi container */}
-            <div ref={jitsiContainerRef} className="w-full h-full" style={{ minHeight: "300px" }} />
+            ) : roomName ? (
+              <JitsiWrapper
+                roomName={roomName}
+                displayName="Doctor"
+                onReadyToClose={() => setShowEndDialog(true)}
+              />
+            ) : null}
           </div>
 
           {/* Controls */}
@@ -537,13 +432,13 @@ export default function ConsultPortal() {
                   <p className="text-xs text-slate-500 text-center">Click to share a file</p>
                   <input type="file" className="hidden" onChange={async (e) => {
                     const file = e.target.files?.[0];
-                    if (!file || !active?.consultation_id || !doctorProfileId) return;
+                    if (!file || !active || !doctorProfileId) return;
                     const fd = new FormData(); fd.append('file', file);
                     try {
                       const uploadRes = await fetch('/api/upload', { method: 'POST', body: fd });
                       if (!uploadRes.ok) throw new Error('Upload failed');
                       const uploadData = await uploadRes.json();
-                      await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ consultationId: active.consultation_id, patientId: active.user_id || active.id, doctorId: doctorProfileId, senderId: doctorUserId, senderRole: 'doctor', attachmentUrl: uploadData.url, attachmentName: uploadData.name, attachmentType: file.type.startsWith('image/') ? 'image' : 'document' }) });
+                      await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ consultationId: active.consultation_id || undefined, patientId: active.user_id || active.id, doctorId: doctorProfileId, senderId: doctorUserId, senderRole: 'doctor', attachmentUrl: uploadData.url, attachmentName: uploadData.name, attachmentType: file.type.startsWith('image/') ? 'image' : 'document' }) });
                     } catch (err) { console.error(err); }
                   }} />
                 </label>

@@ -13,8 +13,9 @@ import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   MessageCircle, X, Send, Paperclip, Download,
-  PhoneOff, Loader2, Clock, Wifi,
+  PhoneOff, Clock, Wifi,
 } from "lucide-react";
+import JitsiWrapper from "../components/JitsiWrapper";
 
 /* ── Types ── */
 interface ChatMsg {
@@ -59,7 +60,6 @@ export default function MeetingRoom({
   const patientId = propPatientId || searchParams.get("patientId") || "";
 
   // State
-  const [loading, setLoading] = useState(true);
   const [jitsiReady, setJitsiReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -69,109 +69,19 @@ export default function MeetingRoom({
   const [elapsed, setElapsed] = useState(0);
 
   // Refs
-  const jitsiContainerRef = useRef<HTMLDivElement>(null);
-  const jitsiApiRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ────────────────────────────────────────────
-  // 1. Load Jitsi External API script + init
-  // ────────────────────────────────────────────
-  useEffect(() => {
-    if (!consultationId) return;
+  // Computed room name
+  const roomName = consultationId ? `NovaHealth_${consultationId.replace(/-/g, "")}` : null;
 
-    const roomName = `NovaHealth_${consultationId.replace(/-/g, "")}`;
-
-    const loadJitsi = () => {
-      // Don't re-create if already initialized
-      if (jitsiApiRef.current) return;
-      if (!jitsiContainerRef.current) return;
-
-      try {
-        const api = new window.JitsiMeetExternalAPI("meet.jit.si", {
-          roomName,
-          parentNode: jitsiContainerRef.current,
-          width: "100%",
-          height: "100%",
-          configOverrides: {
-            startWithAudioMuted: false,
-            startWithVideoMuted: false,
-            disableDeepLinking: true,
-            prejoinPageEnabled: false,
-            enableClosePage: false,
-            disableInviteFunctions: true,
-            toolbarButtons: [
-              "microphone",
-              "camera",
-              "desktop",
-              "fullscreen",
-              "tileview",
-              "settings",
-              "filmstrip",
-            ],
-          },
-          interfaceConfigOverrides: {
-            SHOW_JITSI_WATERMARK: false,
-            SHOW_WATERMARK_FOR_GUESTS: false,
-            SHOW_BRAND_WATERMARK: false,
-            TOOLBAR_ALWAYS_VISIBLE: true,
-            DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
-            FILM_STRIP_MAX_HEIGHT: 120,
-            TOOLBAR_TIMEOUT: 10000,
-          },
-          userInfo: {
-            displayName: "Patient",
-          },
-        });
-
-        // Events
-        api.addListener("videoConferenceJoined", () => {
-          setJitsiReady(true);
-          setLoading(false);
-        });
-
-        api.addListener("readyToClose", () => {
-          handleEndCallDirect();
-        });
-
-        jitsiApiRef.current = api;
-      } catch (e) {
-        console.error("Jitsi init error:", e);
-        setLoading(false);
-      }
-    };
-
-    // Load the Jitsi Meet External API script
-    if (window.JitsiMeetExternalAPI) {
-      loadJitsi();
-    } else {
-      const script = document.createElement("script");
-      script.src = "https://meet.jit.si/external_api.js";
-      script.async = true;
-      script.onload = () => {
-        loadJitsi();
-      };
-      script.onerror = () => {
-        console.error("Failed to load Jitsi script");
-        setLoading(false);
-      };
-      document.head.appendChild(script);
-    }
-
-    return () => {
-      if (jitsiApiRef.current) {
-        jitsiApiRef.current.dispose();
-        jitsiApiRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consultationId]);
+  // (Jitsi initialization is now handled by JitsiWrapper)
 
   // ────────────────────────────────────────────
   // 2. Timer
   // ────────────────────────────────────────────
   useEffect(() => {
-    const timer = setInterval(() => setElapsed((p) => p + 1), 1000);
+    const timer = setInterval(() => setElapsed((prev: number) => prev + 1), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -179,10 +89,11 @@ export default function MeetingRoom({
   // 3. Poll messages from our backend
   // ────────────────────────────────────────────
   useEffect(() => {
-    if (!consultationId) return;
+    if (!consultationId && (!doctorId || !patientId)) return;
     const fetchMsgs = async () => {
       try {
-        const res = await fetch(`/api/messages?consultationId=${consultationId}`);
+        const params = consultationId ? `consultationId=${consultationId}` : `doctorId=${doctorId}&patientId=${patientId}`;
+        const res = await fetch(`/api/messages?${params}`);
         const json = await res.json();
         if (json.data) {
           setMessages(
@@ -232,7 +143,7 @@ export default function MeetingRoom({
     });
 
   const sendMessage = useCallback(() => {
-    if (!newMsg.trim() || !consultationId) return;
+    if (!newMsg.trim() || (!consultationId && (!doctorId || !patientId))) return;
     const text = newMsg.trim();
     setMessages((prev) => [
       ...prev,
@@ -243,7 +154,7 @@ export default function MeetingRoom({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        consultationId,
+        consultationId: consultationId || undefined,
         doctorId,
         patientId,
         senderId: patientId,
@@ -259,7 +170,7 @@ export default function MeetingRoom({
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file || !consultationId) return;
+      if (!file || (!consultationId && (!doctorId || !patientId))) return;
       const isImage = file.type.startsWith("image/");
       // Optimistic
       setMessages((prev) => [
@@ -283,7 +194,7 @@ export default function MeetingRoom({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            consultationId,
+            consultationId: consultationId || undefined,
             doctorId,
             patientId,
             senderId: patientId,
@@ -309,11 +220,8 @@ export default function MeetingRoom({
     setIsEnding(true);
     setShowEndDialog(false);
     try {
-      // Dispose Jitsi
-      if (jitsiApiRef.current) {
-        jitsiApiRef.current.dispose();
-        jitsiApiRef.current = null;
-      }
+      // (Jitsi disposal is handled by JitsiWrapper unmount)
+
       // Update consultation status
       if (consultationId) {
         await fetch("/api/consultations/status", {
@@ -414,22 +322,20 @@ export default function MeetingRoom({
       <div className="flex flex-1 overflow-hidden relative">
         {/* Jitsi video area */}
         <div className="flex-1 relative bg-black min-w-0">
-          {loading && (
+          {roomName ? (
+            <JitsiWrapper
+              roomName={roomName}
+              displayName="Patient"
+              onReady={() => setJitsiReady(true)}
+              onReadyToClose={() => handleEndCallDirect()}
+            />
+          ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-10 gap-3">
-              <Loader2 className="w-10 h-10 text-primary-400 animate-spin" />
-              <p className="text-white text-lg">
-                Loading video consultation…
-              </p>
               <p className="text-slate-400 text-sm">
-                Please allow camera and microphone access
+                Waiting for meeting details...
               </p>
             </div>
           )}
-          <div
-            ref={jitsiContainerRef}
-            className="w-full h-full"
-            style={{ minHeight: "300px" }}
-          />
         </div>
 
         {/* Chat side panel */}

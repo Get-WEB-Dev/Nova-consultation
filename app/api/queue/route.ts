@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         position: entry?.queue_position ?? null,
         estimatedWait: entry?.estimated_wait_mins ?? null,
+        consultation_id: (entry as any)?.consultation_id ?? null,
         total: queue.length,
         inQueue: !!entry,
       });
