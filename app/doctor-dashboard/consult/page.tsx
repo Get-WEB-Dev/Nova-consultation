@@ -3,7 +3,7 @@
 /**
  * Doctor Consultation Portal
  *
- * Uses Jitsi Meet External API (meet.jit.si) for video.
+ * Uses Zoom Video SDK for video.
  * Right panel has: Patient Info, Chat (with files), Notes, Files tabs.
  * Chat + file attachments use our backend (/api/messages, /api/upload).
  * All message operations use doctorProfileId (not auth UUID).
@@ -18,7 +18,7 @@ import {
   Users, Stethoscope, Activity, Plus, Download, CalendarPlus,
   Loader2
 } from "lucide-react";
-import JitsiWrapper from "@/app/components/JitsiWrapper";
+import ZoomVideoCall from "@/app/components/ZoomVideoCall";
 
 /* ── Types ── */
 interface Patient {
@@ -31,10 +31,7 @@ interface ChatMsg {
   attachment_url?: string; attachment_name?: string; attachment_type?: string;
 }
 
-/* ── Jitsi type ── */
-declare global {
-  interface Window { JitsiMeetExternalAPI: any; }
-}
+/* ── Zoom Video SDK ── */
 
 /* ── Small components ── */
 function Timer({ start }: { start: Date }) {
@@ -75,7 +72,7 @@ export default function ConsultPortal() {
   const [doctorUserId, setDoctorUserId] = useState<string | null>(null);
   const [doctorProfileId, setDoctorProfileId] = useState<string | null>(null);
 
-  // Computed Jitsi room name
+  // Computed Zoom room name
   const roomName = active?.consultation_id ? `NovaHealth_${active.consultation_id.replace(/-/g, "")}` : null;
 
   // ────────────────────────────────────────────
@@ -121,7 +118,7 @@ export default function ConsultPortal() {
     return () => clearInterval(interval);
   }, [doctorUserId, doctorProfileId]);
 
-  // (Jitsi initialization is now handled by JitsiWrapper)
+  // (Zoom initialization is handled by ZoomVideoCall)
 
   // ────────────────────────────────────────────
   // 4. Poll messages
@@ -214,7 +211,7 @@ export default function ConsultPortal() {
     setEnding(true);
     setShowEndDialog(false);
     try {
-      // (Jitsi disposal is handled by JitsiWrapper unmount)
+      // (Zoom cleanup is handled by ZoomVideoCall unmount)
 
       // Update status
       await fetch('/api/consultations/status', {
@@ -325,10 +322,11 @@ export default function ConsultPortal() {
                 </div>
               </div>
             ) : roomName ? (
-              <JitsiWrapper
+              <ZoomVideoCall
                 roomName={roomName}
-                displayName="Doctor"
-                onReadyToClose={() => setShowEndDialog(true)}
+                userName="Doctor"
+                onReady={() => { }}
+                onLeave={() => setShowEndDialog(true)}
               />
             ) : null}
           </div>

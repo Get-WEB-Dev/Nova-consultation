@@ -2,8 +2,8 @@
 
 /**
  * Patient-side Meeting Room
- * 
- * Uses Jitsi Meet External API (meet.jit.si) for video.
+ *
+ * Uses Zoom Video SDK for video.
  * Chat + file attachments use our own backend (/api/messages, /api/upload).
  * End-call shows confirmation, then cleans up consultation + queue.
  */
@@ -15,7 +15,7 @@ import {
   MessageCircle, X, Send, Paperclip, Download,
   PhoneOff, Clock, Wifi,
 } from "lucide-react";
-import JitsiWrapper from "../components/JitsiWrapper";
+import ZoomVideoCall from "../components/ZoomVideoCall";
 
 /* ── Types ── */
 interface ChatMsg {
@@ -35,12 +35,7 @@ interface MeetingRoomProps {
   onEnd?: () => void;
 }
 
-/* ── Jitsi type declaration ── */
-declare global {
-  interface Window {
-    JitsiMeetExternalAPI: any;
-  }
-}
+/* ── Zoom Video SDK ── */
 
 export default function MeetingRoom({
   consultationId,
@@ -60,7 +55,7 @@ export default function MeetingRoom({
   const patientId = propPatientId || searchParams.get("patientId") || "";
 
   // State
-  const [jitsiReady, setJitsiReady] = useState(false);
+  const [zoomReady, setZoomReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [newMsg, setNewMsg] = useState("");
@@ -75,7 +70,7 @@ export default function MeetingRoom({
   // Computed room name
   const roomName = consultationId ? `NovaHealth_${consultationId.replace(/-/g, "")}` : null;
 
-  // (Jitsi initialization is now handled by JitsiWrapper)
+  // (Zoom initialization is handled by ZoomVideoCall)
 
   // ────────────────────────────────────────────
   // 2. Timer
@@ -220,7 +215,7 @@ export default function MeetingRoom({
     setIsEnding(true);
     setShowEndDialog(false);
     try {
-      // (Jitsi disposal is handled by JitsiWrapper unmount)
+      // (Zoom cleanup is handled by ZoomVideoCall unmount)
 
       // Update consultation status
       if (consultationId) {
@@ -293,7 +288,7 @@ export default function MeetingRoom({
           <div className="flex items-center gap-1.5">
             <Wifi className="w-4 h-4 text-emerald-400" />
             <span className="text-emerald-400 text-xs font-medium">
-              {jitsiReady ? "Connected" : "Connecting…"}
+              {zoomReady ? "Connected" : "Connecting…"}
             </span>
           </div>
         </div>
@@ -312,22 +307,22 @@ export default function MeetingRoom({
               {doctorName}
             </p>
             <p className="text-emerald-400 text-xs mt-0.5">
-              {jitsiReady ? "● In call" : "● Joining…"}
+              {zoomReady ? "● In call" : "● Joining…"}
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── Main: Jitsi + Chat ── */}
+      {/* ── Main: Zoom + Chat ── */}
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Jitsi video area */}
+        {/* Zoom video area */}
         <div className="flex-1 relative bg-black min-w-0">
           {roomName ? (
-            <JitsiWrapper
+            <ZoomVideoCall
               roomName={roomName}
-              displayName="Patient"
-              onReady={() => setJitsiReady(true)}
-              onReadyToClose={() => handleEndCallDirect()}
+              userName="Patient"
+              onReady={() => setZoomReady(true)}
+              onLeave={() => handleEndCallDirect()}
             />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 z-10 gap-3">

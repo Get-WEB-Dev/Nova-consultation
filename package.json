@@ -10,8 +10,13 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
+    "@zoom/videosdk": "^2.3.15",
     "clsx": "^2.1.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
     "firebase": "^10.12.2",
+    "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.383.0",
     "next": "14.2.3",
     "next-intl": "^3.14.0",
@@ -28,5 +33,21 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
-  }
+  },
+  "description": "A modern, mobile-first health consultancy platform built with **Next.js 14 App Router** and **Tailwind CSS**.",
+  "main": "next.config.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Get-WEB-Dev/Nova-consultation.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Get-WEB-Dev/Nova-consultation/issues"
+  },
+  "homepage": "https://github.com/Get-WEB-Dev/Nova-consultation#readme"
 }
