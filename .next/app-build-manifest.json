@@ -61,15 +61,20 @@
       "static/chunks/main-app.js",
       "static/chunks/app/meeting/layout.js"
     ],
+    "/doctor-dashboard/messages/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/doctor-dashboard/messages/page.js"
+    ],
     "/doctor-dashboard/consult/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/doctor-dashboard/consult/page.js"
     ],
-    "/doctor-dashboard/messages/page": [
+    "/_not-found/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/doctor-dashboard/messages/page.js"
+      "static/chunks/app/_not-found/page.js"
     ]
   }
 }
