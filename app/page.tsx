@@ -1,335 +1,391 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { useState, useEffect } from "react";
 import {
-  Shield,
-  Calendar,
-  Users,
-  ArrowRight,
-  CheckCircle,
-  Video,
-  MessageCircle,
-  Heart,
-  Star,
   Stethoscope,
+  HeartPulse,
+  Brain,
+  Baby,
+  Bone,
+  Eye,
+  Activity,
+  Search,
+  Star,
+  ArrowRight,
+  Calendar,
+  Video,
+  UserCircle,
+  Pill,
+  Menu,
+  X,
+  MapPin,
+  Phone,
+  Mail,
 } from "lucide-react";
+import ModernFooter from "@/components/ui/ModernFooter";
 
-export default function Home() {
+export default function LandingPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const DOCTORS = [
+    { name: "Dr. Sarah Jenkins", specialty: "Cardiology", image: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=600", rating: 4.9, reviews: 128, hospital: "Nova General Hospital" },
+    { name: "Dr. Michael Chen", specialty: "Neurology", image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=600", rating: 4.8, reviews: 93, hospital: "City Medical Center" },
+    { name: "Dr. Emily Carter", specialty: "Dermatology", image: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=600", rating: 5.0, reviews: 312, hospital: "Skin & Care Clinic" },
+    { name: "Dr. James Wilson", specialty: "Orthopedics", image: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=600", rating: 4.7, reviews: 84, hospital: "Sports Medicine Institute" },
+    { name: "Dr. Aisha Patel", specialty: "Pediatrics", image: "https://images.unsplash.com/photo-1594824432258-f99f2b09e25d?auto=format&fit=crop&q=80&w=600", rating: 4.9, reviews: 215, hospital: "Children's Health Clinic" },
+    { name: "Dr. Robert Fox", specialty: "General Medicine", image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=600", rating: 4.6, reviews: 156, hospital: "Community Care Center" },
+  ];
+
+  const SPECIALTIES = [
+    { name: "Cardiology", icon: HeartPulse, color: "text-rose-500", bg: "bg-rose-50" },
+    { name: "Neurology", icon: Brain, color: "text-purple-500", bg: "bg-purple-50" },
+    { name: "Pediatrics", icon: Baby, color: "text-sky-500", bg: "bg-sky-50" },
+    { name: "Orthopedics", icon: Bone, color: "text-orange-500", bg: "bg-orange-50" },
+    { name: "Ophthalmology", icon: Eye, color: "text-teal-500", bg: "bg-teal-50" },
+    { name: "Dermatology", icon: Activity, color: "text-pink-500", bg: "bg-pink-50" },
+    { name: "General Medicine", icon: Stethoscope, color: "text-emerald-500", bg: "bg-emerald-50" },
+    { name: "Physiotherapy", icon: Activity, color: "text-indigo-500", bg: "bg-indigo-50" },
+  ];
+
+  const BLOGS = [
+    { title: "10 Daily Habits for a Healthier Heart", category: "Cardiology", image: "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&q=80&w=600", date: "Mar 12, 2026" },
+    { title: "Understanding Mental Health and Brain Functions", category: "Neurology", image: "https://images.unsplash.com/photo-1543362906-acfc16c67564?auto=format&fit=crop&q=80&w=600", date: "Mar 15, 2026" },
+    { title: "Skincare Basics: Protecting Your Complexion", category: "Dermatology", image: "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&q=80&w=600", date: "Mar 18, 2026" },
+  ];
+
+  const STEPS = [
+    { title: "Create Account", description: "Sign up in minutes – no insurance needed.", icon: UserCircle },
+    { title: "Choose a Doctor", description: "Select a specialist and time that fits your schedule.", icon: Calendar },
+    { title: "Video Consultation", description: "Meet with your doctor via secure HD video.", icon: Video },
+    { title: "Get Better", description: "Receive prescriptions, referrals, or a care plan.", icon: Pill },
+  ];
+
   return (
-    <div className="min-h-screen bg-nova-gradient-soft relative overflow-hidden">
-      {/* Decorative background blobs */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-primary-200/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-80 h-80 bg-accent-200/15 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-gold-200/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+    <div className="min-h-screen font-sans text-slate-800 overflow-x-hidden">
 
-      {/* Nav */}
-      <nav className="max-w-6xl mx-auto px-4 py-5 flex items-center justify-between relative z-10">
-        <div className="flex items-center gap-2.5 font-display font-bold text-lg text-primary-600">
-          <div className="w-9 h-9 rounded-xl overflow-hidden shadow-sm">
-            <Image src="/favicon.png" alt="Nova Health" width={36} height={36} className="w-full h-full object-cover" />
+      {/* ═══════════════════════════════════════════════════════
+          HERO SECTION  —  full-width dark-blue background
+          ═══════════════════════════════════════════════════════ */}
+      {/* ═══════════════════════════════════════════════════════
+          HERO — Two-tone split: dark navy left, blue right
+          ═══════════════════════════════════════════════════════ */}
+      <div className="relative overflow-hidden">
+        {/* Left background — dark navy */}
+        <div className="absolute inset-0 bg-[#0a1628]" />
+        {/* Right background — vibrant blue block behind doctor */}
+        <div className="hidden lg:block absolute top-0 right-0 w-[45%] h-full bg-gradient-to-br from-sky-400 to-sky-500 rounded-bl-[80px]" />
+        {/* Mobile: blue block at top behind image */}
+        <div className="lg:hidden absolute top-0 right-0 w-full h-[55%] bg-gradient-to-b from-sky-400 to-sky-500 rounded-b-[60px]" />
+
+        {/* Decorative circles on the blue panel */}
+        <div className="absolute top-20 right-[5%] w-40 h-40 border-2 border-white/10 rounded-full pointer-events-none" />
+        <div className="absolute top-[40%] right-[15%] w-24 h-24 border-2 border-white/10 rounded-full pointer-events-none" />
+        <div className="absolute bottom-32 right-[2%] w-56 h-56 border border-white/5 rounded-full pointer-events-none" />
+        {/* Decorative circles on the dark panel */}
+        <div className="absolute -top-10 -left-10 w-60 h-60 border border-white/5 rounded-full pointer-events-none" />
+        <div className="absolute bottom-20 left-[20%] w-32 h-32 border border-white/5 rounded-full pointer-events-none" />
+
+        {/* ── NAVBAR ── */}
+        <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? "bg-[#0a1628]/95 backdrop-blur-md shadow-lg shadow-black/10 py-3" : "bg-transparent py-5"}`}>
+          <div className="max-w-[90rem] mx-auto px-6 md:px-12 flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="relative w-9 h-9 overflow-hidden rounded-xl bg-white/15 p-1.5 group-hover:bg-white/25 transition-colors">
+                <Image src="/favicon.png" alt="Nova" fill className="object-cover" />
+              </div>
+              <span className="text-xl font-bold text-white tracking-tight">Nova</span>
+            </Link>
+
+            <nav className="hidden lg:flex items-center gap-8">
+              {["Doctors", "Blogs", "About", "Contact Us"].map(link => (
+                <Link key={link} href={`/${link.toLowerCase().replace(/\s+/g, "")}`} className="text-sm font-semibold text-white/80 hover:text-white transition-colors">
+                  {link}
+                </Link>
+              ))}
+            </nav>
+
+            <div className="hidden lg:flex items-center gap-3">
+              <Link href="/login" className="text-sm font-semibold text-white/80 hover:text-white transition-colors px-4 py-2">Sign In</Link>
+              <Link href="/signup" className="text-sm font-bold text-[#0a1628] bg-white hover:bg-slate-100 px-5 py-2.5 rounded-full shadow-md transition-all hover:-translate-y-0.5">Sign Up</Link>
+              <Link href="/doctor-login" className="text-sm font-semibold text-white/60 hover:text-white transition-colors px-4 py-2 border-l border-white/15 ml-2">Doctor Login</Link>
+            </div>
+
+            <button className="lg:hidden text-white p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
           </div>
-          Nova Health
-        </div>
-        <div className="flex items-center gap-3">
-          <Link href="/doctors" className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-primary-600 transition-colors">
-            <Stethoscope className="w-4 h-4" /> Doctors
-          </Link>
-          <Link href="/doctor-login" className="hidden md:inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-primary-600 transition-colors">
-            <Stethoscope className="w-4 h-4" /> Doctor Portal
-          </Link>
-          <Link href="/admin-login" className="hidden md:inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">
-            <Shield className="w-4 h-4" /> Admin Portal
-          </Link>
-          <Link href="/login" className="btn-ghost">
-            Sign In
-          </Link>
-          <Link href="/login?tab=register" className="btn-primary">
-            Get Started
-          </Link>
-        </div>
-      </nav>
 
-      {/* Hero */}
-      <section className="max-w-6xl mx-auto px-4 pt-12 sm:pt-16 pb-16 sm:pb-20 text-center relative z-10 animate-fade-up">
-        <div className="inline-flex items-center gap-2 bg-accent-50 text-accent-600 text-xs font-semibold px-4 py-2 rounded-full mb-6 border border-accent-100">
-          <CheckCircle className="w-3.5 h-3.5" /> Trusted by 10,000+ patients
-        </div>
-        <h1 className="font-display font-bold text-4xl sm:text-5xl md:text-6xl text-slate-900 leading-tight mb-6">
-          Your Health,{" "}
-          <span className="text-gradient relative">
-            Connected
-            <svg
-              className="absolute -bottom-1 left-0 w-full"
-              viewBox="0 0 300 12"
-              fill="none"
-            >
-              <path
-                d="M2 9C50 3 100 1 150 4C200 7 250 9 298 6"
-                stroke="url(#underline-grad)"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-              <defs>
-                <linearGradient id="underline-grad" x1="0" y1="6" x2="300" y2="6">
-                  <stop offset="0%" stopColor="#1B3A5C" />
-                  <stop offset="100%" stopColor="#2E8B3D" />
-                </linearGradient>
-              </defs>
-            </svg>
-          </span>
-        </h1>
-        <p className="text-slate-500 text-base sm:text-lg max-w-xl mx-auto mb-10 leading-relaxed">
-          Connect with certified doctors and health professionals from the
-          comfort of your home. Quality care, anytime, anywhere.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link
-            href="/login?tab=register"
-            className="btn-primary text-base px-8 py-3.5"
-          >
-            Join Now <ArrowRight className="w-4 h-4" />
-          </Link>
-          <Link href="/dashboard" className="btn-secondary text-base px-8 py-3.5">
-            Meet Professionals
-          </Link>
-        </div>
+          {mobileMenuOpen && (
+            <div className="lg:hidden bg-[#0d1d35] border-t border-white/10 p-6 space-y-3">
+              {["Doctors", "Blogs", "About", "Contact Us"].map(link => (
+                <Link key={link} href={`/${link.toLowerCase().replace(/\s+/g, "")}`} onClick={() => setMobileMenuOpen(false)} className="block font-semibold text-slate-300 hover:text-white py-2">
+                  {link}
+                </Link>
+              ))}
+              <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/10">
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="text-center font-bold text-sky-400 py-3 rounded-xl bg-white/5">Sign In</Link>
+                <Link href="/signup" onClick={() => setMobileMenuOpen(false)} className="text-center font-bold text-white bg-sky-500 py-3 rounded-xl">Sign Up</Link>
+                <Link href="/doctor-login" onClick={() => setMobileMenuOpen(false)} className="text-center font-semibold text-slate-400 py-3 rounded-xl bg-white/5 col-span-2">Doctor Login</Link>
+              </div>
+            </div>
+          )}
+        </header>
 
-        {/* Stats */}
-        <div className="mt-14 grid grid-cols-3 gap-4 max-w-sm mx-auto">
-          {[
-            { value: "500+", label: "Doctors" },
-            { value: "10K+", label: "Patients" },
-            { value: "4.9★", label: "Rating" },
-          ].map(({ value, label }) => (
-            <div key={label} className="text-center">
-              <p className="font-display font-bold text-2xl sm:text-3xl text-gradient">
-                {value}
+        {/* ── HERO CONTENT ── */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-emerald-500">
+
+          {/* SVG WAVE BACKGROUND */}
+          <svg className="absolute right-0 top-0 h-full w-[60%]" viewBox="0 0 500 500" preserveAspectRatio="none">
+            <path d="M0,0 C300,0 200,500 500,500 L500,0 Z" className="fill-blue-950" />
+          </svg>
+
+
+          {/* CONTENT */}
+          <div className="relative z-10 max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-2 items-center">
+
+            {/* LEFT SIDE TEXT */}
+            <div className="text-white space-y-6">
+              <h1 className="text-4xl md:text-5xl font-bold leading-tight">
+                Putting your health first with empathy and skill
+              </h1>
+              <p className="text-white/80 max-w-md">
+                We are leading healthcare facility providing exceptional service for all patients.
               </p>
-              <p className="text-xs text-slate-500 mt-1">{label}</p>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      {/* How It Works */}
-      <section className="bg-white py-16 relative">
-        <div className="max-w-6xl mx-auto px-4">
-          <h2 className="font-display font-bold text-2xl text-center text-slate-800 mb-3">
-            How It Works
-          </h2>
-          <p className="text-sm text-slate-500 text-center mb-10 max-w-md mx-auto">
-            Get started in just three simple steps
-          </p>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                step: "01",
-                icon: Users,
-                title: "Create Account",
-                desc: "Sign up in seconds and complete your health profile with secure, encrypted data.",
-                color: "from-primary-600 to-primary-500",
-              },
-              {
-                step: "02",
-                icon: Calendar,
-                title: "Consult a Doctor",
-                desc: "Browse verified doctors, check availability, and book a consultation instantly.",
-                color: "from-accent-500 to-accent-400",
-              },
-              {
-                step: "03",
-                icon: Video,
-                title: "Start Consultation",
-                desc: "Connect via HD video call, chat in real-time, and get your prescriptions digitally.",
-                color: "from-gold-400 to-gold-500",
-              },
-            ].map(({ step, icon: Icon, title, desc, color }) => (
-              <div
-                key={title}
-                className="relative bg-white rounded-2xl border border-slate-100 p-6 hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 group"
-              >
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center shadow-sm`}>
-                    <Icon className="w-5 h-5 text-white" />
+              <div className="flex gap-4">
+                <button className="bg-white text-teal-600 px-6 py-3 rounded-xl font-semibold">
+                  Get Started
+                </button>
+                <button className="border border-white/40 px-6 py-3 rounded-xl">
+                  Call Now
+                </button>
+
+              </div>
+              <p className="text-sm text-slate-500">
+                Are you a qualified doctor?{" "}
+                <Link href="/doctor/signup" className="text-sky-400 font-bold underline underline-offset-2 hover:text-sky-300 transition-colors">
+                  Get started now
+                </Link>
+              </p>
+            </div>
+
+            {/* RIGHT SIDE IMAGE */}
+            <div className="relative h-[500px] md:h-[600px] w-full">
+              <Image
+                src="/doc.png"
+                alt="Doctors"
+                fill
+                priority
+                className="object-contain scale-110"
+              />
+            </div>
+
+          </div>
+        </div>
+
+        {/* ── STATS STRIP (centered, overlapping the bottom edge) ── */}
+        <div className="relative z-20 -mb-14">
+          <div className="max-w-3xl mx-auto px-6">
+            <div className="bg-white rounded-3xl shadow-xl shadow-slate-900/10 border border-slate-100 py-8 px-6">
+              <div className="grid grid-cols-3 gap-6 text-center">
+                {[
+                  { number: "50+", label: "Clinics" },
+                  { number: "2K+", label: "Doctors" },
+                  { number: "50K+", label: "Patients" },
+                ].map((stat, i) => (
+                  <div key={i} className="flex flex-col items-center gap-2">
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-sky-50 border-2 border-sky-100 flex items-center justify-center">
+                      <span className="text-xl sm:text-2xl font-black text-sky-600">{stat.number}</span>
+                    </div>
+                    <span className="text-xs sm:text-sm font-bold text-slate-600">{stat.label}</span>
                   </div>
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Step {step}</span>
-                </div>
-                <h3 className="font-display font-semibold text-slate-800 mb-2">
-                  {title}
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed">{desc}</p>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="bg-gradient-to-b from-white to-slate-50 py-16">
-        <div className="max-w-6xl mx-auto px-4">
-          <h2 className="font-display font-bold text-2xl text-center text-slate-800 mb-10">
-            Why Nova Health?
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                icon: Stethoscope,
-                title: "Expert Doctors",
-                desc: "Access verified specialists across every field of medicine.",
-                color: "bg-primary-50 text-primary-600",
-              },
-              {
-                icon: Calendar,
-                title: "Easy Appointments",
-                desc: "Book, reschedule, or cancel appointments in seconds.",
-                color: "bg-accent-50 text-accent-600",
-              },
-              {
-                icon: Shield,
-                title: "Secure & Private",
-                desc: "Your medical data is encrypted and always under your control.",
-                color: "bg-gold-50 text-gold-600",
-              },
-            ].map(({ icon: Icon, title, desc, color }) => (
-              <div
-                key={title}
-                className="card text-center hover:-translate-y-1 transition-all duration-300"
-              >
-                <div
-                  className={`w-14 h-14 rounded-2xl ${color} flex items-center justify-center mx-auto mb-4`}
-                >
-                  <Icon className="w-7 h-7" />
-                </div>
-                <h3 className="font-display font-semibold text-slate-800 mb-2">
-                  {title}
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed">{desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Portal Access Section */}
-      <section className="bg-white py-16">
-        <div className="max-w-6xl mx-auto px-4">
-          <h2 className="font-display font-bold text-2xl text-center text-slate-800 mb-3">
-            Portal Access
-          </h2>
-          <p className="text-sm text-slate-500 text-center mb-10 max-w-md mx-auto">
-            Are you a doctor or administrator? Access your dedicated portal below.
-          </p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            {/* Doctor Portal Card */}
-            <Link
-              href="/doctor-login"
-              className="group relative bg-gradient-to-br from-primary-50 to-white rounded-2xl border border-primary-100 p-6 hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-24 h-24 bg-primary-100/40 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-              <div className="relative z-10">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-600 to-primary-500 flex items-center justify-center shadow-sm mb-4">
-                  <Stethoscope className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="font-display font-semibold text-lg text-slate-800 mb-1">
-                  Doctor Portal
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed mb-4">
-                  Access your dashboard, manage consultations, view patient records, and update your schedule.
-                </p>
-                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary-600 group-hover:gap-2.5 transition-all">
-                  Sign in as Doctor <ArrowRight className="w-4 h-4" />
-                </span>
-              </div>
-            </Link>
-
-            {/* Admin Portal Card */}
-            <Link
-              href="/admin-login"
-              className="group relative bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-200 p-6 hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 w-24 h-24 bg-slate-100/40 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-              <div className="relative z-10">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-700 to-slate-600 flex items-center justify-center shadow-sm mb-4">
-                  <Shield className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="font-display font-semibold text-lg text-slate-800 mb-1">
-                  Admin Portal
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed mb-4">
-                  Manage users, oversee doctors, view system analytics, and configure platform settings.
-                </p>
-                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 group-hover:gap-2.5 transition-all">
-                  Sign in as Admin <ArrowRight className="w-4 h-4" />
-                </span>
-              </div>
-            </Link>
-
-            {/* Patient Portal Card */}
-            <Link
-              href="/login"
-              className="group relative bg-gradient-to-br from-accent-50 to-white rounded-2xl border border-accent-100 p-6 hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 overflow-hidden sm:col-span-2 lg:col-span-1"
-            >
-              <div className="absolute top-0 right-0 w-24 h-24 bg-accent-100/40 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-              <div className="relative z-10">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-500 to-accent-400 flex items-center justify-center shadow-sm mb-4">
-                  <Heart className="w-6 h-6 text-white" />
-                </div>
-                <h3 className="font-display font-semibold text-lg text-slate-800 mb-1">
-                  Patient Portal
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed mb-4">
-                  Book appointments, consult with doctors, manage your health records, and more.
-                </p>
-                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent-600 group-hover:gap-2.5 transition-all">
-                  Sign in as Patient <ArrowRight className="w-4 h-4" />
-                </span>
-              </div>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="max-w-6xl mx-auto px-4 py-16 text-center">
-        <div className="bg-gradient-to-r from-primary-600 via-primary-500 to-accent-500 rounded-3xl p-8 sm:p-12 text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/4" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/4" />
-
-          <div className="relative z-10">
-            <h2 className="font-display font-bold text-2xl md:text-3xl mb-3">
-              Ready to take care of your health?
-            </h2>
-            <p className="text-white/80 mb-8 max-w-md mx-auto">
-              Join thousands of patients who trust Nova Health for their healthcare needs.
-            </p>
-            <Link
-              href="/login?tab=register"
-              className="inline-flex items-center gap-2 bg-white text-primary-600 font-semibold px-8 py-3.5 rounded-xl hover:bg-primary-50 hover:shadow-lg transition-all"
-            >
-              Get Started Free <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-100 bg-white">
-        <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 font-display font-bold text-sm text-slate-400">
-            <div className="w-6 h-6 rounded-lg overflow-hidden">
-              <Image src="/favicon.png" alt="Nova Health" width={24} height={24} className="w-full h-full object-cover opacity-50" />
             </div>
-            Nova Health Consultancy
-          </div>
-          <p className="text-xs text-slate-400">
-            © 2024 Nova Health Consultancy. All rights reserved.
-          </p>
-          <div className="flex items-center gap-4 text-xs text-slate-400">
-            <a href="#" className="hover:text-slate-600 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-slate-600 transition-colors">Terms</a>
-            <a href="#" className="hover:text-slate-600 transition-colors">Contact</a>
           </div>
         </div>
-      </footer>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════
+          COMPREHENSIVE CARE  (Specialties)
+          ═══════════════════════════════════════════════════════ */}
+      <section className="py-20 bg-slate-50">
+        <div className="max-w-[90rem] mx-auto px-6 md:px-12">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-3">Comprehensive Care</h2>
+            <p className="text-slate-500 text-lg">Browse our specialties and find the right expert for your needs.</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+            {SPECIALTIES.map((spec) => (
+              <Link
+                key={spec.name}
+                href={`/doctors?specialty=${encodeURIComponent(spec.name)}`}
+                className="group bg-white rounded-2xl p-6 text-center shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all"
+              >
+                <div className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-4 ${spec.bg} group-hover:scale-110 transition-transform`}>
+                  <spec.icon className={`w-8 h-8 ${spec.color}`} />
+                </div>
+                <h3 className="font-bold text-slate-800">{spec.name}</h3>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════
+          FEATURED DOCTORS
+          ═══════════════════════════════════════════════════════ */}
+      <section className="py-20 bg-white">
+        <div className="max-w-[90rem] mx-auto px-6 md:px-12">
+          <div className="flex flex-wrap items-end justify-between gap-4 mb-14">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-800">Meet our top specialists</h2>
+              <p className="text-slate-500 mt-2">Highly rated, experienced, and ready to help.</p>
+            </div>
+            <Link href="/doctors" className="flex items-center gap-2 text-sky-600 font-bold hover:text-sky-700 transition-colors">
+              View all doctors <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {DOCTORS.slice(0, 3).map((doc, idx) => (
+              <div key={idx} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group overflow-hidden">
+                <div className="relative w-full h-64 overflow-hidden bg-slate-100">
+                  <Image src={doc.image} alt={doc.name} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm text-slate-900 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-sm">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /> {doc.rating}
+                  </div>
+                </div>
+                <div className="p-5">
+                  <h3 className="text-xl font-bold mb-1 group-hover:text-sky-600 transition-colors">{doc.name}</h3>
+                  <p className="text-sm text-slate-500 mb-1">{doc.specialty}</p>
+                  <p className="text-xs text-slate-400 flex items-center gap-1 mb-4"><MapPin className="w-3 h-3" /> {doc.hospital}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-400">{doc.reviews} reviews</span>
+                    <Link href="/login" className="text-sm font-bold text-sky-600 hover:text-sky-700">Book now →</Link>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════
+          HOW IT WORKS
+          ═══════════════════════════════════════════════════════ */}
+      <section className="py-20 bg-slate-50">
+        <div className="max-w-[90rem] mx-auto px-6 md:px-12">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-3">How it works</h2>
+            <p className="text-slate-500 text-lg">Get the care you need in four simple steps.</p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {STEPS.map((step, idx) => (
+              <div key={idx} className="bg-white rounded-2xl p-7 text-center border border-slate-100 shadow-sm hover:shadow-lg transition-all relative">
+                <div className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-[#0a1628] text-white text-xs font-bold flex items-center justify-center shadow-md">{idx + 1}</div>
+                <div className="w-16 h-16 mx-auto bg-sky-50 rounded-2xl flex items-center justify-center mb-5">
+                  <step.icon className="w-8 h-8 text-sky-600" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-2">{step.title}</h3>
+                <p className="text-slate-500 text-sm">{step.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════
+          HEALTH INSIGHTS (Blogs)
+          ═══════════════════════════════════════════════════════ */}
+      <section className="py-20 bg-white">
+        <div className="max-w-[90rem] mx-auto px-6 md:px-12">
+          <div className="flex flex-wrap items-end justify-between gap-4 mb-14">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-800">Health insights</h2>
+              <p className="text-slate-500 mt-2">Expert articles to help you stay informed.</p>
+            </div>
+            <Link href="/blogs" className="flex items-center gap-2 text-sky-600 font-bold hover:text-sky-700 transition-colors">
+              Read more articles <ArrowRight className="w-5 h-5" />
+            </Link>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {BLOGS.map((blog, idx) => (
+              <div key={idx} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all group cursor-pointer">
+                <div className="relative h-56 w-full overflow-hidden bg-slate-100">
+                  <Image src={blog.image} alt={blog.title} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">{blog.category}</div>
+                </div>
+                <div className="p-6">
+                  <p className="text-sm font-semibold text-slate-400 mb-2">{blog.date}</p>
+                  <h3 className="text-xl font-bold text-slate-800 mb-3 group-hover:text-sky-600 transition-colors">{blog.title}</h3>
+                  <div className="inline-flex items-center gap-1 text-sky-600 font-bold text-sm">Read article <ArrowRight className="w-4 h-4" /></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════
+          CTA BANNER
+          ═══════════════════════════════════════════════════════ */}
+      <section className="bg-[#0a1628] py-16 sm:py-20 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="max-w-4xl mx-auto px-6 md:px-12 text-center relative z-10">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Ready to take control of your health?</h2>
+          <p className="text-slate-400 text-lg mb-8 max-w-xl mx-auto">Join thousands of patients who trust Nova for their healthcare needs. Start your journey today.</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/signup" className="bg-sky-500 hover:bg-sky-600 text-white font-bold px-8 py-4 rounded-full shadow-lg shadow-sky-500/30 transition-all hover:-translate-y-0.5 text-lg">
+              Get Started – It's Free
+            </Link>
+            <Link href="/doctors" className="bg-white/10 hover:bg-white/15 text-white font-bold px-8 py-4 rounded-full border border-white/10 transition-all hover:-translate-y-0.5 text-lg">
+              Browse Doctors
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <ModernFooter />
     </div>
   );
 }
+
+
+/* <div className="flex items-center max-w-lg bg-white/10 backdrop-blur-sm border border-white/10 rounded-full overflow-hidden focus-within:ring-2 focus-within:ring-sky-400 transition-all">
+                <div className="pl-5 pr-3 text-slate-400">
+                  <Search className="w-5 h-5" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Type Doctor name or Specialties"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="flex-1 py-4 pr-2 bg-transparent text-white placeholder-slate-500 focus:outline-none text-sm sm:text-base"
+                />
+                <Link
+                  href={searchTerm ? `/doctors?q=${encodeURIComponent(searchTerm)}` : "/doctors"}
+                  className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm px-6 py-3 mr-1.5 rounded-full transition-colors whitespace-nowrap shadow-lg shadow-sky-500/30"
+                >
+                  <Search className="w-4 h-4" /> Search
+                </Link>
+              </div>
+
+             
+              /*<p className="text-sm text-slate-500">
+                Are you a qualified doctor?{" "}
+                <Link href="/doctor/signup" className="text-sky-400 font-bold underline underline-offset-2 hover:text-sky-300 transition-colors">
+                  Get started now
+                </Link>
+              </p>
+            </div>*/

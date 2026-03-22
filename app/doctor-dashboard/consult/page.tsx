@@ -72,8 +72,40 @@ export default function ConsultPortal() {
   const [doctorUserId, setDoctorUserId] = useState<string | null>(null);
   const [doctorProfileId, setDoctorProfileId] = useState<string | null>(null);
 
-  // Computed Zoom room name
-  const roomName = active?.consultation_id ? `NovaHealth_${active.consultation_id.replace(/-/g, "")}` : null;
+  // Computed Zoom room name — fallback to doctorId+patientId if no consultation_id
+  const roomName = active?.consultation_id
+    ? `NovaHealth_${active.consultation_id.replace(/-/g, "")}`
+    : (active && (doctorProfileId || doctorUserId))
+      ? `NovaHealth_${(doctorProfileId || doctorUserId || "").replace(/-/g, "")}_${active.id.replace(/-/g, "")}`
+      : null;
+
+  // Auto-create consultation if queue entry has none
+  useEffect(() => {
+    if (!active || active.consultation_id || !doctorProfileId || !active.id) return;
+    const createConsult = async () => {
+      try {
+        const res = await fetch("/api/consultations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ doctorId: doctorProfileId, patientId: active.id }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data?.id) {
+            // Update the queue entry with the new consultation_id
+            setQueue((prev) =>
+              prev.map((p, i) =>
+                i === activeIdx ? { ...p, consultation_id: json.data.id } : p
+              )
+            );
+          }
+        }
+      } catch (e) {
+        console.warn("Auto-create consultation for doctor failed:", e);
+      }
+    };
+    createConsult();
+  }, [active?.id, active?.consultation_id, doctorProfileId, activeIdx]);
 
   // ────────────────────────────────────────────
   // 1. Load doctor user
@@ -101,7 +133,7 @@ export default function ConsultPortal() {
         const res = await fetch(`/api/queue?doctorId=${dId}`);
         const json = await res.json();
         if (json.data) {
-          setQueue(json.data.map((e: any, i: number) => ({
+          const newQueue = json.data.map((e: any, i: number) => ({
             id: e.patient_id,
             user_id: e.patient_id,
             queue_id: e.id,
@@ -109,12 +141,18 @@ export default function ConsultPortal() {
             name: e.patientName || "Patient",
             joinedAt: e.joined_at,
             status: i === 0 ? "active" : "waiting",
-          })));
+          }));
+          // Only update if data changed to prevent unnecessary re-renders
+          setQueue((prev) => {
+            const prevIds = prev.map((p) => p.id + (p.consultation_id || "")).join(",");
+            const newIds = newQueue.map((p: any) => p.id + (p.consultation_id || "")).join(",");
+            return prevIds === newIds ? prev : newQueue;
+          });
         }
       } catch (_) { }
     };
     loadQueue();
-    const interval = setInterval(loadQueue, 5000);
+    const interval = setInterval(loadQueue, 8000);
     return () => clearInterval(interval);
   }, [doctorUserId, doctorProfileId]);
 
@@ -125,10 +163,13 @@ export default function ConsultPortal() {
   // ────────────────────────────────────────────
   useEffect(() => {
     if (!active || (!active.consultation_id && !doctorProfileId)) return;
+    const controller = new AbortController();
     const fetchMsgs = async () => {
       try {
-        const queryParams = active.consultation_id ? `consultationId=${active.consultation_id}` : `doctorId=${doctorProfileId || doctorUserId}&patientId=${active.id}`;
-        const res = await fetch(`/api/messages?${queryParams}`);
+        const dId = doctorProfileId || doctorUserId;
+        // ALWAYS fetch full history between doctor and patient if both IDs are known
+        const queryParams = (dId && active.id) ? `doctorId=${dId}&patientId=${active.id}` : `consultationId=${active.consultation_id}`;
+        const res = await fetch(`/api/messages?${queryParams}`, { signal: controller.signal });
         const json = await res.json();
         if (json.data) {
           setChats(json.data.map((m: any) => ({
@@ -144,9 +185,9 @@ export default function ConsultPortal() {
       } catch (_) { }
     };
     fetchMsgs();
-    const interval = setInterval(fetchMsgs, 3000);
-    return () => clearInterval(interval);
-  }, [active?.consultation_id]);
+    const interval = setInterval(fetchMsgs, 5000);
+    return () => { controller.abort(); clearInterval(interval); };
+  }, [active?.consultation_id, active?.id, doctorProfileId, doctorUserId]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chats]);
 

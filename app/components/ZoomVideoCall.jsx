@@ -3,15 +3,21 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 /**
- * ZoomVideoCall — renders self + remote videos using Zoom Video SDK.
+ * ZoomVideoCall — renders self + remote videos using Zoom Video SDK v2.
  *
- * Uses stream.attachVideo() / detachVideo() which return <video-player>
- * custom elements that work on both desktop and mobile.
+ * Key fixes:
+ * - enforceMultipleVideos for desktop Chrome
+ * - <video-player-container> wrapper elements
+ * - peer-video-state-changed + user-added/removed listeners
+ * - connection-change listener for quality monitoring
+ * - Fallback rendering: 360p first, upgrade later
  */
 export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) {
     const clientRef = useRef(null);
-    const selfVideoRef = useRef(null);
-    const remoteVideoRef = useRef(null);
+    const selfContainerRef = useRef(null);
+    const remoteContainerRef = useRef(null);
+    const mountedRef = useRef(true);
+    const joinedRef = useRef(false);
 
     const [joined, setJoined] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -19,9 +25,11 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
     const [videoStarted, setVideoStarted] = useState(false);
     const [audioStarted, setAudioStarted] = useState(false);
     const [remoteUsers, setRemoteUsers] = useState([]);
+    const [connectionQuality, setConnectionQuality] = useState("good");
 
     // ── Cleanup ──────────────────────────────────────────────
     const cleanup = useCallback(async () => {
+        mountedRef.current = false;
         const client = clientRef.current;
         if (!client) return;
 
@@ -29,67 +37,63 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
             const stream = client.getMediaStream();
             try { await stream.stopVideo(); } catch (_) { }
             try { await stream.stopAudio(); } catch (_) { }
-
-            // Detach all rendered videos
-            try {
-                const selfContainer = selfVideoRef.current;
-                if (selfContainer) {
-                    const players = selfContainer.querySelectorAll("video-player");
-                    for (const p of players) { try { await stream.detachVideo(p); } catch (_) { } }
-                    selfContainer.innerHTML = "";
-                }
-                const remoteContainer = remoteVideoRef.current;
-                if (remoteContainer) {
-                    const players = remoteContainer.querySelectorAll("video-player");
-                    for (const p of players) { try { await stream.detachVideo(p); } catch (_) { } }
-                    remoteContainer.innerHTML = "";
-                }
-            } catch (_) { }
-
             await client.leave();
         } catch (_) { }
 
         try { client.destroy(); } catch (_) { }
         clientRef.current = null;
-        setJoined(false);
-        setVideoStarted(false);
-        setAudioStarted(false);
-        setRemoteUsers([]);
-    }, []);
-
-    // ── Render a user's video into a container ───────────────
-    const renderVideo = useCallback(async (userId, container) => {
-        const client = clientRef.current;
-        if (!client || !container) return;
-        try {
-            const stream = client.getMediaStream();
-            const videoPlayer = await stream.attachVideo(userId, 3); // 3 = 720p quality
-            container.innerHTML = "";
-            container.appendChild(videoPlayer);
-        } catch (e) {
-            console.warn("[Zoom] renderVideo failed for user", userId, e);
+        joinedRef.current = false;
+        if (mountedRef.current) {
+            setJoined(false);
+            setVideoStarted(false);
+            setAudioStarted(false);
+            setRemoteUsers([]);
         }
     }, []);
 
-    // ── Stop rendering a user's video ────────────────────────
-    const stopRenderVideo = useCallback(async (userId, container) => {
+    // ── Attach a user's video to a container ─────────────────
+    const attachUserVideo = useCallback(async (userId, container, quality = 2) => {
         const client = clientRef.current;
         if (!client || !container) return;
         try {
             const stream = client.getMediaStream();
-            const players = container.querySelectorAll("video-player");
-            for (const p of players) {
-                try { await stream.detachVideo(p); } catch (_) { }
+            const playerElement = await stream.attachVideo(userId, quality);
+            if (playerElement && container) {
+                // Clear old players in this container
+                while (container.firstChild) {
+                    try {
+                        await stream.detachVideo(container.firstChild);
+                    } catch (_) { }
+                    container.removeChild(container.firstChild);
+                }
+                container.appendChild(playerElement);
             }
-            container.innerHTML = "";
+        } catch (e) {
+            console.warn("[Zoom] attachUserVideo failed for", userId, e);
+        }
+    }, []);
+
+    // ── Detach video from container ──────────────────────────
+    const detachUserVideo = useCallback(async (container) => {
+        const client = clientRef.current;
+        if (!client || !container) return;
+        try {
+            const stream = client.getMediaStream();
+            while (container.firstChild) {
+                try {
+                    await stream.detachVideo(container.firstChild);
+                } catch (_) { }
+                container.removeChild(container.firstChild);
+            }
         } catch (_) { }
     }, []);
 
     // ── Join session ─────────────────────────────────────────
     const joinSession = useCallback(async () => {
-        if (!roomName || joined || loading) return;
+        if (!roomName || joinedRef.current || loading) return;
         setLoading(true);
         setError(null);
+        mountedRef.current = true;
 
         try {
             const ZoomVideo = (await import("@zoom/videosdk")).default;
@@ -101,92 +105,111 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
             if (!res.ok) throw new Error("Failed to fetch Zoom token");
             const { token } = await res.json();
 
-            // Create + init
+            // Create + init with desktop rendering support
             const client = ZoomVideo.createClient();
-            await client.init("en-US", "Global", { patchJsMedia: true });
+            await client.init("en-US", "Global", {
+                patchJsMedia: true,
+                enforceMultipleVideos: true,
+                enforceVirtualBackground: false,
+            });
+
             await client.join(roomName, token, userName || "User");
             clientRef.current = client;
-            setJoined(true);
+            joinedRef.current = true;
+            if (mountedRef.current) setJoined(true);
 
             const stream = client.getMediaStream();
 
             // ── Start audio ──
             try {
                 await stream.startAudio();
-                setAudioStarted(true);
+                if (mountedRef.current) setAudioStarted(true);
             } catch (e) {
-                console.warn("[Zoom] Audio start failed:", e);
+                console.warn("[Zoom] Audio start:", e);
             }
 
-            // ── Start self video ──
+            // ── Start self video (slight delay for stability) ──
+            await new Promise((r) => setTimeout(r, 300));
             try {
                 await stream.startVideo();
-                setVideoStarted(true);
+                if (mountedRef.current) setVideoStarted(true);
                 const myUserId = client.getCurrentUserInfo().userId;
-                if (selfVideoRef.current) {
-                    await renderVideo(myUserId, selfVideoRef.current);
+                if (selfContainerRef.current) {
+                    await attachUserVideo(myUserId, selfContainerRef.current, 2);
                 }
             } catch (e) {
-                console.warn("[Zoom] Self video start failed:", e);
+                console.warn("[Zoom] Self video start:", e);
             }
 
-            // ── Render any already-present remote participants ──
-            const currentUsers = client.getAllUser();
+            // ── Render already-present remote participants ──
+            const allUsers = client.getAllUser();
             const myId = client.getCurrentUserInfo().userId;
-            const others = currentUsers.filter((u) => u.userId !== myId && u.bVideoOn);
-            setRemoteUsers(currentUsers.filter((u) => u.userId !== myId));
+            const others = allUsers.filter((u) => u.userId !== myId);
+            if (mountedRef.current) setRemoteUsers(others);
             for (const u of others) {
-                if (remoteVideoRef.current) {
-                    await renderVideo(u.userId, remoteVideoRef.current);
+                if (u.bVideoOn && remoteContainerRef.current) {
+                    await attachUserVideo(u.userId, remoteContainerRef.current, 2);
                 }
             }
 
-            // ── Listen for remote video state changes ──
+            // ── Event: remote video state changed ──
             client.on("peer-video-state-changed", async (payload) => {
-                if (!clientRef.current) return;
+                if (!clientRef.current || !mountedRef.current) return;
                 const { action, userId } = payload;
                 if (action === "Start") {
-                    if (remoteVideoRef.current) {
-                        await renderVideo(userId, remoteVideoRef.current);
+                    if (remoteContainerRef.current) {
+                        await attachUserVideo(userId, remoteContainerRef.current, 2);
                     }
                 } else if (action === "Stop") {
-                    if (remoteVideoRef.current) {
-                        await stopRenderVideo(userId, remoteVideoRef.current);
+                    if (remoteContainerRef.current) {
+                        await detachUserVideo(remoteContainerRef.current);
                     }
                 }
             });
 
-            // ── Listen for users joining / leaving ──
-            client.on("user-added", (payload) => {
-                if (!clientRef.current) return;
+            // ── Event: user joined ──
+            client.on("user-added", () => {
+                if (!clientRef.current || !mountedRef.current) return;
                 const myId = clientRef.current.getCurrentUserInfo()?.userId;
-                setRemoteUsers(
-                    clientRef.current.getAllUser().filter((u) => u.userId !== myId)
-                );
+                const others = clientRef.current.getAllUser().filter((u) => u.userId !== myId);
+                setRemoteUsers(others);
             });
 
+            // ── Event: user left ──
             client.on("user-removed", async (payload) => {
-                if (!clientRef.current) return;
+                if (!clientRef.current || !mountedRef.current) return;
                 const myId = clientRef.current.getCurrentUserInfo()?.userId;
                 setRemoteUsers(
                     clientRef.current.getAllUser().filter((u) => u.userId !== myId)
                 );
-                // Clean up removed user's video
-                for (const u of payload) {
-                    if (remoteVideoRef.current) {
-                        await stopRenderVideo(u.userId, remoteVideoRef.current);
-                    }
+                if (remoteContainerRef.current) {
+                    await detachUserVideo(remoteContainerRef.current);
+                }
+            });
+
+            // ── Event: connection quality change ──
+            client.on("connection-change", (payload) => {
+                if (!mountedRef.current) return;
+                const { state } = payload;
+                if (state === "Fail" || state === "Closed") {
+                    setConnectionQuality("poor");
+                } else if (state === "Reconnecting") {
+                    setConnectionQuality("reconnecting");
+                } else {
+                    setConnectionQuality("good");
                 }
             });
 
             if (onReady) onReady();
         } catch (err) {
             console.error("[Zoom] Join error:", err);
-            setError(err.message || "Failed to join session");
+            if (mountedRef.current) {
+                setError(err.message || "Failed to join session");
+            }
         } finally {
-            setLoading(false);
+            if (mountedRef.current) setLoading(false);
         }
-    }, [roomName, userName, joined, loading, onReady, renderVideo, stopRenderVideo]);
+    }, [roomName, userName, loading, onReady, attachUserVideo, detachUserVideo]);
 
     // ── Leave session ────────────────────────────────────────
     const leaveSession = useCallback(async () => {
@@ -198,88 +221,116 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
     const toggleVideo = useCallback(async () => {
         const client = clientRef.current;
         if (!client) return;
-        const stream = client.getMediaStream();
-        if (videoStarted) {
-            await stream.stopVideo();
-            if (selfVideoRef.current) {
-                await stopRenderVideo(client.getCurrentUserInfo().userId, selfVideoRef.current);
+        try {
+            const stream = client.getMediaStream();
+            if (videoStarted) {
+                await stream.stopVideo();
+                if (selfContainerRef.current) await detachUserVideo(selfContainerRef.current);
+                setVideoStarted(false);
+            } else {
+                await stream.startVideo();
+                const myUserId = client.getCurrentUserInfo().userId;
+                if (selfContainerRef.current) {
+                    await attachUserVideo(myUserId, selfContainerRef.current, 2);
+                }
+                setVideoStarted(true);
             }
-            setVideoStarted(false);
-        } else {
-            await stream.startVideo();
-            const myUserId = client.getCurrentUserInfo().userId;
-            if (selfVideoRef.current) {
-                await renderVideo(myUserId, selfVideoRef.current);
-            }
-            setVideoStarted(true);
+        } catch (e) {
+            console.warn("[Zoom] toggleVideo:", e);
         }
-    }, [videoStarted, renderVideo, stopRenderVideo]);
+    }, [videoStarted, attachUserVideo, detachUserVideo]);
 
     // ── Toggle audio ─────────────────────────────────────────
     const toggleAudio = useCallback(async () => {
         const client = clientRef.current;
         if (!client) return;
-        const stream = client.getMediaStream();
-        if (audioStarted) {
-            await stream.muteAudio();
-            setAudioStarted(false);
-        } else {
-            await stream.unmuteAudio();
-            setAudioStarted(true);
+        try {
+            const stream = client.getMediaStream();
+            if (audioStarted) {
+                await stream.muteAudio();
+                setAudioStarted(false);
+            } else {
+                await stream.unmuteAudio();
+                setAudioStarted(true);
+            }
+        } catch (e) {
+            console.warn("[Zoom] toggleAudio:", e);
         }
     }, [audioStarted]);
 
     // ── Auto-join on mount ───────────────────────────────────
     useEffect(() => {
-        if (roomName && !joined && !loading) {
+        mountedRef.current = true;
+        if (roomName && !joinedRef.current) {
             joinSession();
         }
-        return () => { cleanup(); };
+        return () => {
+            mountedRef.current = false;
+            cleanup();
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomName]);
 
+    // ── Connection quality dot color ─────────────────────────
+    const qualityColor = connectionQuality === "good"
+        ? "#10b981"
+        : connectionQuality === "reconnecting"
+            ? "#f59e0b"
+            : "#ef4444";
+
     return (
-        <div className="zoom-video-root">
-            {/* Loading overlay */}
+        <div className="zoom-root">
+            {/* Loading */}
             {loading && (
                 <div className="zoom-overlay">
                     <div className="zoom-spinner" />
-                    <p className="zoom-overlay-title">Connecting to video session…</p>
-                    <p className="zoom-overlay-subtitle">
-                        Please allow camera and microphone access
-                    </p>
+                    <p className="zoom-title">Connecting to video session…</p>
+                    <p className="zoom-sub">Please allow camera and microphone access</p>
                 </div>
             )}
 
-            {/* Error state */}
+            {/* Error */}
             {error && !loading && (
                 <div className="zoom-overlay">
-                    <p className="zoom-error-title">Connection Error</p>
-                    <p className="zoom-overlay-subtitle">{error}</p>
-                    <button onClick={joinSession} className="zoom-retry-btn">
+                    <p className="zoom-err">Connection Error</p>
+                    <p className="zoom-sub">{error}</p>
+                    <button onClick={() => { joinedRef.current = false; joinSession(); }} className="zoom-retry">
                         Retry
                     </button>
                 </div>
             )}
 
-            {/* ── Video grid ── */}
-            <div className="zoom-video-grid">
-                {/* Remote video (large / main) */}
-                <div className="zoom-remote-video">
-                    <div ref={remoteVideoRef} className="zoom-video-player-container" />
-                    {remoteUsers.length === 0 && joined && (
+            {/* Video grid */}
+            <div className="zoom-grid">
+                {/* Remote video (main area) */}
+                <div className="zoom-remote">
+                    <video-player-container ref={remoteContainerRef} class="zoom-vpc" />
+                    {remoteUsers.length === 0 && joined && !loading && (
                         <div className="zoom-waiting">
+                            <div className="zoom-waiting-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                            </div>
                             <p>Waiting for other participant…</p>
+                        </div>
+                    )}
+                    {/* Connection quality indicator */}
+                    {joined && (
+                        <div className="zoom-quality">
+                            <span className="zoom-quality-dot" style={{ background: qualityColor }} />
+                            <span className="zoom-quality-text">
+                                {connectionQuality === "good" ? "Connected" : connectionQuality === "reconnecting" ? "Reconnecting…" : "Poor connection"}
+                            </span>
                         </div>
                     )}
                 </div>
 
-                {/* Self video (picture-in-picture) */}
+                {/* Self video (PIP) */}
                 {joined && (
-                    <div className="zoom-self-video">
-                        <div ref={selfVideoRef} className="zoom-video-player-container" />
+                    <div className="zoom-self">
+                        <video-player-container ref={selfContainerRef} class="zoom-vpc" />
                         {!videoStarted && (
                             <div className="zoom-cam-off">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.34l1 1L22 8v8" /><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2l10 10Z" /><line x1="2" x2="22" y1="2" y2="22" /></svg>
                                 <span>Camera Off</span>
                             </div>
                         )}
@@ -288,12 +339,12 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
                 )}
             </div>
 
-            {/* ── Controls bar ── */}
+            {/* Controls */}
             {joined && (
                 <div className="zoom-controls">
                     <button
                         onClick={toggleAudio}
-                        className={`zoom-ctrl-btn ${!audioStarted ? "zoom-ctrl-off" : ""}`}
+                        className={`zoom-btn ${!audioStarted ? "zoom-btn-off" : ""}`}
                         title={audioStarted ? "Mute" : "Unmute"}
                     >
                         {audioStarted ? (
@@ -305,7 +356,7 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
 
                     <button
                         onClick={toggleVideo}
-                        className={`zoom-ctrl-btn ${!videoStarted ? "zoom-ctrl-off" : ""}`}
+                        className={`zoom-btn ${!videoStarted ? "zoom-btn-off" : ""}`}
                         title={videoStarted ? "Stop Video" : "Start Video"}
                     >
                         {videoStarted ? (
@@ -315,15 +366,33 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
                         )}
                     </button>
 
-                    <button onClick={leaveSession} className="zoom-leave-btn" title="Leave">
+                    <button onClick={leaveSession} className="zoom-btn-leave" title="Leave">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l-3.41-2.6Z" /><line x1="23" x2="1" y1="1" y2="23" /></svg>
                     </button>
                 </div>
             )}
 
-            {/* ── Scoped styles ── */}
+            <style jsx global>{`
+        /* Force Zoom SDK custom elements to fill containers */
+        video-player-container {
+          display: block !important;
+          width: 100% !important;
+          height: 100% !important;
+        }
+        video-player-container video-player {
+          width: 100% !important;
+          height: 100% !important;
+        }
+        video-player-container video-player video,
+        video-player-container video-player canvas {
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+        }
+      `}</style>
+
             <style jsx>{`
-        .zoom-video-root {
+        .zoom-root {
           position: relative;
           width: 100%;
           height: 100%;
@@ -333,181 +402,104 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
           flex-direction: column;
           overflow: hidden;
         }
-
         .zoom-overlay {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          background: #0f172a;
-          z-index: 30;
-          gap: 0.75rem;
+          position: absolute; inset: 0;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          background: #0f172a; z-index: 30; gap: 0.75rem;
         }
         .zoom-spinner {
-          width: 2.5rem;
-          height: 2.5rem;
-          border: 4px solid rgba(99,102,241,0.3);
-          border-top-color: #6366f1;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
+          width: 2.5rem; height: 2.5rem;
+          border: 4px solid rgba(99,102,241,0.3); border-top-color: #6366f1;
+          border-radius: 50%; animation: zspin 0.8s linear infinite;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .zoom-overlay-title { color: #fff; font-size: 1.125rem; }
-        .zoom-overlay-subtitle { color: #94a3b8; font-size: 0.875rem; max-width: 280px; text-align: center; }
-        .zoom-error-title { color: #f87171; font-size: 1.125rem; }
-        .zoom-retry-btn {
-          margin-top: 0.5rem;
-          padding: 0.5rem 1.5rem;
-          background: #4f46e5;
-          color: #fff;
-          border: none;
-          border-radius: 0.75rem;
-          font-size: 0.875rem;
-          font-weight: 600;
-          cursor: pointer;
+        @keyframes zspin { to { transform: rotate(360deg); } }
+        .zoom-title { color: #fff; font-size: 1.125rem; }
+        .zoom-sub { color: #94a3b8; font-size: 0.875rem; max-width: 280px; text-align: center; }
+        .zoom-err { color: #f87171; font-size: 1.125rem; }
+        .zoom-retry {
+          margin-top: 0.5rem; padding: 0.5rem 1.5rem;
+          background: #4f46e5; color: #fff; border: none; border-radius: 0.75rem;
+          font-size: 0.875rem; font-weight: 600; cursor: pointer;
         }
-        .zoom-retry-btn:hover { background: #4338ca; }
+        .zoom-retry:hover { background: #4338ca; }
 
-        /* ── Video grid ── */
-        .zoom-video-grid {
-          flex: 1;
-          position: relative;
-          width: 100%;
-          height: 100%;
-          min-height: 0;
+        .zoom-grid {
+          flex: 1; position: relative; width: 100%; height: 100%; min-height: 0;
         }
-
-        /* Remote = full area */
-        .zoom-remote-video {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
+        .zoom-remote {
+          position: absolute; inset: 0; width: 100%; height: 100%;
         }
-
-        .zoom-video-player-container {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+        .zoom-vpc {
+          display: block; width: 100%; height: 100%;
         }
-
-        /* Make Zoom's <video-player> elements fill their container */
-        .zoom-video-player-container :global(video-player) {
-          width: 100% !important;
-          height: 100% !important;
-        }
-        .zoom-video-player-container :global(video-player video),
-        .zoom-video-player-container :global(video-player canvas) {
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: cover !important;
-        }
-
         .zoom-waiting {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #64748b;
-          font-size: 0.875rem;
+          position: absolute; inset: 0;
+          display: flex; flex-direction: column; align-items: center; justify-content: center;
+          color: #64748b; font-size: 0.875rem; gap: 12px;
+        }
+        .zoom-waiting-icon { opacity: 0.4; }
+        .zoom-quality {
+          position: absolute; top: 12px; left: 12px;
+          display: flex; align-items: center; gap: 6px;
+          background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+          padding: 4px 10px; border-radius: 20px; z-index: 15;
+        }
+        .zoom-quality-dot {
+          width: 8px; height: 8px; border-radius: 50%;
+          display: inline-block; flex-shrink: 0;
+        }
+        .zoom-quality-text {
+          color: #e2e8f0; font-size: 0.625rem; font-weight: 500;
         }
 
-        /* Self = PIP in bottom-right */
-        .zoom-self-video {
-          position: absolute;
-          bottom: 80px;
-          right: 16px;
-          width: 180px;
-          height: 135px;
-          border-radius: 12px;
-          overflow: hidden;
+        .zoom-self {
+          position: absolute; bottom: 80px; right: 16px;
+          width: 160px; height: 120px;
+          border-radius: 12px; overflow: hidden;
           border: 2px solid rgba(255,255,255,0.15);
-          background: #1e293b;
-          z-index: 20;
+          background: #1e293b; z-index: 20;
           box-shadow: 0 8px 32px rgba(0,0,0,0.4);
         }
         @media (min-width: 768px) {
-          .zoom-self-video {
-            width: 240px;
-            height: 180px;
-          }
+          .zoom-self { width: 220px; height: 165px; }
         }
-
+        @media (min-width: 1280px) {
+          .zoom-self { width: 280px; height: 210px; }
+        }
         .zoom-cam-off {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #1e293b;
-          color: #94a3b8;
-          font-size: 0.75rem;
+          position: absolute; inset: 0;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+          background: #1e293b; color: #94a3b8; font-size: 0.7rem;
         }
-
         .zoom-self-label {
-          position: absolute;
-          bottom: 4px;
-          left: 8px;
-          color: #fff;
-          font-size: 0.625rem;
-          background: rgba(0,0,0,0.5);
-          padding: 2px 6px;
-          border-radius: 4px;
+          position: absolute; bottom: 4px; left: 8px;
+          color: #fff; font-size: 0.6rem;
+          background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;
         }
 
-        /* ── Controls bar ── */
         .zoom-controls {
-          position: absolute;
-          bottom: 16px;
-          left: 50%;
-          transform: translateX(-50%);
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          z-index: 25;
-          background: rgba(15,23,42,0.8);
-          backdrop-filter: blur(12px);
-          padding: 8px 16px;
-          border-radius: 9999px;
+          position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+          display: flex; align-items: center; gap: 12px; z-index: 25;
+          background: rgba(15,23,42,0.85); backdrop-filter: blur(16px);
+          padding: 8px 20px; border-radius: 9999px;
           border: 1px solid rgba(255,255,255,0.1);
         }
-
-        .zoom-ctrl-btn {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          border: none;
-          background: rgba(255,255,255,0.1);
-          color: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: background 0.2s;
+        .zoom-btn {
+          width: 44px; height: 44px; border-radius: 50%; border: none;
+          background: rgba(255,255,255,0.1); color: #fff;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: background 0.2s;
         }
-        .zoom-ctrl-btn:hover { background: rgba(255,255,255,0.2); }
-        .zoom-ctrl-off { background: rgba(239,68,68,0.3); color: #fca5a5; }
-        .zoom-ctrl-off:hover { background: rgba(239,68,68,0.5); }
-
-        .zoom-leave-btn {
-          width: 44px;
-          height: 44px;
-          border-radius: 50%;
-          border: none;
-          background: #ef4444;
-          color: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: background 0.2s;
+        .zoom-btn:hover { background: rgba(255,255,255,0.2); }
+        .zoom-btn-off { background: rgba(239,68,68,0.3); color: #fca5a5; }
+        .zoom-btn-off:hover { background: rgba(239,68,68,0.5); }
+        .zoom-btn-leave {
+          width: 44px; height: 44px; border-radius: 50%; border: none;
+          background: #ef4444; color: #fff;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: background 0.2s;
         }
-        .zoom-leave-btn:hover { background: #dc2626; }
+        .zoom-btn-leave:hover { background: #dc2626; }
       `}</style>
         </div>
     );

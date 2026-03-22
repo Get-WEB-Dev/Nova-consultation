@@ -142,7 +142,7 @@ export default function PostCard(props: PostCardProps) {
 
   const InteractionsSection = () => (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-4 pt-2 border-t border-slate-100">
+      <div className="flex items-center gap-4 pt-2 border-t border-slate-100/60">
         <button
           onClick={handleLike}
           className={`flex items-center gap-1.5 text-sm transition-all ${liked ? "text-rose-500 scale-105" : "text-slate-400 hover:text-rose-500"}`}
@@ -175,7 +175,7 @@ export default function PostCard(props: PostCardProps) {
                   <div className="relative w-7 h-7 rounded-full overflow-hidden flex-shrink-0">
                     <Image src={comment.avatar} alt={comment.author} fill className="object-cover" unoptimized />
                   </div>
-                  <div className="bg-slate-50 rounded-xl px-3 py-2 flex-1 min-w-0">
+                  <div className="bg-slate-50/60 rounded-xl px-3 py-2 flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-700">{comment.author}</p>
                     <p className="text-xs text-slate-600 mt-0.5">{comment.text}</p>
                   </div>
@@ -187,7 +187,7 @@ export default function PostCard(props: PostCardProps) {
             <div className="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
               <span className="text-xs font-bold text-primary-600">Y</span>
             </div>
-            <div className="flex-1 flex items-center gap-2 bg-slate-50 rounded-full px-3 py-1.5 border border-slate-200 focus-within:border-primary-400 transition-colors">
+            <div className="flex-1 flex items-center gap-2 bg-slate-50/60 rounded-full px-3 py-1.5 border border-slate-200/60 focus-within:border-teal-400 transition-all duration-200">
               <input
                 type="text"
                 value={newComment}
@@ -207,7 +207,7 @@ export default function PostCard(props: PostCardProps) {
   );
 
   const cardContent = (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col hover:shadow-md transition-all duration-300 group">
+    <div className="glass-card overflow-hidden flex flex-col hover:shadow-glass-lg hover:-translate-y-0.5 transition-all duration-300 group">
       <ThumbnailSection />
       <div className="p-4 flex flex-col gap-3">
         <Link
@@ -239,7 +239,7 @@ export default function PostCard(props: PostCardProps) {
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {tags.map((tag) => (
-              <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 font-medium border border-primary-100">
+              <span key={tag} className="text-[10px] px-2.5 py-0.5 rounded-full bg-gradient-to-r from-teal-50 to-primary-50 text-teal-700 font-semibold border border-teal-100/60">
                 #{tag}
               </span>
             ))}

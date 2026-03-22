@@ -94,6 +94,12 @@ export default function HistoryPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Poll every 10s so new patient consultations appear without reload
+  useEffect(() => {
+    const interval = setInterval(() => load(), 10000);
+    return () => clearInterval(interval);
+  }, [load]);
+
   const STATUS_TABS = [
     { k: "all", l: "All" }, { k: "completed", l: "Completed" }, { k: "active", l: "Active" },
     { k: "waiting", l: "Waiting" }, { k: "follow_up", l: "Follow-up" }, { k: "missed", l: "Missed" },

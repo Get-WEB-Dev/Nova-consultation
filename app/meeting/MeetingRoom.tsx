@@ -62,15 +62,39 @@ export default function MeetingRoom({
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [activeConsultationId, setActiveConsultationId] = useState<string | null>(consultationId || null);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Computed room name
-  const roomName = consultationId ? `NovaHealth_${consultationId.replace(/-/g, "")}` : null;
+  // Room name: use consultationId if available, otherwise fallback to doctorId+patientId
+  const roomName = activeConsultationId
+    ? `NovaHealth_${activeConsultationId.replace(/-/g, "")}`
+    : (doctorId && patientId)
+      ? `NovaHealth_${doctorId.replace(/-/g, "")}_${patientId.replace(/-/g, "")}`
+      : null;
 
-  // (Zoom initialization is handled by ZoomVideoCall)
+  // Auto-create consultation if missing
+  useEffect(() => {
+    if (activeConsultationId || !doctorId || !patientId) return;
+    const createConsult = async () => {
+      try {
+        const res = await fetch("/api/consultations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ doctorId, patientId }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.data?.id) setActiveConsultationId(json.data.id);
+        }
+      } catch (e) {
+        console.warn("Auto-create consultation failed:", e);
+      }
+    };
+    createConsult();
+  }, [activeConsultationId, doctorId, patientId]);
 
   // ────────────────────────────────────────────
   // 2. Timer
@@ -84,11 +108,14 @@ export default function MeetingRoom({
   // 3. Poll messages from our backend
   // ────────────────────────────────────────────
   useEffect(() => {
-    if (!consultationId && (!doctorId || !patientId)) return;
+    const cid = activeConsultationId || consultationId;
+    if (!cid && (!doctorId || !patientId)) return;
+    const controller = new AbortController();
     const fetchMsgs = async () => {
       try {
-        const params = consultationId ? `consultationId=${consultationId}` : `doctorId=${doctorId}&patientId=${patientId}`;
-        const res = await fetch(`/api/messages?${params}`);
+        // ALWAYS fetch full history between doctor and patient if both IDs are known
+        const params = (doctorId && patientId) ? `doctorId=${doctorId}&patientId=${patientId}` : `consultationId=${cid}`;
+        const res = await fetch(`/api/messages?${params}`, { signal: controller.signal });
         const json = await res.json();
         if (json.data) {
           setMessages(
@@ -114,9 +141,9 @@ export default function MeetingRoom({
       } catch (_) { }
     };
     fetchMsgs();
-    const interval = setInterval(fetchMsgs, 3000);
-    return () => clearInterval(interval);
-  }, [consultationId]);
+    const interval = setInterval(fetchMsgs, 5000);
+    return () => { controller.abort(); clearInterval(interval); };
+  }, [activeConsultationId, consultationId, doctorId, patientId]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -138,7 +165,8 @@ export default function MeetingRoom({
     });
 
   const sendMessage = useCallback(() => {
-    if (!newMsg.trim() || (!consultationId && (!doctorId || !patientId))) return;
+    const cid = activeConsultationId || consultationId;
+    if (!newMsg.trim() || (!cid && (!doctorId || !patientId))) return;
     const text = newMsg.trim();
     setMessages((prev) => [
       ...prev,
@@ -149,7 +177,7 @@ export default function MeetingRoom({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        consultationId: consultationId || undefined,
+        consultationId: cid || undefined,
         doctorId,
         patientId,
         senderId: patientId,
@@ -157,7 +185,7 @@ export default function MeetingRoom({
         body: text,
       }),
     }).catch(() => { });
-  }, [newMsg, consultationId, doctorId, patientId]);
+  }, [newMsg, activeConsultationId, consultationId, doctorId, patientId]);
 
   // ────────────────────────────────────────────
   // 5. Chat — file upload
@@ -165,7 +193,8 @@ export default function MeetingRoom({
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file || (!consultationId && (!doctorId || !patientId))) return;
+      const cid = activeConsultationId || consultationId;
+      if (!file || (!cid && (!doctorId || !patientId))) return;
       const isImage = file.type.startsWith("image/");
       // Optimistic
       setMessages((prev) => [
@@ -189,7 +218,7 @@ export default function MeetingRoom({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            consultationId: consultationId || undefined,
+            consultationId: cid || undefined,
             doctorId,
             patientId,
             senderId: patientId,
@@ -205,7 +234,7 @@ export default function MeetingRoom({
       }
       e.target.value = "";
     },
-    [consultationId, doctorId, patientId]
+    [activeConsultationId, consultationId, doctorId, patientId]
   );
 
   // ────────────────────────────────────────────
@@ -218,11 +247,12 @@ export default function MeetingRoom({
       // (Zoom cleanup is handled by ZoomVideoCall unmount)
 
       // Update consultation status
-      if (consultationId) {
+      const cid = activeConsultationId || consultationId;
+      if (cid) {
         await fetch("/api/consultations/status", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ consultationId, status: "completed" }),
+          body: JSON.stringify({ consultationId: cid, status: "completed" }),
         });
       }
       // Remove from queue

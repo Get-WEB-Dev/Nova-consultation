@@ -21,31 +21,31 @@ import { getNotifications, markNotificationRead, markAllNotificationsRead } from
 type TabKey = "all" | "doctor_available" | "follow_up" | "chat" | "system";
 
 const TABS: { key: TabKey; label: string; icon: typeof Bell }[] = [
-  { key: "all",              label: "All",         icon: Bell          },
-  { key: "doctor_available", label: "Availability", icon: Zap           },
-  { key: "follow_up",        label: "Follow-ups",  icon: BellRing      },
-  { key: "chat",             label: "Chat",        icon: MessageCircle },
-  { key: "system",           label: "System",      icon: ShieldCheck   },
+  { key: "all", label: "All", icon: Bell },
+  { key: "doctor_available", label: "Availability", icon: Zap },
+  { key: "follow_up", label: "Follow-ups", icon: BellRing },
+  { key: "chat", label: "Chat", icon: MessageCircle },
+  { key: "system", label: "System", icon: ShieldCheck },
 ];
 
 const TYPE_ICONS: Record<string, typeof Bell> = {
-  doctor_available:      Zap,
-  queue_called:          Users,
-  follow_up:             BellRing,
+  doctor_available: Zap,
+  queue_called: Users,
+  follow_up: BellRing,
   consultation_complete: Video,
-  saved_doctor_online:   Bookmark,
-  chat:                  MessageCircle,
-  system:                ShieldCheck,
+  saved_doctor_online: Bookmark,
+  chat: MessageCircle,
+  system: ShieldCheck,
 };
 
 const TYPE_COLORS: Record<string, string> = {
-  doctor_available:      "bg-emerald-100 text-emerald-600",
-  queue_called:          "bg-gold-100 text-gold-600",
-  follow_up:             "bg-primary-100 text-primary-600",
+  doctor_available: "bg-emerald-100 text-emerald-600",
+  queue_called: "bg-gold-100 text-gold-600",
+  follow_up: "bg-primary-100 text-primary-600",
   consultation_complete: "bg-accent-100 text-accent-600",
-  saved_doctor_online:   "bg-rose-100 text-rose-500",
-  chat:                  "bg-accent-100 text-accent-600",
-  system:                "bg-slate-100 text-slate-500",
+  saved_doctor_online: "bg-rose-100 text-rose-500",
+  chat: "bg-accent-100 text-accent-600",
+  system: "bg-slate-100 text-slate-500",
 };
 
 function timeAgo(dateStr: string): string {
@@ -60,15 +60,15 @@ function timeAgo(dateStr: string): string {
 // Shape a raw DB notification row → Notification frontend type
 function mapNotification(row: any): Notification {
   return {
-    id:           row.id,
-    type:         row.type as NotificationType,
-    title:        row.title,
-    message:      row.message,
-    read:         row.read ?? false,
-    doctorName:   row.doctor_name   ?? undefined,
+    id: row.id,
+    type: row.type as NotificationType,
+    title: row.title,
+    message: row.message,
+    read: row.read ?? false,
+    doctorName: row.doctor_name ?? undefined,
     doctorAvatar: row.doctor_avatar ?? undefined,
-    actionUrl:    row.action_url    ?? undefined,
-    created_at:   row.created_at,
+    actionUrl: row.action_url ?? undefined,
+    created_at: row.created_at,
   };
 }
 
@@ -77,26 +77,30 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
 
-  const loadNotifs = useCallback(async () => {
-    setLoading(true);
+  const loadNotifs = useCallback(async (showLoader = true) => {
+    if (showLoader) setLoading(true);
     try {
       let user = getUser();
       if (!user) user = await loadUser();
-      if (!user) { setLoading(false); return; }
+      if (!user) { if (showLoader) setLoading(false); return; }
       const raw = await getNotifications(user.id);
       setNotifications(raw.map(mapNotification));
     } catch {
       setNotifications([]);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadNotifs();
+    const interval = setInterval(() => loadNotifs(false), 5000);
     const handler = () => loadNotifs();
     window.addEventListener("hc-auth-change", handler);
-    return () => window.removeEventListener("hc-auth-change", handler);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("hc-auth-change", handler);
+    };
   }, [loadNotifs]);
 
   const filtered =
@@ -105,10 +109,10 @@ export default function NotificationsPage() {
       : activeTab === "system"
         ? notifications.filter((n) => n.type === "system" || n.type === "consultation_complete")
         : notifications.filter((n) =>
-            n.type === activeTab ||
-            (n.type === "queue_called" && activeTab === "doctor_available") ||
-            (n.type === "saved_doctor_online" && activeTab === "doctor_available")
-          );
+          n.type === activeTab ||
+          (n.type === "queue_called" && activeTab === "doctor_available") ||
+          (n.type === "saved_doctor_online" && activeTab === "doctor_available")
+        );
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -147,11 +151,10 @@ export default function NotificationsPage() {
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg transition-all whitespace-nowrap ${
-              activeTab === key
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg transition-all whitespace-nowrap ${activeTab === key
                 ? "bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-sm"
                 : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-            }`}
+              }`}
           >
             <Icon className="w-3.5 h-3.5" />
             {label}
@@ -182,9 +185,8 @@ export default function NotificationsPage() {
                 key={notif.id}
                 href={notif.actionUrl || ""}
                 onClick={() => handleMarkRead(notif.id)}
-                className={`bg-white rounded-2xl border shadow-sm p-4 flex items-start gap-3 transition-all hover:shadow-md cursor-pointer ${
-                  !notif.read ? "border-l-4 border-l-primary-500 border-slate-100" : "border-slate-100"
-                }`}
+                className={`bg-white rounded-2xl border shadow-sm p-4 flex items-start gap-3 transition-all hover:shadow-md cursor-pointer ${!notif.read ? "border-l-4 border-l-primary-500 border-slate-100" : "border-slate-100"
+                  }`}
               >
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${colorClass}`}>
                   <NIcon className="w-5 h-5" />

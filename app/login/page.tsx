@@ -7,7 +7,7 @@ import Image from "next/image";
 import {
   Mail, Lock, User, ArrowRight,
   Stethoscope, Heart, Shield, Eye, EyeOff,
-  Loader2, AlertCircle,
+  Loader2, AlertCircle, Sparkles,
 } from "lucide-react";
 import { signIn, signUp, getUser, loadUser } from "@/lib/supabase/auth";
 
@@ -42,9 +42,6 @@ const T = {
   },
 } as const;
 
-// Role selector removed — patient signup is only for patients.
-// Doctors register via /doctor-login, admins via admin flow.
-
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -63,7 +60,6 @@ function LoginForm() {
   const t = T[lang];
 
   useEffect(() => {
-    // If already logged in, redirect based on role
     loadUser().then((user) => {
       if (user) {
         if (user.role === "doctor") router.replace("/doctor-dashboard");
@@ -89,11 +85,9 @@ function LoginForm() {
         loggedInUser = await signIn(email, password);
       } else {
         loggedInUser = await signUp(email, password, name || email.split("@")[0], "user");
-        // New user: clear onboarding so it shows after sign up
         localStorage.removeItem("nova-onboarding-done");
       }
 
-      // Role-based redirect: doctors and admins cannot access patient portal
       if (loggedInUser.role === "doctor") {
         router.push("/doctor-dashboard");
         return;
@@ -122,24 +116,31 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-nova-gradient-soft flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-80 h-80 bg-primary-200/20 rounded-full blur-3xl -translate-y-1/3 translate-x-1/3 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-64 h-64 bg-accent-200/15 rounded-full blur-3xl translate-y-1/3 -translate-x-1/4 pointer-events-none" />
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: 'linear-gradient(160deg, #f0f8ff 0%, #f8fafc 30%, #f0fdf9 60%, #f8fafc 100%)' }}>
+      {/* Decorative blobs */}
+      <div className="absolute top-0 right-0 w-96 h-96 rounded-full -translate-y-1/3 translate-x-1/3 pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(12,188,173,0.08) 0%, transparent 70%)' }} />
+      <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full translate-y-1/3 -translate-x-1/4 pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(26,53,88,0.06) 0%, transparent 70%)' }} />
+      <div className="absolute top-1/2 left-1/2 w-64 h-64 rounded-full -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(20,184,146,0.04) 0%, transparent 70%)' }} />
 
-      <Link href="/" className="flex items-center gap-2.5 font-display font-bold text-xl text-primary-600 mb-8 relative z-10">
-        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm">
+      <Link href="/" className="flex items-center gap-2.5 font-display font-bold text-xl mb-8 relative z-10 group">
+        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm group-hover:shadow-glow-teal transition-shadow duration-300">
           <Image src="/favicon.png" alt="Nova Health" width={40} height={40} className="w-full h-full object-cover" />
         </div>
-        Nova Health
+        <span className="text-gradient">Nova Health</span>
       </Link>
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-card p-6 relative z-10">
-        <div className="flex bg-slate-100 rounded-xl p-1 mb-6">
+      <div className="w-full max-w-md relative z-10 glass-card p-7 animate-fade-up">
+        {/* Tab switcher */}
+        <div className="flex bg-slate-100/60 rounded-xl p-1 mb-6">
           {(["login", "register"] as Tab[]).map((t2) => (
             <button
               key={t2}
               onClick={() => { setTab(t2); setError(null); }}
-              className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${tab === t2
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${tab === t2
                 ? "bg-white text-primary-600 shadow-sm"
                 : "text-slate-500 hover:text-slate-700"
                 }`}
@@ -149,18 +150,19 @@ function LoginForm() {
           ))}
         </div>
 
+        {/* Header */}
         <div className="text-center mb-6">
           <h1 className="font-display font-bold text-xl text-slate-800">
             {tab === "login" ? t.welcome : t.join}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-slate-500 mt-1.5">
             {tab === "login" ? t.loginSub : t.registerSub}
           </p>
         </div>
 
         {/* Error message */}
         {error && (
-          <div className="flex items-start gap-2 p-3 mb-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm animate-fade-up">
+          <div className="flex items-start gap-2 p-3.5 mb-4 rounded-xl bg-rose-50/80 border border-rose-200/60 text-rose-700 text-sm animate-fade-up">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -189,7 +191,7 @@ function LoginForm() {
             </label>
             <div className="relative">
               <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} className="input-field pr-10" placeholder="••••••••" required minLength={6} />
-              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors duration-200">
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
@@ -200,10 +202,7 @@ function LoginForm() {
             )}
           </div>
 
-          {/* Role selector removed — this page only registers patients.
-              Doctors register via /doctor-login, admins via admin flow. */}
-
-          <button type="submit" disabled={loading} className="w-full btn-primary py-3 text-base disabled:opacity-60 disabled:cursor-not-allowed">
+          <button type="submit" disabled={loading} className="w-full btn-primary py-3 text-base disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary-600/20">
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -231,7 +230,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 rounded-xl bg-primary-100 animate-breathe" /></div>}>
       <LoginForm />
     </Suspense>
   );

@@ -4,5 +4,11 @@
     "files": [
       "static/chunks/_app-pages-browser_node_modules_zoom_videosdk_dist_index_esm_js.js"
     ]
+  },
+  "components/layout/Navbar.tsx -> @/lib/realtime/subscriptions": {
+    "id": "components/layout/Navbar.tsx -> @/lib/realtime/subscriptions",
+    "files": [
+      "static/chunks/_app-pages-browser_lib_realtime_subscriptions_ts.js"
+    ]
   }
 }

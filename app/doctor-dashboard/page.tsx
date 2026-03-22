@@ -6,7 +6,8 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Users, CheckCircle2, Star, ChevronLeft, ChevronRight,
-  Video, Clock, Zap, Play, Stethoscope, Calendar, AlertCircle, Activity
+  Video, Clock, Zap, Play, Stethoscope, AlertCircle, Activity,
+  Power, CalendarDays, MoreVertical
 } from "lucide-react";
 
 /* ── types ─────────────────────────────────────────────── */
@@ -24,10 +25,10 @@ interface ConsultSummary { patientName: string; issue: string; durationMinutes: 
 
 /* ── mock data ──────────────────────────────────────────── */
 const MOCK_REVIEWS = [
-  { id:"1", name:"Sarah K.",    rating:5, text:"Very helpful and caring doctor. Explained everything clearly.",     avatar:"S", time:"2 days ago" },
-  { id:"2", name:"Mohammed A.", rating:5, text:"Quick and professional consultation. Highly recommend!",            avatar:"M", time:"3 days ago" },
-  { id:"3", name:"Hana T.",     rating:4, text:"Great advice. I felt heard and understood throughout.",             avatar:"H", time:"5 days ago" },
-  { id:"4", name:"James L.",    rating:5, text:"Best online doctor experience I've ever had.",                      avatar:"J", time:"1 week ago" },
+  { id: "1", name: "Sarah K.", rating: 5, text: "Very helpful and caring doctor. Explained everything clearly.", avatar: "S", time: "2 days ago" },
+  { id: "2", name: "Mohammed A.", rating: 5, text: "Quick and professional consultation. Highly recommend!", avatar: "M", time: "3 days ago" },
+  { id: "3", name: "Hana T.", rating: 4, text: "Great advice. I felt heard and understood throughout.", avatar: "H", time: "5 days ago" },
+  { id: "4", name: "James L.", rating: 5, text: "Best online doctor experience I've ever had.", avatar: "J", time: "1 week ago" },
 ];
 
 /* ── countdown hook ─────────────────────────────────────── */
@@ -40,43 +41,41 @@ function useCountdown(initialMs: number) {
   const h = Math.floor(rem / 3600000);
   const m = Math.floor((rem % 3600000) / 60000);
   const s = Math.floor((rem % 60000) / 1000);
-  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 /* ── Reviews Slider ─────────────────────────────────────── */
 function ReviewsSlider() {
   const [idx, setIdx] = useState(0);
   const next = useCallback(() => setIdx(i => (i + 1) % MOCK_REVIEWS.length), []);
-  useEffect(() => { const t = setInterval(next, 4500); return () => clearInterval(t); }, [next]);
+  useEffect(() => { const t = setInterval(next, 5000); return () => clearInterval(t); }, [next]);
   const r = MOCK_REVIEWS[idx];
   return (
-    <section>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-bold text-slate-800 dark:text-white">Patient Reviews</h2>
-        <div className="flex gap-1">
-          {MOCK_REVIEWS.map((_,i) => (
-            <button key={i} onClick={()=>setIdx(i)} className={`rounded-full transition-all duration-300 ${i===idx?"w-5 h-2 bg-primary-500":"w-2 h-2 bg-slate-200 hover:bg-slate-300"}`} />
+    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden group">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+          <Star className="w-5 h-5 text-gold-500 fill-current" /> Patient Feedback
+        </h2>
+        <div className="flex gap-1.5">
+          {MOCK_REVIEWS.map((_, i) => (
+            <button key={i} onClick={() => setIdx(i)} className={`rounded-full transition-all duration-300 ${i === idx ? "w-6 h-2 bg-primary-500" : "w-2 h-2 bg-slate-200 hover:bg-slate-300"}`} />
           ))}
         </div>
       </div>
-      <div className="relative bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-card border border-slate-100 dark:border-slate-700 overflow-hidden">
-        <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-primary-50 dark:bg-primary-900/20 opacity-60" />
-        <div className="absolute -bottom-4 -left-4 w-16 h-16 rounded-full bg-gold-50 dark:bg-gold-900/20 opacity-60" />
-        <div className="relative">
-          <div className="flex gap-0.5 mb-3">{[1,2,3,4,5].map(i=><Star key={i} className={`w-4 h-4 ${i<=r.rating?"fill-gold-400 text-gold-400":"text-slate-200"}`}/>)}</div>
-          <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed italic mb-4">"{r.text}"</p>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-300 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">{r.avatar}</span>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{r.name}</p>
-              <p className="text-xs text-slate-400">{r.time}</p>
-            </div>
+      <div className="relative">
+        <div className="flex gap-1 mb-4">{[1, 2, 3, 4, 5].map(i => <Star key={i} className={`w-4 h-4 ${i <= r.rating ? "fill-gold-400 text-gold-400" : "text-slate-200"}`} />)}</div>
+        <p className="text-slate-600 text-base leading-relaxed italic mb-6">"{r.text}"</p>
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-teal-400 flex items-center justify-center shadow-md">
+            <span className="text-white text-sm font-bold">{r.avatar}</span>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-800">{r.name}</p>
+            <p className="text-xs text-slate-400 font-medium">{r.time}</p>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -91,128 +90,145 @@ function ScheduleSlider({ lastConsult }: { lastConsult: ConsultSummary | null })
     if (Math.abs(diff) > 50) setSlide(diff > 0 ? 1 : 0);
   };
   return (
-    <section>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-bold text-slate-800 dark:text-white">Schedule</h2>
-        <div className="flex gap-1">
-          {[0,1].map(i=><button key={i} onClick={()=>setSlide(i)} className={`rounded-full transition-all duration-300 ${i===slide?"w-5 h-2 bg-primary-500":"w-2 h-2 bg-slate-200"}`}/>)}
+    <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+          <CalendarDays className="w-5 h-5 text-primary-500" /> Schedule
+        </h2>
+        <div className="flex gap-1.5">
+          {[0, 1].map(i => <button key={i} onClick={() => setSlide(i)} className={`rounded-full transition-all duration-300 ${i === slide ? "w-6 h-2 bg-primary-500" : "w-2 h-2 bg-slate-200"}`} />)}
         </div>
       </div>
       <div className="overflow-hidden rounded-2xl" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        <div className="flex transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]" style={{transform:`translateX(-${slide*100}%)`}}>
+        <div className="flex items-stretch transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]" style={{ transform: `translateX(-${slide * 100}%)` }}>
           {/* Slide 1 */}
-          <div className="min-w-full bg-gradient-to-br from-primary-700 to-primary-500 rounded-2xl p-5 relative overflow-hidden" style={{boxShadow:"0 6px 28px rgba(27,58,92,0.28)"}}>
-            <div className="absolute inset-0 opacity-10" style={{backgroundImage:"radial-gradient(circle at 80% 20%, white 0%, transparent 50%)"}}/>
+          <div className="w-full flex-shrink-0 rounded-2xl p-6 relative overflow-hidden bg-slate-900 text-white">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary-500/20 rounded-full blur-2xl" />
             <div className="relative flex items-start justify-between gap-4">
               <div className="flex-1">
-                <p className="text-primary-200 text-xs font-semibold uppercase tracking-wider mb-1">Next Schedule</p>
-                <p className="text-white font-bold text-lg leading-tight">Morning Session</p>
-                <p className="text-primary-200 text-sm mt-0.5">10:30 AM – 1:00 PM</p>
-                <div className="flex items-center gap-4 mt-3">
-                  <div className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-primary-300"/><span className="text-primary-200 text-xs">8 slots</span></div>
-                  <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-primary-300"/><span className="text-primary-200 text-xs">15 min avg</span></div>
+                <p className="text-primary-300 text-xs font-bold uppercase tracking-wider mb-2">Next Session</p>
+                <p className="text-white font-bold text-xl leading-tight mb-1">Morning Clinic</p>
+                <p className="text-slate-400 text-sm">10:30 AM – 1:00 PM</p>
+                <div className="flex items-center gap-5 mt-5">
+                  <div className="flex items-center gap-2"><Users className="w-4 h-4 text-primary-400" /><span className="text-slate-300 text-sm font-medium">8 slots</span></div>
+                  <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-primary-400" /><span className="text-slate-300 text-sm font-medium">15 min avg</span></div>
                 </div>
               </div>
-              <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-3 py-2.5 text-center flex-shrink-0">
-                <p className="text-white/60 text-[9px] uppercase tracking-wider font-semibold mb-1">Starts in</p>
-                <p className="text-white font-bold text-xl font-mono leading-none">{countdown}</p>
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl px-4 py-3 text-center flex-shrink-0 border border-white/10 shadow-xl">
+                <p className="text-slate-300 text-[10px] uppercase tracking-wider font-bold mb-1">Starts in</p>
+                <p className="text-white font-black text-2xl font-mono leading-none tracking-tight">{countdown}</p>
               </div>
             </div>
-            <button onClick={()=>setSlide(1)} className="mt-3 flex items-center gap-1 text-primary-200 text-xs hover:text-white transition-colors">
-              Last consultation <ChevronRight className="w-3.5 h-3.5"/>
-            </button>
           </div>
           {/* Slide 2 */}
-          <div className="min-w-full bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 shadow-card">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Last Consultation</p>
-              <button onClick={()=>setSlide(0)} className="flex items-center gap-1 text-primary-500 text-xs font-medium hover:text-primary-600">
-                <ChevronLeft className="w-3.5 h-3.5"/>Today's schedule
-              </button>
+          <div className="w-full flex-shrink-0 bg-slate-50 border border-slate-100 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-5">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Last Consultation</p>
             </div>
             {lastConsult ? (
               <>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold">{lastConsult.patientName[0]}</span>
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <span className="text-white font-bold text-lg">{lastConsult.patientName[0]}</span>
                   </div>
                   <div className="flex-1">
-                    <p className="font-bold text-slate-800 dark:text-white">{lastConsult.patientName}</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">{lastConsult.issue}</p>
+                    <p className="font-bold text-slate-800 text-lg">{lastConsult.patientName}</p>
+                    <p className="text-sm text-slate-500 font-medium">{lastConsult.issue}</p>
                   </div>
                   <div className="text-right">
-                    <div className="flex items-center gap-1 text-slate-500"><Clock className="w-3.5 h-3.5"/><span className="text-sm font-semibold">{lastConsult.durationMinutes} min</span></div>
+                    <div className="flex items-center gap-1.5 text-slate-400"><Clock className="w-4 h-4" /><span className="text-sm font-bold">{lastConsult.durationMinutes}m</span></div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 bg-accent-50 dark:bg-accent-900/20 rounded-xl px-3 py-2">
-                  <CheckCircle2 className="w-4 h-4 text-accent-500 flex-shrink-0"/>
-                  <span className="text-xs font-semibold text-accent-700 dark:text-accent-300">Consultation completed successfully</span>
+                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  <span className="text-sm font-bold text-emerald-700">Completed successfully</span>
                 </div>
               </>
             ) : (
               <>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center"><span className="text-white font-bold">H</span></div>
-                  <div><p className="font-bold text-slate-800 dark:text-white">Hana</p><p className="text-sm text-slate-500">Fever</p></div>
-                  <div className="ml-auto flex items-center gap-1 text-slate-500"><Clock className="w-3.5 h-3.5"/><span className="text-sm font-semibold">7 min</span></div>
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center"><span className="text-slate-500 font-bold">H</span></div>
+                  <div><p className="font-bold text-slate-800 text-lg">Hana T.</p><p className="text-sm text-slate-500 font-medium">Routine Checkup</p></div>
+                  <div className="ml-auto flex items-center gap-1.5 text-slate-400"><Clock className="w-4 h-4" /><span className="text-sm font-bold">12m</span></div>
                 </div>
-                <div className="flex items-center gap-2 bg-accent-50 dark:bg-accent-900/20 rounded-xl px-3 py-2">
-                  <CheckCircle2 className="w-4 h-4 text-accent-500 flex-shrink-0"/>
-                  <span className="text-xs font-semibold text-accent-700 dark:text-accent-300">Consultation completed successfully</span>
+                <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                  <span className="text-sm font-bold text-emerald-700">Completed successfully</span>
                 </div>
               </>
             )}
           </div>
         </div>
       </div>
-    </section>
-  );
-}
-
-/* ── Toggle ──────────────────────────────────────────────── */
-function StatusToggle({ online, onChange, busy }: { online:boolean; onChange:(v:boolean)=>void; busy:boolean }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className={`text-sm font-semibold transition-colors ${online?"text-emerald-600":"text-slate-400"}`}>{online?"Online":"Offline"}</span>
-      <button onClick={()=>!busy&&onChange(!online)} disabled={busy}
-        className={`relative w-12 h-6 rounded-full transition-all duration-300 disabled:opacity-60 ${online?"bg-emerald-500 shadow-md shadow-emerald-500/30":"bg-slate-200 dark:bg-slate-600"}`}>
-        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-300 ${online?"left-[calc(100%-1.375rem)]":"left-0.5"}`}/>
-      </button>
     </div>
   );
 }
 
-/* ── Queue Card ──────────────────────────────────────────── */
-function QueueCard({ p, pos }: { p:QueuePatient; pos:number }) {
-  const mins = Math.max(0, Math.floor((Date.now()-new Date(p.joinedAt).getTime())/60000));
+/* ── Toggle ──────────────────────────────────────────────── */
+function StatusToggle({ online, onChange, busy }: { online: boolean; onChange: (v: boolean) => void; busy: boolean }) {
   return (
-    <div className="flex items-center gap-3 p-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-card">
+    <button
+      onClick={() => !busy && onChange(!online)}
+      disabled={busy}
+      className={`relative flex items-center gap-3 px-5 py-2.5 rounded-full transition-all duration-300 disabled:opacity-70 font-bold text-sm shadow-sm ${online
+          ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+          : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
+        }`}
+    >
+      <div className="relative flex items-center justify-center w-5 h-5">
+        {online ? (
+          <>
+            <div className="absolute inset-0 bg-emerald-400 rounded-full animate-ping opacity-40"></div>
+            <div className="relative w-3 h-3 bg-emerald-500 rounded-full"></div>
+          </>
+        ) : (
+          <Power className="w-4 h-4 text-slate-400" />
+        )}
+      </div>
+      {online ? "Online & Accepting" : "Currently Offline"}
+    </button>
+  );
+}
+
+/* ── Queue Card ──────────────────────────────────────────── */
+function QueueCard({ p, pos }: { p: QueuePatient; pos: number }) {
+  const mins = Math.max(0, Math.floor((Date.now() - new Date(p.joinedAt).getTime()) / 60000));
+  return (
+    <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow group">
       <div className="relative flex-shrink-0">
-        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-800 dark:to-primary-700 flex items-center justify-center overflow-hidden">
+        <div className="w-14 h-14 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden">
           {p.patientAvatar
-            ? <Image src={p.patientAvatar} alt={p.patientName} width={44} height={44} className="object-cover"/>
-            : <span className="font-bold text-primary-600 dark:text-primary-200">{p.patientName[0]}</span>
+            ? <Image src={p.patientAvatar} alt={p.patientName} width={56} height={56} className="object-cover" />
+            : <span className="font-bold text-slate-400 text-lg">{p.patientName[0]}</span>
           }
         </div>
-        <div className="absolute -top-1 -left-1 w-5 h-5 rounded-full bg-primary-600 flex items-center justify-center shadow-sm">
-          <span className="text-white text-[9px] font-bold">{pos}</span>
+        <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center shadow-md">
+          <span className="text-white text-xs font-bold">{pos}</span>
         </div>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-slate-800 dark:text-white text-sm">{p.patientName}</p>
-        {p.symptoms && <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{p.symptoms}</p>}
+        <div className="flex items-center justify-between mb-1">
+          <p className="font-bold text-slate-800 text-base truncate pr-2">{p.patientName}</p>
+          <div className={`flex items-center gap-1.5 flex-shrink-0 ${mins >= 10 ? "text-amber-500 bg-amber-50 px-2 py-0.5 rounded-md" : "text-slate-400"}`}>
+            <Clock className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-black tracking-wide">{mins} MIN WAIT</span>
+          </div>
+        </div>
+        <p className="text-sm text-slate-500 truncate">{p.symptoms || "No symptoms specified"}</p>
         {p.severity && (
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block ${p.severity==="Severe"?"bg-rose-50 text-rose-600":p.severity==="Moderate"?"bg-amber-50 text-amber-600":"bg-emerald-50 text-emerald-600"}`}>
-            {p.severity}
-          </span>
+          <div className="mt-2.5 flex items-center gap-2">
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-md ${p.severity === "Severe" ? "bg-rose-50 text-rose-600 border border-rose-100" :
+                p.severity === "Moderate" ? "bg-amber-50 text-amber-600 border border-amber-100" :
+                  "bg-emerald-50 text-emerald-600 border border-emerald-100"
+              }`}>
+              {p.severity} Priority
+            </span>
+          </div>
         )}
       </div>
-      <div className="text-right flex-shrink-0">
-        <div className={`flex items-center gap-1 justify-end ${mins>=5?"text-amber-500":"text-slate-400"}`}>
-          <Clock className="w-3 h-3"/><span className="text-xs font-semibold">{mins}m</span>
-        </div>
-        <p className="text-[10px] text-slate-400">waiting</p>
-      </div>
+      <button className="flex-shrink-0 w-10 h-10 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-primary-50 hover:text-primary-600 transition-colors">
+        <MoreVertical className="w-5 h-5" />
+      </button>
     </div>
   );
 }
@@ -220,17 +236,15 @@ function QueueCard({ p, pos }: { p:QueuePatient; pos:number }) {
 /* ── Waiting animation ───────────────────────────────────── */
 function WaitingAnim() {
   return (
-    <div className="flex flex-col items-center justify-center py-14 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-card">
-      <div className="relative mb-5">
-        <div className="w-20 h-20 rounded-full bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
-          <Stethoscope className="w-9 h-9 text-primary-300"/>
+    <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-dashed border-slate-200">
+      <div className="relative mb-6">
+        <div className="w-24 h-24 rounded-full bg-slate-50 flex items-center justify-center">
+          <Stethoscope className="w-10 h-10 text-slate-300" />
         </div>
-        <div className="absolute inset-0 rounded-full border-2 border-primary-200 animate-ping opacity-25"/>
-        <div className="absolute inset-[-8px] rounded-full border border-primary-100 animate-ping opacity-15" style={{animationDelay:"0.6s"}}/>
+        <div className="absolute inset-0 rounded-full border-2 border-slate-200 animate-ping opacity-20" />
       </div>
-      <p className="font-semibold text-slate-700 dark:text-slate-300 text-base">Waiting for patients to join</p>
-      <p className="text-sm text-slate-400 mt-1">Your queue will appear here</p>
-      <div className="flex gap-1.5 mt-4">{[0,1,2].map(i=><div key={i} className="w-1.5 h-1.5 rounded-full bg-primary-300 animate-bounce" style={{animationDelay:`${i*0.2}s`}}/>)}</div>
+      <p className="font-bold text-slate-700 text-lg">Waiting for patients...</p>
+      <p className="text-slate-500 mt-2 font-medium">Your queue will appear here when patients join.</p>
     </div>
   );
 }
@@ -239,153 +253,201 @@ function WaitingAnim() {
    MAIN PAGE
 ══════════════════════════════════════════════════════════════ */
 export default function DoctorHomePage() {
-  const [user, setUser] = useState<AuthUser|null>(null);
-  const [profile, setProfile] = useState<Profile|null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [queue, setQueue] = useState<QueuePatient[]>([]);
   const [completedToday, setCompletedToday] = useState(0);
-  const [lastConsult, setLastConsult] = useState<ConsultSummary|null>(null);
+  const [lastConsult, setLastConsult] = useState<ConsultSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
 
   useEffect(() => {
     const u = getUser(); if (!u) return; setUser(u);
-    Promise.all([
-      fetch(`/api/doctor/profile?doctorId=${u.id}`).then(r=>r.json()),
-      fetch(`/api/queue?doctorId=${u.id}`).then(r=>r.json()).catch(()=>({data:[]})),
-      fetch(`/api/doctor/consultations?doctorId=${u.id}`).then(r=>r.json()).catch(()=>({data:[]})),
-    ]).then(([p,q,c]) => {
-      if (p.data) { setProfile(p.data); setIsOnline(["available","in_consultation"].includes(p.data.status)); }
-      const qData: QueuePatient[] = (q.data||[]).map((e:any,i:number)=>({
-        id:e.id, patientName:e.patientName||e.patient_name||"Patient",
-        patientAvatar:e.patientAvatar, symptoms:e.symptoms, duration:e.duration,
-        severity:e.severity, notes:e.notes,
-        joinedAt:e.joinedAt||e.joined_at||new Date().toISOString(), queuePosition:i+1,
+    const loadData = () => Promise.all([
+      fetch(`/api/doctor/profile?doctorId=${u.id}`).then(r => r.json()),
+      fetch(`/api/queue?doctorId=${u.id}`).then(r => r.json()).catch(() => ({ data: [] })),
+      fetch(`/api/doctor/consultations?doctorId=${u.id}`).then(r => r.json()).catch(() => ({ data: [] })),
+    ]).then(([p, q, c]) => {
+      if (p.data) { setProfile(p.data); setIsOnline(["available", "in_consultation"].includes(p.data.status)); }
+      const qData: QueuePatient[] = (q.data || []).map((e: any, i: number) => ({
+        id: e.id, patientName: e.patientName || e.patient_name || "Patient",
+        patientAvatar: e.patientAvatar, symptoms: e.symptoms, duration: e.duration,
+        severity: e.severity, notes: e.notes,
+        joinedAt: e.joinedAt || e.joined_at || new Date().toISOString(), queuePosition: i + 1,
       }));
       setQueue(qData);
       const today = new Date().toDateString();
-      const done = (c.data||[]).filter((x:any)=>x.status==="completed"&&new Date(x.created_at).toDateString()===today);
+      const done = (c.data || []).filter((x: any) => x.status === "completed" && new Date(x.created_at).toDateString() === today);
       setCompletedToday(done.length);
-      const allDone = (c.data||[]).filter((x:any)=>x.status==="completed");
+      const allDone = (c.data || []).filter((x: any) => x.status === "completed");
       if (allDone.length) {
-        const last = allDone.sort((a:any,b:any)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime())[0];
-        setLastConsult({patientName:last.patientName||"Patient",issue:last.notes||"General consultation",durationMinutes:last.durationMinutes||0});
+        const last = allDone.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+        setLastConsult({ patientName: last.patientName || "Patient", issue: last.notes || "General consultation", durationMinutes: last.durationMinutes || 0 });
       }
-    }).finally(()=>setLoading(false));
+    }).finally(() => setLoading(false));
+
+    loadData();
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
-  const toggleStatus = async (val:boolean) => {
-    if (!user||toggling) return;
+  const toggleStatus = async (val: boolean) => {
+    if (!user || toggling) return;
     setToggling(true); setIsOnline(val);
     try {
-      await fetch("/api/doctor/profile",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({doctorId:user.id,status:val?"available":"offline"})});
-    } catch {}
+      await fetch("/api/doctor/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorId: user.id, status: val ? "available" : "offline" }) });
+    } catch { }
     setToggling(false);
   };
 
   if (loading) return (
-    <div className="space-y-4 animate-pulse">
-      <div className="h-14 bg-slate-200 dark:bg-slate-700 rounded-2xl"/>
-      <div className="h-36 bg-slate-200 dark:bg-slate-700 rounded-2xl"/>
-      <div className="h-32 bg-slate-200 dark:bg-slate-700 rounded-2xl"/>
+    <div className="space-y-6 max-w-5xl mx-auto p-4 md:p-8 animate-pulse">
+      <div className="flex justify-between items-center mb-8">
+        <div className="h-8 w-48 bg-slate-200 rounded-lg" />
+        <div className="h-10 w-32 bg-slate-200 rounded-full" />
+      </div>
+      <div className="h-[200px] bg-slate-200 rounded-3xl" />
+      <div className="h-[300px] bg-slate-200 rounded-3xl" />
     </div>
   );
 
-  const hour = new Date().getHours();
-  const greet = hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
-
   return (
-    <div className="space-y-5 animate-fade-up">
-      {/* Greeting + Toggle */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs text-slate-400 font-medium">{new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</p>
-          <h1 className="font-bold text-xl text-slate-800 dark:text-white mt-0.5">{greet}, Dr. {user?.name?.split(" ").pop()} 👋</h1>
-          {profile?.specialty && <p className="text-xs text-slate-400 mt-0.5">{profile.specialty}</p>}
+    <div className="max-w-5xl mx-auto p-4 md:p-8 space-y-8 animate-fade-up pb-32 lg:pb-8">
+
+      {/* ── HEADER: Professional Workspace ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-teal-400 flex items-center justify-center text-white shadow-md">
+            <Stethoscope className="w-7 h-7" />
+          </div>
+          <div>
+            <h1 className="font-black text-2xl text-slate-800 tracking-tight">Physician Portal</h1>
+            <p className="text-slate-500 font-medium text-sm mt-1 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+              {profile?.specialty || "Specialist"} Workspace
+            </p>
+          </div>
         </div>
-        <div className="flex-shrink-0 pt-1">
-          <StatusToggle online={isOnline} onChange={toggleStatus} busy={toggling}/>
-        </div>
+        <StatusToggle online={isOnline} onChange={toggleStatus} busy={toggling} />
       </div>
 
-      {/* ── OFFLINE ── */}
+      {/* ── OFFLINE STATE ── */}
       {!isOnline && (
-        <>
-          <ReviewsSlider/>
-          <ScheduleSlider lastConsult={lastConsult}/>
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-8">
+          <div className="grid md:grid-cols-2 gap-8">
+            <ScheduleSlider lastConsult={lastConsult} />
+            <ReviewsSlider />
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              {label:"Rating",value:profile?.rating?.toFixed(1)||"4.9",icon:Star,color:"text-gold-400",bg:"bg-gold-50 dark:bg-gold-900/20"},
-              {label:"Patients",value:(profile?.patients_served||0).toString(),icon:Users,color:"text-primary-500",bg:"bg-primary-50 dark:bg-primary-900/20"},
-              {label:"Experience",value:`${profile?.experience_years||0}y`,icon:Activity,color:"text-accent-500",bg:"bg-accent-50 dark:bg-accent-900/20"},
-            ].map(({label,value,icon:Icon,color,bg})=>(
-              <div key={label} className="bg-white dark:bg-slate-800 rounded-2xl p-3 shadow-card border border-slate-100 dark:border-slate-700 text-center">
-                <div className={`w-8 h-8 ${bg} rounded-xl flex items-center justify-center mx-auto mb-1.5`}><Icon className={`w-4 h-4 ${color}`}/></div>
-                <p className="font-bold text-slate-800 dark:text-white">{value}</p>
-                <p className="text-[10px] text-slate-400 font-medium mt-0.5">{label}</p>
+              { label: "Patient Rating", value: profile?.rating?.toFixed(1) || "4.9", sub: "Out of 5.0", icon: Star, color: "text-gold-500", bg: "bg-gold-50 border-gold-100" },
+              { label: "Total Patients", value: (profile?.patients_served || 0).toString(), sub: "Lifetime count", icon: Users, color: "text-primary-500", bg: "bg-primary-50 border-primary-100" },
+              { label: "Experience", value: `${profile?.experience_years || 0} Yrs`, sub: "Medical practice", icon: Activity, color: "text-teal-500", bg: "bg-teal-50 border-teal-100" },
+              { label: "Consult Fee", value: `$${profile?.fee || 50}`, sub: "Per session", icon: Zap, color: "text-indigo-500", bg: "bg-indigo-50 border-indigo-100" },
+            ].map(({ label, value, sub, icon: Icon, color, bg }) => (
+              <div key={label} className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div className="flex items-start justify-between mb-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${bg}`}>
+                    <Icon className={`w-5 h-5 ${color}`} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+                  <p className="font-black text-3xl text-slate-800">{value}</p>
+                  <p className="text-xs text-slate-400 font-medium mt-1">{sub}</p>
+                </div>
               </div>
             ))}
           </div>
-          {/* Go online CTA */}
-          <div className="relative bg-gradient-to-br from-primary-600 to-primary-500 rounded-2xl p-5 overflow-hidden" style={{boxShadow:"0 8px 28px rgba(27,58,92,0.22)"}}>
-            <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-white/5"/>
-            <div className="relative flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0"><Zap className="w-6 h-6 text-white"/></div>
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-bold text-sm">Ready to start consulting?</p>
-                <p className="text-primary-200 text-xs mt-0.5">Switch online to receive patients</p>
+
+          <div className="bg-slate-900 rounded-3xl p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-64 h-64 bg-primary-500/20 rounded-full blur-3xl" />
+            <div className="relative z-10 flex items-center gap-6">
+              <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center border border-white/20">
+                <Power className="w-8 h-8 text-white" />
               </div>
-              <button onClick={()=>toggleStatus(true)} className="flex-shrink-0 bg-white text-primary-700 text-xs font-bold px-4 py-2 rounded-xl hover:bg-primary-50 transition-colors active:scale-95">
-                Go Online
-              </button>
+              <div>
+                <h3 className="text-2xl font-bold text-white mb-2">Ready for consultations?</h3>
+                <p className="text-slate-400">Switch online to start receiving patients from the queue instantly.</p>
+              </div>
             </div>
+            <button onClick={() => toggleStatus(true)} className="relative z-10 w-full sm:w-auto bg-white text-slate-900 font-bold px-8 py-4 rounded-xl hover:bg-slate-100 transition-colors shadow-lg active:scale-95 whitespace-nowrap">
+              Go Online Now
+            </button>
           </div>
-        </>
+        </div>
       )}
 
-      {/* ── ONLINE ── */}
+      {/* ── ONLINE STATE ── */}
       {isOnline && (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              {label:"Patients Waiting",value:queue.length,icon:Users,color:"text-amber-500",bg:"bg-amber-50 dark:bg-amber-900/20"},
-              {label:"Completed Today",value:completedToday,icon:CheckCircle2,color:"text-accent-500",bg:"bg-accent-50 dark:bg-accent-900/20"},
-            ].map(({label,value,icon:Icon,color,bg})=>(
-              <div key={label} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-card border border-slate-100 dark:border-slate-700">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className={`w-9 h-9 ${bg} rounded-xl flex items-center justify-center`}><Icon className={`w-[18px] h-[18px] ${color}`}/></div>
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 leading-tight">{label}</span>
-                </div>
-                <p className="font-bold text-3xl text-slate-800 dark:text-white">{value}</p>
+        <div className="space-y-8">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-5">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-500">
+                <Users className="w-7 h-7" />
               </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 rounded-xl px-4 py-2.5">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/>
-            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">You're online</p>
-            <p className="text-xs text-emerald-500 ml-auto">Accepting patients</p>
-          </div>
-          {/* Queue */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold text-slate-800 dark:text-white">Consultation Queue</h2>
-              {queue.length>0 && <span className="text-xs font-bold bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300 px-2.5 py-1 rounded-full">{queue.length} {queue.length===1?"patient":"patients"}</span>}
+              <div>
+                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Queue</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="font-black text-4xl text-slate-800">{queue.length}</p>
+                  <span className="text-slate-500 font-medium">waiting</span>
+                </div>
+              </div>
             </div>
-            {queue.length===0 ? <WaitingAnim/> : <div className="space-y-2.5">{queue.map((p,i)=><QueueCard key={p.id} p={p} pos={i+1}/>)}</div>}
+
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-5">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-500">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Today</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="font-black text-4xl text-slate-800">{completedToday}</p>
+                  <span className="text-slate-500 font-medium">completed</span>
+                </div>
+              </div>
+            </div>
           </div>
-          {queue.length>0 && (
-            <div className="sticky bottom-24 lg:bottom-6 z-20">
+
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-bold text-slate-800 text-xl flex items-center gap-3">
+                Waiting Queue
+                {queue.length > 0 && (
+                  <span className="bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-full">{queue.length}</span>
+                )}
+              </h2>
+            </div>
+
+            {queue.length === 0 ? (
+              <WaitingAnim />
+            ) : (
+              <div className="space-y-4">
+                {queue.map((p, i) => <QueueCard key={p.id} p={p} pos={i + 1} />)}
+              </div>
+            )}
+          </div>
+
+          {queue.length > 0 && (
+            <div className="fixed bottom-0 inset-x-0 p-4 md:p-8 pointer-events-none z-50 flex justify-center">
               <Link href="/doctor-dashboard/consult"
-                className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-primary-700 to-primary-500 text-white font-bold text-base py-4 rounded-2xl active:scale-[0.98] transition-transform"
-                style={{boxShadow:"0 8px 32px rgba(27,58,92,0.30)"}}>
-                <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center"><Video className="w-4 h-4"/></div>
-                Start Consultation
-                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center"><Play className="w-3.5 h-3.5 fill-white"/></div>
+                className="pointer-events-auto flex items-center justify-center gap-4 w-full max-w-lg bg-slate-900 text-white font-bold text-lg py-5 px-8 rounded-full shadow-2xl hover:bg-slate-800 active:scale-[0.98] transition-all group border border-slate-700">
+                <div className="flex items-center gap-3">
+                  <span className="relative flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-slate-900"></span>
+                  </span>
+                  Accept Next Patient
+                </div>
+                <div className="ml-auto w-10 h-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
+                  <Play className="w-4 h-4 fill-white" />
+                </div>
               </Link>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

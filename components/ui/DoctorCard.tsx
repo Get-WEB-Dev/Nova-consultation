@@ -76,10 +76,10 @@ interface DoctorCardProps {
 }
 
 const STATUS_CONFIG: Record<DoctorStatus, { label: string; dot: string; badge: string }> = {
-  available:       { label: "Available Now",    dot: "bg-emerald-500 animate-pulse", badge: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
-  busy:            { label: "Busy — Join Queue", dot: "bg-gold-400 animate-pulse",   badge: "bg-gold-50 text-gold-700 border border-gold-200" },
-  in_consultation: { label: "In Consultation",  dot: "bg-orange-400 animate-pulse",  badge: "bg-orange-50 text-orange-700 border border-orange-200" },
-  offline:         { label: "Offline",          dot: "bg-slate-400",                 badge: "bg-slate-100 text-slate-500 border border-slate-200" },
+  available: { label: "Available Now", dot: "bg-emerald-500 animate-pulse", badge: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
+  busy: { label: "Busy — Join Queue", dot: "bg-gold-400 animate-pulse", badge: "bg-gold-50 text-gold-700 border border-gold-200" },
+  in_consultation: { label: "In Consultation", dot: "bg-orange-400 animate-pulse", badge: "bg-orange-50 text-orange-700 border border-orange-200" },
+  offline: { label: "Offline", dot: "bg-slate-400", badge: "bg-slate-100 text-slate-500 border border-slate-200" },
 };
 
 function FullDoctorCard(props: DoctorCardProps) {
@@ -93,7 +93,7 @@ function FullDoctorCard(props: DoctorCardProps) {
   const cfg = STATUS_CONFIG[status];
 
   // ── Saved state — one shared fetch per page, not one per card ──
-  const [saved, setSaved]       = useState<boolean>(initialSaved ?? false);
+  const [saved, setSaved] = useState<boolean>(initialSaved ?? false);
   const [reminded, setReminded] = useState<boolean>(false);
   const [loadedSaved, setLoadedSaved] = useState(initialSaved !== undefined);
 
@@ -186,8 +186,8 @@ function FullDoctorCard(props: DoctorCardProps) {
   }, [id, reminded]);
 
   return (
-    <div className="card flex flex-col gap-4 hover:-translate-y-0.5 transition-all duration-200 group relative">
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary-500 to-accent-500 rounded-t-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+    <div className="glass-card flex flex-col gap-4 p-5 hover:-translate-y-0.5 transition-all duration-300 group relative">
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary-600 via-teal-500 to-mint-500 rounded-t-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
       <div className="flex items-start gap-3">
         <div className="relative w-14 h-14 rounded-2xl overflow-hidden flex-shrink-0">
@@ -208,11 +208,10 @@ function FullDoctorCard(props: DoctorCardProps) {
             <div className="flex gap-1 flex-shrink-0">
               <button
                 onClick={toggleSave}
-                className={`p-1.5 rounded-lg border transition-all ${
-                  saved
+                className={`p-1.5 rounded-lg border transition-all ${saved
                     ? "bg-rose-50 border-rose-200 text-rose-500"
                     : "bg-slate-50 border-slate-200 text-slate-400 hover:text-rose-400"
-                }`}
+                  }`}
                 title={saved ? "Unsave doctor" : "Save doctor"}
               >
                 {saved ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
@@ -235,21 +234,21 @@ function FullDoctorCard(props: DoctorCardProps) {
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="bg-slate-50 rounded-xl py-2.5">
+        <div className="bg-gradient-to-br from-slate-50 to-primary-50/30 rounded-xl py-2.5">
           <div className="flex items-center justify-center gap-1 text-gold-400">
             <Star className="w-3.5 h-3.5 fill-current" />
             <span className="text-sm font-semibold text-slate-800">{rating}</span>
           </div>
           <p className="text-[10px] text-slate-500">{reviews} reviews</p>
         </div>
-        <div className="bg-slate-50 rounded-xl py-2.5">
+        <div className="bg-gradient-to-br from-slate-50 to-teal-50/30 rounded-xl py-2.5">
           <div className="flex items-center justify-center gap-1">
             <Clock className="w-3.5 h-3.5 text-primary-500" />
             <span className="text-sm font-semibold text-slate-800">{experience}y</span>
           </div>
           <p className="text-[10px] text-slate-500">Experience</p>
         </div>
-        <div className="bg-slate-50 rounded-xl py-2.5">
+        <div className="bg-gradient-to-br from-slate-50 to-mint-50/30 rounded-xl py-2.5">
           <p className="text-sm font-semibold text-slate-800">${fee}</p>
           <p className="text-[10px] text-slate-500">Per session</p>
         </div>
@@ -289,11 +288,10 @@ function FullDoctorCard(props: DoctorCardProps) {
           <p className="text-xs text-slate-600 font-medium">Next: {nextAvailableSlot}</p>
           <button
             onClick={toggleRemind}
-            className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
-              reminded
+            className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${reminded
                 ? "bg-primary-100 text-primary-700"
                 : "bg-white text-slate-600 border border-slate-200 hover:border-primary-300 hover:text-primary-600"
-            }`}
+              }`}
           >
             {reminded ? <BellRing className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
             {reminded ? "Reminder set" : "Remind Me"}
@@ -319,11 +317,10 @@ function FullDoctorCard(props: DoctorCardProps) {
         {status === "offline" && (
           <button
             onClick={toggleRemind}
-            className={`flex-1 text-sm flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border transition-all font-medium ${
-              reminded
+            className={`flex-1 text-sm flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border transition-all font-medium ${reminded
                 ? "bg-primary-50 text-primary-700 border-primary-200"
                 : "bg-slate-100 text-slate-600 border-slate-200 hover:border-primary-300"
-            }`}
+              }`}
           >
             <Bell className="w-3.5 h-3.5" /> {reminded ? "Reminder Set" : "Remind Me"}
           </button>
@@ -335,10 +332,10 @@ function FullDoctorCard(props: DoctorCardProps) {
 
 function CompactDoctorCard({ id, name, specialty, avatar, status = "offline" }: DoctorCardProps) {
   const dot =
-    status === "available"       ? "bg-emerald-500 animate-pulse"
-    : status === "busy"          ? "bg-gold-400 animate-pulse"
-    : status === "in_consultation" ? "bg-orange-400"
-    : "bg-slate-400";
+    status === "available" ? "bg-emerald-500 animate-pulse"
+      : status === "busy" ? "bg-gold-400 animate-pulse"
+        : status === "in_consultation" ? "bg-orange-400"
+          : "bg-slate-400";
 
   return (
     <Link

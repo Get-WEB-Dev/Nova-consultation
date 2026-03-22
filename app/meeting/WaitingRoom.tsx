@@ -45,21 +45,45 @@ export default function WaitingRoom({
     const [elapsedWait, setElapsedWait] = useState(0);
     const [consultationId, setConsultationId] = useState<string | null>(null);
 
-    // Join queue on mount
+    // Join queue on mount — create consultation first
     useEffect(() => {
         const joinQueueAsync = async () => {
             try {
+                // Step 1: Create consultation first so both sides have the ID
+                let cid = consultationId;
+                if (!cid) {
+                    try {
+                        const consultRes = await fetch("/api/consultations", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ doctorId, patientId }),
+                        });
+                        if (consultRes.ok) {
+                            const consultJson = await consultRes.json();
+                            if (consultJson.data?.id) {
+                                cid = consultJson.data.id;
+                                setConsultationId(cid);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn("Create consultation failed:", e);
+                    }
+                }
+
+                // Step 2: Join queue with the consultationId
                 const res = await fetch("/api/queue", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ doctorId, patientId }),
+                    body: JSON.stringify({ doctorId, patientId, consultationId: cid }),
                 });
                 if (res.ok) {
                     const json = await res.json();
                     const entry = json.data ?? json;
                     setYourPosition(entry.queue_position ?? entry.position ?? 1);
                     setEstimatedWait(entry.estimated_wait_mins ?? entry.estimatedWait ?? 5);
-                    if (entry.consultation_id) setConsultationId(entry.consultation_id);
+                    if (entry.consultation_id && !cid) {
+                        setConsultationId(entry.consultation_id);
+                    }
                 }
             } catch (_) {
                 setYourPosition(1);

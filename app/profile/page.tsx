@@ -1,255 +1,162 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import {
-  User, Heart, Save, CheckCircle, AlertCircle, Loader2,
+  User, Shield, Heart, Phone, Calendar, Mail,
+  Check, AlertCircle, Loader2, Edit3, Save, X,
 } from "lucide-react";
 import { getUser, loadUser } from "@/lib/supabase/auth";
 import { getProfile, updateProfile } from "@/lib/api";
 
-// ── MOCK PROFILE (disabled) ───────────────────────────────────
-// const MOCK_PROFILE = {
-//   name: "Alex Hailu",
-//   email: "alex@example.com",
-//   phone: "+251 912 345 678",
-//   dob: "1995-06-15",
-//   bio: "Health-conscious individual looking for convenient access to quality healthcare.",
-//   avatar: "https://ui-avatars.com/api/?name=Alex+Hailu&background=1B3A5C&color=fff&size=128",
-//   bloodType: "O+",
-//   allergies: "Penicillin",
-//   emergencyContact: "+251 911 222 333",
-// };
-// ─────────────────────────────────────────────────────────────
-
-type Lang = "en" | "am";
-
-const T = {
-  en: {
-    title: "My Profile",
-    subtitle: "Manage your personal and health information",
-    personalInfo: "Personal Information",
-    healthInfo: "Health Information",
-    name: "Full Name", email: "Email", phone: "Phone", dob: "Date of Birth",
-    bio: "About Me", bloodType: "Blood Type", allergies: "Allergies",
-    emergency: "Emergency Contact", save: "Save Changes", saved: "Saved!",
-    loading: "Loading profile...", error: "Could not load profile.",
-  },
-  am: {
-    title: "መገለጫዬ",
-    subtitle: "የግል እና የጤና መረጃዎን ያስተዳድሩ",
-    personalInfo: "የግል መረጃ",
-    healthInfo: "የጤና መረጃ",
-    name: "ሙሉ ስም", email: "ኢሜይል", phone: "ስልክ", dob: "የልደት ቀን",
-    bio: "ስለ እኔ", bloodType: "የደም ዓይነት", allergies: "አለርጂዎች",
-    emergency: "የአደጋ ጊዜ ዕውቅያ", save: "ለውጦችን ያስቀምጡ", saved: "ተቀምጧል!",
-    loading: "መገለጫ በመጫን ላይ...", error: "መገለጫ መጫን አልቻለም።",
-  },
-} as const;
-
-interface ProfileState {
-  name: string;
-  email: string;
-  phone: string;
-  dob: string;
-  bio: string;
-  avatar: string;
-  bloodType: string;
-  allergies: string;
-  emergencyContact: string;
-}
-
-const EMPTY_PROFILE: ProfileState = {
-  name: "", email: "", phone: "", dob: "", bio: "",
-  avatar: "", bloodType: "", allergies: "", emergencyContact: "",
-};
+type Tab = "info" | "health";
 
 export default function ProfilePage() {
-  const [lang, setLang] = useState<Lang>("en");
-  const [profile, setProfile] = useState<ProfileState>(EMPTY_PROFILE);
+  const [tab, setTab] = useState<Tab>("info");
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
-  const t = T[lang];
+  const [form, setForm] = useState({
+    name: "", email: "", phone: "", dob: "", bio: "",
+    bloodType: "", allergies: "", emergencyContact: "",
+    avatar: "",
+  });
 
-  // Language sync
   useEffect(() => {
-    const stored = localStorage.getItem("hc-lang") as Lang | null;
-    if (stored) setLang(stored);
-    const handler = (e: Event) => setLang((e as CustomEvent<Lang>).detail);
-    window.addEventListener("hc-lang-change", handler);
-    return () => window.removeEventListener("hc-lang-change", handler);
-  }, []);
-
-  // Load real profile from Supabase on mount
-  useEffect(() => {
-    async function loadProfile() {
-      setLoading(true);
-      setError(null);
+    (async () => {
+      let u = getUser(); if (!u) u = await loadUser();
+      if (!u) { setLoading(false); return; }
       try {
-        // Ensure the auth cache is hydrated
-        let user = getUser();
-        if (!user) user = await loadUser();
-        if (!user) { setLoading(false); return; }
-
-        const data = await getProfile(user.id);
-        setProfile({
-          name:             data.name             ?? "",
-          email:            data.email            ?? "",
-          phone:            data.phone            ?? "",
-          dob:              data.dob              ?? "",
-          bio:              data.bio              ?? "",
-          avatar:           data.avatar           ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name ?? "")}&background=1B3A5C&color=fff&size=128`,
-          bloodType:        data.bloodType        ?? "",
-          allergies:        data.allergies        ?? "",
-          emergencyContact: data.emergencyContact ?? "",
-        });
-      } catch (err: any) {
-        setError(err.message ?? t.error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadProfile();
-
-    // Re-load if auth changes
-    const handler = () => loadProfile();
-    window.addEventListener("hc-auth-change", handler);
-    return () => window.removeEventListener("hc-auth-change", handler);
+        const p = await getProfile(u.id);
+        if (p) setForm({ name: p.name ?? "", email: p.email ?? "", phone: p.phone ?? "", dob: p.dob ?? "", bio: p.bio ?? "", bloodType: p.bloodType ?? "", allergies: p.allergies ?? "", emergencyContact: p.emergencyContact ?? "", avatar: p.avatar ?? "" });
+      } catch { }
+      setLoading(false);
+    })();
   }, []);
 
   const handleSave = async () => {
-    const user = getUser();
-    if (!user) return;
-    setSaving(true);
-    setError(null);
+    setSaving(true); setError("");
     try {
-      await updateProfile(user.id, {
-        name:             profile.name,
-        phone:            profile.phone,
-        dob:              profile.dob,
-        bio:              profile.bio,
-        bloodType:        profile.bloodType,
-        allergies:        profile.allergies,
-        emergencyContact: profile.emergencyContact,
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (err: any) {
-      setError(err.message ?? "Failed to save.");
-    } finally {
-      setSaving(false);
-    }
+      let u = getUser(); if (!u) u = await loadUser(); if (!u) return;
+      await updateProfile(u.id, form);
+      setSaved(true); setEditing(false);
+      setTimeout(() => setSaved(false), 3000);
+    } catch { setError("Failed to save. Please try again."); }
+    setSaving(false);
   };
 
-  const update = (key: keyof ProfileState, val: string) =>
-    setProfile((p) => ({ ...p, [key]: val }));
+  const F = ({ label, name, type = "text", placeholder = "" }: { label: string; name: keyof typeof form; type?: string; placeholder?: string }) => (
+    <div>
+      <label className="block text-xs font-semibold text-slate-500 mb-1.5">{label}</label>
+      {editing ? (
+        <input type={type} value={form[name]} onChange={e => setForm(p => ({ ...p, [name]: e.target.value }))}
+          placeholder={placeholder} className="input-field" />
+      ) : (
+        <p className="text-sm text-slate-700 py-2.5 px-0 border-b border-slate-100">
+          {form[name] || <span className="text-slate-300 italic">Not set</span>}
+        </p>
+      )}
+    </div>
+  );
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
-        <p className="text-sm text-slate-500">{t.loading}</p>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <Loader2 className="w-6 h-6 text-primary-400 animate-spin" />
+    </div>
+  );
 
   return (
-    <div className="space-y-6 animate-fade-up">
-      <div>
-        <h1 className="font-display font-bold text-2xl text-slate-800">{t.title}</h1>
-        <p className="text-slate-500 text-sm mt-1">{t.subtitle}</p>
+    <div className="max-w-2xl mx-auto space-y-5 animate-fade-up pb-safe">
+
+      {/* Profile header card */}
+      <div className="glass-card overflow-hidden">
+        <div className="h-24 animate-gradient-shift" style={{ background: 'linear-gradient(135deg, #1a3558 0%, #1e5080 40%, #0cbcad 80%, #14b892 100%)', backgroundSize: '200% 200%' }} />
+        <div className="px-6 pb-6">
+          <div className="flex items-end justify-between -mt-10 mb-4">
+            <div className="w-20 h-20 rounded-2xl border-4 border-white shadow-md overflow-hidden bg-primary-100 ring-4 ring-white/50">
+              {form.avatar ? (
+                <Image src={form.avatar} alt={form.name} width={80} height={80} className="w-full h-full object-cover" unoptimized />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <span className="text-primary-700 font-display font-bold text-2xl uppercase">{form.name?.[0] || "P"}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 mb-1">
+              {saved && (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl font-semibold animate-fade-in">
+                  <Check className="w-3.5 h-3.5" /> Saved
+                </div>
+              )}
+              {editing ? (
+                <>
+                  <button onClick={() => setEditing(false)} className="btn-ghost text-xs px-3 py-1.5">
+                    <X className="w-3.5 h-3.5" /> Cancel
+                  </button>
+                  <button onClick={handleSave} disabled={saving} className="btn-primary text-xs px-4 py-1.5">
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    Save
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setEditing(true)} className="btn-secondary text-xs px-4 py-1.5">
+                  <Edit3 className="w-3.5 h-3.5" /> Edit Profile
+                </button>
+              )}
+            </div>
+          </div>
+          <h2 className="font-display font-bold text-xl text-slate-800">{form.name || "Patient"}</h2>
+          <p className="text-sm text-slate-400 mt-0.5">{form.email || "No email set"}</p>
+        </div>
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-4 py-3 text-sm">
+        <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-600 text-sm px-4 py-3 rounded-xl animate-fade-in">
           <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
         </div>
       )}
 
-      {/* Avatar section */}
-      <div className="card flex items-center gap-5">
-        <div className="relative w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg">
-          <Image
-            src={profile.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || "U")}&background=1B3A5C&color=fff&size=128`}
-            alt={profile.name}
-            fill
-            className="object-cover"
-            unoptimized
-          />
-        </div>
-        <div>
-          <h2 className="font-display font-semibold text-lg text-slate-800">{profile.name || "—"}</h2>
-          <p className="text-sm text-slate-500">{profile.email}</p>
-          <span className="badge-green mt-2 text-[10px]">
-            <CheckCircle className="w-3 h-3" /> Verified Patient
-          </span>
-        </div>
+      {/* Tabs */}
+      <div className="tab-bar">
+        <button className={tab === "info" ? "tab-item-active" : "tab-item-inactive"} onClick={() => setTab("info")}>
+          <User className="w-4 h-4" /> Personal Info
+        </button>
+        <button className={tab === "health" ? "tab-item-active" : "tab-item-inactive"} onClick={() => setTab("health")}>
+          <Heart className="w-4 h-4" /> Health Info
+        </button>
       </div>
 
       {/* Personal Info */}
-      <div className="card">
-        <h3 className="font-display font-semibold text-slate-800 mb-4 flex items-center gap-2">
-          <User className="w-4 h-4 text-primary-500" /> {t.personalInfo}
-        </h3>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">{t.name}</label>
-            <input type="text" value={profile.name} onChange={(e) => update("name", e.target.value)} className="input-field" />
+      {tab === "info" && (
+        <div className="glass-card p-5 space-y-4 animate-fade-in">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <F label="Full Name" name="name" placeholder="Your full name" />
+            <F label="Email Address" name="email" type="email" placeholder="your@email.com" />
+            <F label="Phone Number" name="phone" type="tel" placeholder="+1 234 567 8900" />
+            <F label="Date of Birth" name="dob" type="date" />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">{t.email}</label>
-            <input type="email" value={profile.email} disabled className="input-field opacity-60 cursor-not-allowed" title="Email cannot be changed here" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">{t.phone}</label>
-            <input type="tel" value={profile.phone} onChange={(e) => update("phone", e.target.value)} className="input-field" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">{t.dob}</label>
-            <input type="date" value={profile.dob} onChange={(e) => update("dob", e.target.value)} className="input-field" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">{t.bio}</label>
-            <textarea value={profile.bio} onChange={(e) => update("bio", e.target.value)} rows={3} className="input-field resize-none" />
-          </div>
+          <F label="About Me" name="bio" placeholder="Brief description about yourself" />
         </div>
-      </div>
+      )}
 
       {/* Health Info */}
-      <div className="card">
-        <h3 className="font-display font-semibold text-slate-800 mb-4 flex items-center gap-2">
-          <Heart className="w-4 h-4 text-accent-500" /> {t.healthInfo}
-        </h3>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">{t.bloodType}</label>
-            <input type="text" value={profile.bloodType} onChange={(e) => update("bloodType", e.target.value)} className="input-field" />
+      {tab === "health" && (
+        <div className="glass-card p-5 space-y-4 animate-fade-in">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <F label="Blood Type" name="bloodType" placeholder="e.g. O+" />
+            <F label="Known Allergies" name="allergies" placeholder="e.g. Penicillin" />
+            <F label="Emergency Contact" name="emergencyContact" placeholder="+1 234 567 8900" />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">{t.allergies}</label>
-            <input type="text" value={profile.allergies} onChange={(e) => update("allergies", e.target.value)} className="input-field" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">{t.emergency}</label>
-            <input type="tel" value={profile.emergencyContact} onChange={(e) => update("emergencyContact", e.target.value)} className="input-field" />
+          <div className="bg-primary-50 border border-primary-100 rounded-xl p-4 flex items-start gap-3">
+            <Shield className="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-primary-700 leading-relaxed">
+              Your health information is private and only shared with healthcare providers during consultations.
+            </p>
           </div>
         </div>
-      </div>
-
-      {/* Save */}
-      <div className="flex justify-end">
-        <button onClick={handleSave} disabled={saving} className={`${saved ? "btn-accent" : "btn-primary"} px-8`}>
-          {saved
-            ? <><CheckCircle className="w-4 h-4" /> {t.saved}</>
-            : saving
-              ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-              : <><Save className="w-4 h-4" /> {t.save}</>
-          }
-        </button>
-      </div>
+      )}
     </div>
   );
 }
