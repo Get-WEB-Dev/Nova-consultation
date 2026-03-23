@@ -2,75 +2,216 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Menu, X, Stethoscope } from "lucide-react";
 
-export default function ModernNavbar() {
-    const [scrolled, setScrolled] = useState(false);
-    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+// ── Palette ───────────────────────────────────────────────────────────────────
+const NAV_BG = "#003580";
+const NAV_DARK = "#00224f";
+const ACCENT = "#0071c2";
+const SKY = "#38bdf8";
 
-    useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 20);
-        };
-        window.addEventListener("scroll", handleScroll);
-        return () => window.removeEventListener("scroll", handleScroll);
-    }, []);
+const NAV_LINKS = [
+  { label: "Consultation", href: "/doctors" },
+  { label: "Doctors", href: "/doctors" },
+  { label: "Health Plans", href: "/plans" },
+  { label: "Blogs", href: "/blogs" },
+  { label: "About", href: "/about" },
+  { label: "Contact", href: "/contact" },
+];
 
-    return (
-        <>
-            <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? "bg-white/90 backdrop-blur-md shadow-sm py-3" : "bg-white/50 backdrop-blur-sm shadow-sm py-4"}`}>
-                <div className="max-w-[90rem] mx-auto px-6 md:px-12 flex items-center justify-between">
-                    <Link href="/" className="flex items-center gap-2 group">
-                        <div className="relative w-10 h-10 overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-teal-400 p-2 shadow-lg shadow-primary-500/20 group-hover:scale-105 transition-transform">
-                            <Image src="/favicon.png" alt="Nova Logo" fill className="object-cover" />
-                        </div>
-                        <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-teal-600 tracking-tight">Nova</span>
-                    </Link>
+export default function MediBookNavbar() {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
 
-                    {/* Desktop Nav */}
-                    <nav className="hidden lg:flex items-center gap-8">
-                        <Link href="/doctors" className="text-sm font-bold text-slate-600 hover:text-primary-600 transition-colors">Doctors</Link>
-                        <Link href="/blogs" className="text-sm font-bold text-slate-600 hover:text-primary-600 transition-colors">Blogs</Link>
-                        <Link href="/about" className="text-sm font-bold text-slate-600 hover:text-primary-600 transition-colors">About</Link>
-                        <Link href="/contact" className="text-sm font-bold text-slate-600 hover:text-primary-600 transition-colors">Contact Us</Link>
-                    </nav>
+  useEffect(() => {
+    const h = () => setScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", h);
+    return () => window.removeEventListener("scroll", h);
+  }, []);
 
-                    <div className="hidden lg:flex items-center gap-4">
-                        {/* Patient Auth */}
-                        <div className="flex items-center gap-3 border-r border-slate-200 pr-5">
-                            <Link href="/login" className="text-sm font-bold text-slate-600 hover:text-primary-600 transition-colors">Sign In</Link>
-                            <Link href="/signup" className="text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 px-5 py-2 rounded-full shadow-md shadow-primary-600/20 transition-all hover:-translate-y-0.5">Sign Up</Link>
-                        </div>
-                        {/* Doctor Auth */}
-                        <div className="flex items-center gap-3 pl-1">
-                            <Link href="/doctor-login" className="text-sm font-bold text-slate-600 hover:text-teal-600 transition-colors">Doctor Sign In</Link>
-                            <Link href="/doctor/signup" className="text-sm font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-5 py-2 rounded-full shadow-sm transition-all hover:-translate-y-0.5">Doctor Sign Up</Link>
-                        </div>
-                    </div>
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
-                    {/* Mobile Menu Toggle */}
-                    <button className="lg:hidden text-slate-600 p-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-                        {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-                    </button>
-                </div>
+  const isActive = (href: string) =>
+    pathname === href || pathname?.startsWith(href + "/");
 
-                {/* Mobile Nav */}
-                {mobileMenuOpen && (
-                    <div className="lg:hidden absolute top-full left-0 w-full bg-white shadow-xl border-t border-slate-100 flex flex-col p-6 gap-4 animate-fade-in-up origin-top">
-                        <Link href="/doctors" onClick={() => setMobileMenuOpen(false)} className="font-bold text-slate-700 py-2 border-b border-slate-50">Doctors</Link>
-                        <Link href="/blogs" onClick={() => setMobileMenuOpen(false)} className="font-bold text-slate-700 py-2 border-b border-slate-50">Blogs</Link>
-                        <Link href="/about" onClick={() => setMobileMenuOpen(false)} className="font-bold text-slate-700 py-2 border-b border-slate-50">About</Link>
-                        <Link href="/contact" onClick={() => setMobileMenuOpen(false)} className="font-bold text-slate-700 py-2 border-b border-slate-50">Contact Us</Link>
+  return (
+    <header
+      className="fixed top-0 inset-x-0 z-50 transition-all duration-200"
+      style={{
+        background: NAV_BG,
+        boxShadow: scrolled
+          ? "0 2px 16px rgba(0,0,0,0.28)"
+          : "0 1px 0 rgba(255,255,255,0.06)",
+      }}
+    >
+      {/* ── Desktop bar ─────────────────────────────────────────────────── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-2 flex-shrink-0 group">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity group-hover:opacity-80"
+            style={{ background: SKY }}
+          >
+            <Stethoscope className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-extrabold text-white text-[17px] tracking-tight">
+            MediBook
+          </span>
+        </Link>
 
-                        <div className="grid grid-cols-2 gap-3 mt-4">
-                            <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="font-bold text-center text-primary-600 py-3 bg-primary-50 rounded-xl">Sign In</Link>
-                            <Link href="/signup" onClick={() => setMobileMenuOpen(false)} className="font-bold text-center text-white bg-primary-600 py-3 rounded-xl shadow-md">Sign Up</Link>
-                            <Link href="/doctor-login" onClick={() => setMobileMenuOpen(false)} className="font-bold text-center text-teal-700 py-3 bg-teal-50 rounded-xl col-span-1">Dr. Sign In</Link>
-                            <Link href="/doctor/signup" onClick={() => setMobileMenuOpen(false)} className="font-bold text-center text-teal-800 py-3 border border-teal-200 rounded-xl col-span-1">Dr. Sign Up</Link>
-                        </div>
-                    </div>
+        {/* Desktop nav links */}
+        <nav className="hidden lg:flex items-center gap-1">
+          {NAV_LINKS.map((n) => {
+            const active = isActive(n.href);
+            return (
+              <Link
+                key={n.label + n.href}
+                href={n.href}
+                className="relative text-[13px] font-semibold px-3 py-2 rounded-lg transition-all"
+                style={{
+                  color: active ? "white" : "rgba(255,255,255,0.72)",
+                  background: active ? "rgba(255,255,255,0.12)" : "transparent",
+                }}
+                onMouseEnter={(e) => {
+                  if (!active) e.currentTarget.style.color = "white";
+                }}
+                onMouseLeave={(e) => {
+                  if (!active)
+                    e.currentTarget.style.color = "rgba(255,255,255,0.72)";
+                }}
+              >
+                {n.label}
+                {/* active underline */}
+                {active && (
+                  <span
+                    className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full"
+                    style={{ background: SKY }}
+                  />
                 )}
-            </header>
-        </>
-    );
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Desktop auth */}
+        <div className="hidden lg:flex items-center gap-2">
+          <Link
+            href="/login"
+            className="text-[13px] font-semibold px-4 py-2 rounded-lg transition-all hover:bg-white/10"
+            style={{ color: "rgba(255,255,255,0.82)" }}
+          >
+            Sign In
+          </Link>
+          <Link
+            href="/signup"
+            className="text-[13px] font-extrabold px-4 py-2 rounded-lg transition-all hover:opacity-88 active:scale-95"
+            style={{ background: SKY, color: NAV_DARK }}
+          >
+            Sign Up Free
+          </Link>
+          <div
+            className="w-px h-5 mx-1"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+          />
+          <Link
+            href="/doctor-login"
+            className="text-[12px] font-semibold px-3 py-2 rounded-lg border transition-all hover:bg-white/10"
+            style={{
+              borderColor: "rgba(255,255,255,0.18)",
+              color: "rgba(255,255,255,0.58)",
+            }}
+          >
+            Doctor Login
+          </Link>
+        </div>
+
+        {/* Mobile hamburger */}
+        <button
+          className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl transition-all"
+          style={{ background: "rgba(255,255,255,0.1)", color: "white" }}
+          onClick={() => setMobileMenuOpen((o) => !o)}
+          aria-label="Toggle menu"
+        >
+          {mobileMenuOpen ? (
+            <X className="w-5 h-5" />
+          ) : (
+            <Menu className="w-5 h-5" />
+          )}
+        </button>
+      </div>
+
+      {/* ── Mobile dropdown ──────────────────────────────────────────────── */}
+      <div
+        className="lg:hidden overflow-hidden transition-all duration-300"
+        style={{
+          maxHeight: mobileMenuOpen ? 480 : 0,
+          borderTop: mobileMenuOpen
+            ? "1px solid rgba(255,255,255,0.08)"
+            : "none",
+          background: NAV_DARK,
+        }}
+      >
+        <div className="px-4 pt-3 pb-5 space-y-0.5">
+          {NAV_LINKS.map((n) => {
+            const active = isActive(n.href);
+            return (
+              <Link
+                key={n.label + n.href}
+                href={n.href}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[14px] font-semibold transition-all"
+                style={{
+                  color: active ? "white" : "rgba(255,255,255,0.72)",
+                  background: active ? "rgba(255,255,255,0.1)" : "transparent",
+                }}
+              >
+                {active && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ background: SKY }}
+                  />
+                )}
+                {n.label}
+              </Link>
+            );
+          })}
+
+          {/* Auth buttons */}
+          <div
+            className="grid grid-cols-2 gap-2 pt-4 mt-2 border-t"
+            style={{ borderColor: "rgba(255,255,255,0.08)" }}
+          >
+            <Link
+              href="/login"
+              className="flex items-center justify-center py-2.5 rounded-xl text-[13px] font-bold transition-all"
+              style={{ background: "rgba(255,255,255,0.1)", color: "white" }}
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/signup"
+              className="flex items-center justify-center py-2.5 rounded-xl text-[13px] font-extrabold transition-all active:scale-95"
+              style={{ background: SKY, color: NAV_DARK }}
+            >
+              Sign Up Free
+            </Link>
+            <Link
+              href="/doctor-login"
+              className="col-span-2 flex items-center justify-center py-2.5 rounded-xl text-[13px] font-semibold transition-all"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                color: "rgba(255,255,255,0.55)",
+              }}
+            >
+              Doctor Login
+            </Link>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
 }

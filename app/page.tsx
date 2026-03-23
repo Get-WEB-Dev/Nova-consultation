@@ -21,337 +21,950 @@ import {
   Menu,
   X,
   MapPin,
-  Phone,
-  Mail,
+  CheckCircle,
+  Shield,
+  Clock,
+  Users,
+  Zap,
+  ChevronRight,
 } from "lucide-react";
 import ModernFooter from "@/components/ui/ModernFooter";
+import ModernNavbar from "@/components/ui/ModernNavbar";
+
+// ── Palette ───────────────────────────────────────────────────────────────────
+const NAV_BG = "#003580"; // dark navy (booking.com)
+const NAV_DARK = "#00224f";
+const ACCENT = "#0071c2"; // sky/booking blue
+const SKY = "#38bdf8"; // lighter sky blue for accents
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+const DOCTORS = [
+  {
+    name: "Dr. Sarah Jenkins",
+    specialty: "Cardiology",
+    image:
+      "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=600",
+    rating: 4.9,
+    reviews: 128,
+    hospital: "Nova General Hospital",
+    fee: 450,
+  },
+  {
+    name: "Dr. Michael Chen",
+    specialty: "Neurology",
+    image:
+      "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=600",
+    rating: 4.8,
+    reviews: 93,
+    hospital: "City Medical Center",
+    fee: 380,
+  },
+  {
+    name: "Dr. Emily Carter",
+    specialty: "Dermatology",
+    image:
+      "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=600",
+    rating: 5.0,
+    reviews: 312,
+    hospital: "Skin & Care Clinic",
+    fee: 320,
+  },
+  {
+    name: "Dr. James Wilson",
+    specialty: "Orthopedics",
+    image:
+      "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=600",
+    rating: 4.7,
+    reviews: 84,
+    hospital: "Sports Medicine Institute",
+    fee: 410,
+  },
+  {
+    name: "Dr. Aisha Patel",
+    specialty: "Pediatrics",
+    image:
+      "https://images.unsplash.com/photo-1594824432258-f99f2b09e25d?auto=format&fit=crop&q=80&w=600",
+    rating: 4.9,
+    reviews: 215,
+    hospital: "Children's Health Clinic",
+    fee: 280,
+  },
+  {
+    name: "Dr. Robert Fox",
+    specialty: "General Medicine",
+    image:
+      "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=600",
+    rating: 4.6,
+    reviews: 156,
+    hospital: "Community Care Center",
+    fee: 250,
+  },
+];
+
+const SPECIALTIES = [
+  { name: "Cardiology", icon: HeartPulse, color: "#ef4444", bg: "#fff1f2" },
+  { name: "Neurology", icon: Brain, color: "#a855f7", bg: "#faf5ff" },
+  { name: "Pediatrics", icon: Baby, color: ACCENT, bg: "#eff6ff" },
+  { name: "Orthopedics", icon: Bone, color: "#f97316", bg: "#fff7ed" },
+  { name: "Ophthalmology", icon: Eye, color: "#14b8a6", bg: "#f0fdfa" },
+  { name: "Dermatology", icon: Activity, color: "#ec4899", bg: "#fdf2f8" },
+  {
+    name: "General Medicine",
+    icon: Stethoscope,
+    color: "#22c55e",
+    bg: "#f0fdf4",
+  },
+  { name: "Physiotherapy", icon: Activity, color: "#6366f1", bg: "#eef2ff" },
+];
+
+const BLOGS = [
+  {
+    title: "10 Daily Habits for a Healthier Heart",
+    category: "Cardiology",
+    image:
+      "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&q=80&w=800",
+    date: "Mar 12, 2026",
+  },
+  {
+    title: "Understanding Mental Health and Brain Functions",
+    category: "Neurology",
+    image:
+      "https://images.unsplash.com/photo-1543362906-acfc16c67564?auto=format&fit=crop&q=80&w=800",
+    date: "Mar 15, 2026",
+  },
+  {
+    title: "Skincare Basics: Protecting Your Complexion",
+    category: "Dermatology",
+    image:
+      "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&q=80&w=800",
+    date: "Mar 18, 2026",
+  },
+];
+
+const STEPS = [
+  {
+    title: "Create Account",
+    description: "Sign up in minutes — no insurance needed.",
+    icon: UserCircle,
+  },
+  {
+    title: "Choose a Doctor",
+    description: "Filter by specialty, rating, and availability.",
+    icon: Search,
+  },
+  {
+    title: "Video Consultation",
+    description: "Meet your doctor via secure HD video call.",
+    icon: Video,
+  },
+  {
+    title: "Get a Care Plan",
+    description: "Receive prescriptions, referrals, or follow-up care.",
+    icon: Pill,
+  },
+];
+
+const TRUST_ITEMS = [
+  {
+    icon: Shield,
+    label: "Verified Doctors",
+    desc: "Every doctor is licensed & credential-checked",
+  },
+  {
+    icon: Clock,
+    label: "Available 24/7",
+    desc: "Book appointments any time, day or night",
+  },
+  {
+    icon: Users,
+    label: "50,000+ Patients",
+    desc: "Trusted by patients across the country",
+  },
+  {
+    icon: CheckCircle,
+    label: "Secure & Private",
+    desc: "Your health data is encrypted and protected",
+  },
+];
+
+// ── Status dot colors ─────────────────────────────────────────────────────────
+const STATUS_COLOR: Record<string, string> = {
+  available: "#22c55e",
+  busy: "#f59e0b",
+  offline: "#94a3b8",
+};
 
 export default function LandingPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [locationTerm, setLocationTerm] = useState("");
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    const h = () => setScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", h);
+    return () => window.removeEventListener("scroll", h);
   }, []);
 
-  const DOCTORS = [
-    { name: "Dr. Sarah Jenkins", specialty: "Cardiology", image: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=600", rating: 4.9, reviews: 128, hospital: "Nova General Hospital" },
-    { name: "Dr. Michael Chen", specialty: "Neurology", image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=600", rating: 4.8, reviews: 93, hospital: "City Medical Center" },
-    { name: "Dr. Emily Carter", specialty: "Dermatology", image: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=600", rating: 5.0, reviews: 312, hospital: "Skin & Care Clinic" },
-    { name: "Dr. James Wilson", specialty: "Orthopedics", image: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=600", rating: 4.7, reviews: 84, hospital: "Sports Medicine Institute" },
-    { name: "Dr. Aisha Patel", specialty: "Pediatrics", image: "https://images.unsplash.com/photo-1594824432258-f99f2b09e25d?auto=format&fit=crop&q=80&w=600", rating: 4.9, reviews: 215, hospital: "Children's Health Clinic" },
-    { name: "Dr. Robert Fox", specialty: "General Medicine", image: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=600", rating: 4.6, reviews: 156, hospital: "Community Care Center" },
-  ];
-
-  const SPECIALTIES = [
-    { name: "Cardiology", icon: HeartPulse, color: "text-rose-500", bg: "bg-rose-50" },
-    { name: "Neurology", icon: Brain, color: "text-purple-500", bg: "bg-purple-50" },
-    { name: "Pediatrics", icon: Baby, color: "text-sky-500", bg: "bg-sky-50" },
-    { name: "Orthopedics", icon: Bone, color: "text-orange-500", bg: "bg-orange-50" },
-    { name: "Ophthalmology", icon: Eye, color: "text-teal-500", bg: "bg-teal-50" },
-    { name: "Dermatology", icon: Activity, color: "text-pink-500", bg: "bg-pink-50" },
-    { name: "General Medicine", icon: Stethoscope, color: "text-emerald-500", bg: "bg-emerald-50" },
-    { name: "Physiotherapy", icon: Activity, color: "text-indigo-500", bg: "bg-indigo-50" },
-  ];
-
-  const BLOGS = [
-    { title: "10 Daily Habits for a Healthier Heart", category: "Cardiology", image: "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&q=80&w=600", date: "Mar 12, 2026" },
-    { title: "Understanding Mental Health and Brain Functions", category: "Neurology", image: "https://images.unsplash.com/photo-1543362906-acfc16c67564?auto=format&fit=crop&q=80&w=600", date: "Mar 15, 2026" },
-    { title: "Skincare Basics: Protecting Your Complexion", category: "Dermatology", image: "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&q=80&w=600", date: "Mar 18, 2026" },
-  ];
-
-  const STEPS = [
-    { title: "Create Account", description: "Sign up in minutes – no insurance needed.", icon: UserCircle },
-    { title: "Choose a Doctor", description: "Select a specialist and time that fits your schedule.", icon: Calendar },
-    { title: "Video Consultation", description: "Meet with your doctor via secure HD video.", icon: Video },
-    { title: "Get Better", description: "Receive prescriptions, referrals, or a care plan.", icon: Pill },
-  ];
-
   return (
-    <div className="min-h-screen font-sans text-slate-800 overflow-x-hidden">
+    <div
+      className="min-h-screen overflow-x-hidden"
+      style={{
+        background: "#f0f4f8",
+        fontFamily: "system-ui, -apple-system, sans-serif",
+      }}
+    >
+      {/* ══════════════════════════════════════════════════════
+          STICKY NAV
+      ══════════════════════════════════════════════════════ */}
+      <ModernNavbar />
 
-      {/* ═══════════════════════════════════════════════════════
-          HERO SECTION  —  full-width dark-blue background
-          ═══════════════════════════════════════════════════════ */}
-      {/* ═══════════════════════════════════════════════════════
-          HERO — Two-tone split: dark navy left, blue right
-          ═══════════════════════════════════════════════════════ */}
-      <div className="relative overflow-hidden">
-        {/* Left background — dark navy */}
-        <div className="absolute inset-0 bg-[#0a1628]" />
-        {/* Right background — vibrant blue block behind doctor */}
-        <div className="hidden lg:block absolute top-0 right-0 w-[45%] h-full bg-gradient-to-br from-sky-400 to-sky-500 rounded-bl-[80px]" />
-        {/* Mobile: blue block at top behind image */}
-        <div className="lg:hidden absolute top-0 right-0 w-full h-[55%] bg-gradient-to-b from-sky-400 to-sky-500 rounded-b-[60px]" />
+      {/* ══════════════════════════════════════════════════════
+          HERO — full-width, booking.com style
+      ══════════════════════════════════════════════════════ */}
+      <section
+        className="relative overflow-hidden pt-14"
+        style={{ background: NAV_BG, minHeight: "92vh" }}
+      >
+        {/* Background blobs */}
+        <div
+          className="absolute top-0 right-0 w-[700px] h-[700px] rounded-full pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(56,189,248,0.12) 0%, transparent 70%)",
+            transform: "translate(20%, -20%)",
+          }}
+        />
+        <div
+          className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,113,194,0.15) 0%, transparent 70%)",
+            transform: "translate(-20%, 20%)",
+          }}
+        />
 
-        {/* Decorative circles on the blue panel */}
-        <div className="absolute top-20 right-[5%] w-40 h-40 border-2 border-white/10 rounded-full pointer-events-none" />
-        <div className="absolute top-[40%] right-[15%] w-24 h-24 border-2 border-white/10 rounded-full pointer-events-none" />
-        <div className="absolute bottom-32 right-[2%] w-56 h-56 border border-white/5 rounded-full pointer-events-none" />
-        {/* Decorative circles on the dark panel */}
-        <div className="absolute -top-10 -left-10 w-60 h-60 border border-white/5 rounded-full pointer-events-none" />
-        <div className="absolute bottom-20 left-[20%] w-32 h-32 border border-white/5 rounded-full pointer-events-none" />
-
-        {/* ── NAVBAR ── */}
-        <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? "bg-[#0a1628]/95 backdrop-blur-md shadow-lg shadow-black/10 py-3" : "bg-transparent py-5"}`}>
-          <div className="max-w-[90rem] mx-auto px-6 md:px-12 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="relative w-9 h-9 overflow-hidden rounded-xl bg-white/15 p-1.5 group-hover:bg-white/25 transition-colors">
-                <Image src="/favicon.png" alt="Nova" fill className="object-cover" />
-              </div>
-              <span className="text-xl font-bold text-white tracking-tight">Nova</span>
-            </Link>
-
-            <nav className="hidden lg:flex items-center gap-8">
-              {["Doctors", "Blogs", "About", "Contact Us"].map(link => (
-                <Link key={link} href={`/${link.toLowerCase().replace(/\s+/g, "")}`} className="text-sm font-semibold text-white/80 hover:text-white transition-colors">
-                  {link}
-                </Link>
-              ))}
-            </nav>
-
-            <div className="hidden lg:flex items-center gap-3">
-              <Link href="/login" className="text-sm font-semibold text-white/80 hover:text-white transition-colors px-4 py-2">Sign In</Link>
-              <Link href="/signup" className="text-sm font-bold text-[#0a1628] bg-white hover:bg-slate-100 px-5 py-2.5 rounded-full shadow-md transition-all hover:-translate-y-0.5">Sign Up</Link>
-              <Link href="/doctor-login" className="text-sm font-semibold text-white/60 hover:text-white transition-colors px-4 py-2 border-l border-white/15 ml-2">Doctor Login</Link>
-            </div>
-
-            <button className="lg:hidden text-white p-2" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
-
-          {mobileMenuOpen && (
-            <div className="lg:hidden bg-[#0d1d35] border-t border-white/10 p-6 space-y-3">
-              {["Doctors", "Blogs", "About", "Contact Us"].map(link => (
-                <Link key={link} href={`/${link.toLowerCase().replace(/\s+/g, "")}`} onClick={() => setMobileMenuOpen(false)} className="block font-semibold text-slate-300 hover:text-white py-2">
-                  {link}
-                </Link>
-              ))}
-              <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/10">
-                <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="text-center font-bold text-sky-400 py-3 rounded-xl bg-white/5">Sign In</Link>
-                <Link href="/signup" onClick={() => setMobileMenuOpen(false)} className="text-center font-bold text-white bg-sky-500 py-3 rounded-xl">Sign Up</Link>
-                <Link href="/doctor-login" onClick={() => setMobileMenuOpen(false)} className="text-center font-semibold text-slate-400 py-3 rounded-xl bg-white/5 col-span-2">Doctor Login</Link>
-              </div>
-            </div>
-          )}
-        </header>
-
-        {/* ── HERO CONTENT ── */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-emerald-500">
-
-          {/* SVG WAVE BACKGROUND */}
-          <svg className="absolute right-0 top-0 h-full w-[60%]" viewBox="0 0 500 500" preserveAspectRatio="none">
-            <path d="M0,0 C300,0 200,500 500,500 L500,0 Z" className="fill-blue-950" />
-          </svg>
-
-
-          {/* CONTENT */}
-          <div className="relative z-10 max-w-6xl mx-auto px-6 py-20 grid md:grid-cols-2 items-center">
-
-            {/* LEFT SIDE TEXT */}
-            <div className="text-white space-y-6">
-              <h1 className="text-4xl md:text-5xl font-bold leading-tight">
-                Putting your health first with empathy and skill
-              </h1>
-              <p className="text-white/80 max-w-md">
-                We are leading healthcare facility providing exceptional service for all patients.
-              </p>
-
-              <div className="flex gap-4">
-                <button className="bg-white text-teal-600 px-6 py-3 rounded-xl font-semibold">
-                  Get Started
-                </button>
-                <button className="border border-white/40 px-6 py-3 rounded-xl">
-                  Call Now
-                </button>
-
-              </div>
-              <p className="text-sm text-slate-500">
-                Are you a qualified doctor?{" "}
-                <Link href="/doctor/signup" className="text-sky-400 font-bold underline underline-offset-2 hover:text-sky-300 transition-colors">
-                  Get started now
-                </Link>
-              </p>
-            </div>
-
-            {/* RIGHT SIDE IMAGE */}
-            <div className="relative h-[500px] md:h-[600px] w-full">
-              <Image
-                src="/doc.png"
-                alt="Doctors"
-                fill
-                priority
-                className="object-contain scale-110"
+        {/* Hero grid: text left, doctor image right */}
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-14 pb-0 grid lg:grid-cols-2 gap-0 items-center">
+          {/* ── LEFT: Text + Search ── */}
+          <div className="pb-16 lg:pb-10 pt-8 lg:pr-8">
+            {/* Pill badge */}
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-bold mb-6 border"
+              style={{
+                background: "rgba(56,189,248,0.12)",
+                borderColor: "rgba(56,189,248,0.3)",
+                color: SKY,
+              }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full animate-pulse"
+                style={{ background: SKY }}
               />
+              2,000+ Verified Doctors Available Now
             </div>
 
-          </div>
-        </div>
+            <h1
+              className="text-white font-extrabold leading-[1.1] mb-5"
+              style={{ fontSize: "clamp(2rem, 5vw, 3.25rem)" }}
+            >
+              Your Health,
+              <br />
+              <span style={{ color: SKY }}>Our Priority.</span>
+              <br />
+              <span
+                style={{
+                  color: "rgba(255,255,255,0.7)",
+                  fontSize: "0.75em",
+                  fontWeight: 700,
+                }}
+              >
+                Find & Book Top Doctors
+              </span>
+            </h1>
 
-        {/* ── STATS STRIP (centered, overlapping the bottom edge) ── */}
-        <div className="relative z-20 -mb-14">
-          <div className="max-w-3xl mx-auto px-6">
-            <div className="bg-white rounded-3xl shadow-xl shadow-slate-900/10 border border-slate-100 py-8 px-6">
-              <div className="grid grid-cols-3 gap-6 text-center">
-                {[
-                  { number: "50+", label: "Clinics" },
-                  { number: "2K+", label: "Doctors" },
-                  { number: "50K+", label: "Patients" },
-                ].map((stat, i) => (
-                  <div key={i} className="flex flex-col items-center gap-2">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-sky-50 border-2 border-sky-100 flex items-center justify-center">
-                      <span className="text-xl sm:text-2xl font-black text-sky-600">{stat.number}</span>
-                    </div>
-                    <span className="text-xs sm:text-sm font-bold text-slate-600">{stat.label}</span>
-                  </div>
-                ))}
+            <p
+              className="text-[15px] leading-relaxed mb-8 max-w-lg"
+              style={{ color: "rgba(255,255,255,0.65)" }}
+            >
+              Connect with verified specialists in minutes. Compare ratings,
+              fees, and availability — then book instantly with a single tap.
+            </p>
+
+            {/* Search bar — booking.com style with sky yellow-border equivalent (sky border) */}
+            <div
+              className="rounded-2xl overflow-hidden border-2 mb-5"
+              style={{
+                borderColor: SKY,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+              }}
+            >
+              {/* Row 1: Doctor search + Location */}
+              <div className="flex flex-col sm:flex-row">
+                <div
+                  className="flex-1 flex items-center gap-2.5 bg-white px-4 py-3.5 sm:border-r"
+                  style={{ borderColor: "#e2e8f0" }}
+                >
+                  <Stethoscope
+                    className="w-5 h-5 flex-shrink-0"
+                    style={{ color: ACCENT }}
+                  />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Doctor name, specialty…"
+                    className="flex-1 text-[14px] font-medium outline-none placeholder:text-slate-400"
+                    style={{ color: "#1e293b" }}
+                  />
+                  {searchTerm && (
+                    <button onClick={() => setSearchTerm("")}>
+                      <X className="w-4 h-4 text-slate-300" />
+                    </button>
+                  )}
+                </div>
+                <div
+                  className="flex items-center gap-2.5 bg-white px-4 py-3.5 border-t sm:border-t-0"
+                  style={{ borderColor: "#e2e8f0", minWidth: 160 }}
+                >
+                  <MapPin
+                    className="w-5 h-5 flex-shrink-0"
+                    style={{ color: ACCENT }}
+                  />
+                  <input
+                    type="text"
+                    value={locationTerm}
+                    onChange={(e) => setLocationTerm(e.target.value)}
+                    placeholder="City or hospital…"
+                    className="flex-1 text-[14px] font-medium outline-none placeholder:text-slate-400"
+                    style={{ color: "#1e293b" }}
+                  />
+                </div>
+              </div>
+              {/* Row 2: Search button full width */}
+              <Link
+                href={
+                  searchTerm
+                    ? `/doctors?q=${encodeURIComponent(searchTerm)}`
+                    : "/doctors"
+                }
+                className="flex items-center justify-center gap-2 w-full py-3.5 text-[14px] font-extrabold text-white transition-all hover:opacity-90 active:scale-[0.99]"
+                style={{ background: NAV_DARK }}
+              >
+                <Search className="w-4 h-4" /> Search Doctors
+              </Link>
+            </div>
+
+            {/* Quick specialty chips */}
+            <div className="flex flex-wrap gap-2">
+              {["Dermatology", "Cardiology", "Pediatrics", "Neurology"].map(
+                (s) => (
+                  <Link
+                    key={s}
+                    href={`/doctors?specialty=${encodeURIComponent(s)}`}
+                    className="text-[12px] font-semibold px-3 py-1.5 rounded-full border transition-all hover:bg-white/20"
+                    style={{
+                      borderColor: "rgba(255,255,255,0.2)",
+                      color: "rgba(255,255,255,0.75)",
+                    }}
+                  >
+                    {s}
+                  </Link>
+                ),
+              )}
+            </div>
+
+            {/* Doctor CTA */}
+            <p
+              className="text-[13px] mt-5"
+              style={{ color: "rgba(255,255,255,0.45)" }}
+            >
+              Are you a doctor?{" "}
+              <Link
+                href="/doctor/signup"
+                className="font-bold underline underline-offset-2 transition-colors"
+                style={{ color: SKY }}
+              >
+                Join MediBook →
+              </Link>
+            </p>
+          </div>
+
+          {/* ── RIGHT: Doctor image ── */}
+          {/* ── RIGHT: Doctor image ── */}
+          <div
+            className="relative"
+            style={{ height: "clamp(560px, 85vh, 860px)" }}
+          >
+            {/* Soft sky-blue glow behind the figure */}
+            <div
+              className="absolute inset-x-0 bottom-0 pointer-events-none"
+              style={{
+                height: "85%",
+                background:
+                  "radial-gradient(ellipse 80% 60% at 50% 100%, rgba(56,189,248,0.22) 0%, transparent 70%)",
+              }}
+            />
+
+            {/* Doctor image — fills the column, pinned to the bottom, perfectly straight */}
+            <Image
+              src="/doctors.png"
+              alt="Doctor"
+              fill
+              priority
+              className="object-contain"
+              style={{
+                objectPosition: "",
+                filter: "drop-shadow(0 0 48px rgba(56,189,248,0.28))",
+              }}
+            />
+
+            {/* Floating stat: patients */}
+            <div
+              className="absolute top-10 left-4 bg-white rounded-2xl px-4 py-3 flex items-center gap-3"
+              style={{ boxShadow: "0 8px 28px rgba(0,0,0,0.18)" }}
+            >
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "#eff6ff" }}
+              >
+                <Users className="w-4 h-4" style={{ color: ACCENT }} />
+              </div>
+              <div>
+                <p className="text-[18px] font-extrabold text-slate-900 leading-none">
+                  50K+
+                </p>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                  Happy Patients
+                </p>
               </div>
             </div>
+
+            {/* Floating stat: rating */}
+            <div
+              className="absolute top-1/3 right-4 bg-white rounded-2xl px-4 py-3"
+              style={{ boxShadow: "0 8px 28px rgba(0,0,0,0.18)" }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                <span className="text-[18px] font-extrabold text-slate-900">
+                  4.9
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Avg. Rating
+              </p>
+              <p
+                className="text-[10px] font-semibold mt-0.5"
+                style={{ color: ACCENT }}
+              >
+                2,000+ Doctors
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* ═══════════════════════════════════════════════════════
-          COMPREHENSIVE CARE  (Specialties)
-          ═══════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-slate-50">
-        <div className="max-w-[90rem] mx-auto px-6 md:px-12">
-          <div className="text-center max-w-2xl mx-auto mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-3">Comprehensive Care</h2>
-            <p className="text-slate-500 text-lg">Browse our specialties and find the right expert for your needs.</p>
+        {/* Stats strip at bottom of hero */}
+        <div
+          className="relative z-20"
+          style={{
+            background: NAV_DARK,
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+            <div
+              className="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x"
+              style={{ borderColor: "rgba(255,255,255,0.1)" }}
+            >
+              {[
+                { number: "50+", label: "Partner Clinics" },
+                { number: "2K+", label: "Verified Doctors" },
+                { number: "50K+", label: "Patients Served" },
+                { number: "4.9★", label: "Average Rating" },
+              ].map((s, i) => (
+                <div
+                  key={i}
+                  className="flex flex-col items-center justify-center py-3 px-4"
+                >
+                  <p className="text-[22px] font-extrabold text-white leading-none">
+                    {s.number}
+                  </p>
+                  <p
+                    className="text-[11px] font-semibold mt-1"
+                    style={{ color: "rgba(255,255,255,0.5)" }}
+                  >
+                    {s.label}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════
+          CARE SPECIALTIES  (booking.com category row style)
+      ══════════════════════════════════════════════════════ */}
+      <section className="py-14 sm:py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          {/* Header */}
+          <div className="flex items-end justify-between gap-4 mb-8 sm:mb-12">
+            <div>
+              <p
+                className="text-[11px] font-extrabold uppercase tracking-widest mb-1.5"
+                style={{ color: ACCENT }}
+              >
+                Specialties
+              </p>
+              <h2 className="text-[24px] sm:text-[32px] font-extrabold text-slate-900 leading-tight">
+                Comprehensive Care
+              </h2>
+              <p className="text-slate-500 text-[14px] mt-1">
+                Browse specialties and find the right expert for your needs.
+              </p>
+            </div>
+            <Link
+              href="/doctors"
+              className="hidden sm:flex items-center gap-1.5 text-[13px] font-bold transition-colors flex-shrink-0"
+              style={{ color: ACCENT }}
+            >
+              All Specialties <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {/* Grid: 4 on desktop, 2 on mobile */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
             {SPECIALTIES.map((spec) => (
               <Link
                 key={spec.name}
                 href={`/doctors?specialty=${encodeURIComponent(spec.name)}`}
-                className="group bg-white rounded-2xl p-6 text-center shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all"
+                className="flex flex-col items-center gap-2.5 p-4 rounded-2xl border border-slate-100 text-center transition-all hover:shadow-lg hover:-translate-y-0.5 group cursor-pointer bg-white"
+                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
               >
-                <div className={`w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-4 ${spec.bg} group-hover:scale-110 transition-transform`}>
-                  <spec.icon className={`w-8 h-8 ${spec.color}`} />
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+                  style={{ background: spec.bg }}
+                >
+                  <spec.icon
+                    className="w-6 h-6"
+                    style={{ color: spec.color }}
+                  />
                 </div>
-                <h3 className="font-bold text-slate-800">{spec.name}</h3>
+                <p className="text-[11px] sm:text-[12px] font-bold text-slate-700 leading-tight">
+                  {spec.name}
+                </p>
               </Link>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════
-          FEATURED DOCTORS
-          ═══════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-white">
-        <div className="max-w-[90rem] mx-auto px-6 md:px-12">
-          <div className="flex flex-wrap items-end justify-between gap-4 mb-14">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-slate-800">Meet our top specialists</h2>
-              <p className="text-slate-500 mt-2">Highly rated, experienced, and ready to help.</p>
-            </div>
-            <Link href="/doctors" className="flex items-center gap-2 text-sky-600 font-bold hover:text-sky-700 transition-colors">
-              View all doctors <ArrowRight className="w-5 h-5" />
-            </Link>
+      {/* ══════════════════════════════════════════════════════
+          TRUST / WHY MEDIBOOK — dark navy band
+      ══════════════════════════════════════════════════════ */}
+      <section className="py-14 sm:py-20" style={{ background: NAV_BG }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-10 sm:mb-14">
+            <p
+              className="text-[11px] font-extrabold uppercase tracking-widest mb-2"
+              style={{ color: SKY }}
+            >
+              Why MediBook
+            </p>
+            <h2 className="text-[24px] sm:text-[32px] font-extrabold text-white leading-tight">
+              Healthcare you can trust
+            </h2>
           </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {DOCTORS.slice(0, 3).map((doc, idx) => (
-              <div key={idx} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group overflow-hidden">
-                <div className="relative w-full h-64 overflow-hidden bg-slate-100">
-                  <Image src={doc.image} alt={doc.name} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
-                  <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm text-slate-900 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-sm">
-                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /> {doc.rating}
-                  </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {TRUST_ITEMS.map((item, i) => (
+              <div
+                key={i}
+                className="rounded-2xl p-6 border transition-all hover:border-sky-400/30"
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  borderColor: "rgba(255,255,255,0.1)",
+                }}
+              >
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
+                  style={{ background: "rgba(56,189,248,0.15)" }}
+                >
+                  <item.icon className="w-6 h-6" style={{ color: SKY }} />
                 </div>
-                <div className="p-5">
-                  <h3 className="text-xl font-bold mb-1 group-hover:text-sky-600 transition-colors">{doc.name}</h3>
-                  <p className="text-sm text-slate-500 mb-1">{doc.specialty}</p>
-                  <p className="text-xs text-slate-400 flex items-center gap-1 mb-4"><MapPin className="w-3 h-3" /> {doc.hospital}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-400">{doc.reviews} reviews</span>
-                    <Link href="/login" className="text-sm font-bold text-sky-600 hover:text-sky-700">Book now →</Link>
-                  </div>
-                </div>
+                <p className="font-extrabold text-white text-[15px] mb-1">
+                  {item.label}
+                </p>
+                <p
+                  className="text-[12px] leading-relaxed"
+                  style={{ color: "rgba(255,255,255,0.55)" }}
+                >
+                  {item.desc}
+                </p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════
+      {/* ══════════════════════════════════════════════════════
+          FEATURED DOCTORS  (booking.com property card style)
+      ══════════════════════════════════════════════════════ */}
+      <section className="py-14 sm:py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="flex items-end justify-between gap-4 mb-8 sm:mb-12">
+            <div>
+              <p
+                className="text-[11px] font-extrabold uppercase tracking-widest mb-1.5"
+                style={{ color: ACCENT }}
+              >
+                Top Rated
+              </p>
+              <h2 className="text-[24px] sm:text-[32px] font-extrabold text-slate-900">
+                Meet our top specialists
+              </h2>
+              <p className="text-slate-500 text-[14px] mt-1">
+                Highly rated, experienced, and ready to help you today.
+              </p>
+            </div>
+            <Link
+              href="/doctors"
+              className="hidden sm:flex items-center gap-1.5 text-[13px] font-bold flex-shrink-0"
+              style={{ color: ACCENT }}
+            >
+              View all <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          {/* Desktop: 3-col wide cards. Mobile: scrollable row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {DOCTORS.slice(0, 6).map((doc, i) => (
+              <div
+                key={i}
+                className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all group cursor-pointer flex flex-col"
+                style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}
+              >
+                {/* Image */}
+                <div
+                  className="relative h-52 overflow-hidden"
+                  style={{
+                    background:
+                      "linear-gradient(160deg, #cfe0ff 0%, #a8c8f8 100%)",
+                  }}
+                >
+                  <Image
+                    src={doc.image}
+                    alt={doc.name}
+                    fill
+                    className="object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                    unoptimized
+                  />
+                  {/* Rating badge */}
+                  <div className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-white/95 backdrop-blur-sm shadow">
+                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    {doc.rating}
+                  </div>
+                  {/* Available dot */}
+                  <div className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/95 shadow">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Available
+                  </div>
+                </div>
+                {/* Content */}
+                <div className="p-4 flex flex-col flex-1">
+                  <h3 className="font-extrabold text-[15px] text-slate-900 mb-0.5 group-hover:text-blue-700 transition-colors">
+                    {doc.name}
+                  </h3>
+                  <p
+                    className="text-[12px] font-semibold mb-1"
+                    style={{ color: ACCENT }}
+                  >
+                    {doc.specialty}
+                  </p>
+                  <p className="text-[11px] text-slate-400 flex items-center gap-1 mb-3">
+                    <MapPin className="w-3 h-3 flex-shrink-0" /> {doc.hospital}
+                  </p>
+
+                  <div className="border-t border-dashed border-slate-100 pt-3 mt-auto flex items-center justify-between">
+                    <div>
+                      <p className="text-[9px] text-slate-400">
+                        Consultation fee
+                      </p>
+                      <p
+                        className="text-[15px] font-extrabold leading-tight"
+                        style={{ color: ACCENT }}
+                      >
+                        {doc.fee}{" "}
+                        <span className="text-[10px] font-semibold text-slate-500">
+                          Birr
+                        </span>
+                      </p>
+                    </div>
+                    <Link
+                      href="/login"
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-extrabold text-white transition-all active:scale-95 hover:opacity-90"
+                      style={{ background: NAV_BG }}
+                    >
+                      <Zap className="w-3.5 h-3.5" /> Book Now
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-center mt-8">
+            <Link
+              href="/doctors"
+              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl font-extrabold text-white text-[14px] transition-all hover:opacity-90 active:scale-95"
+              style={{ background: NAV_BG }}
+            >
+              View All Doctors <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════
           HOW IT WORKS
-          ═══════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-slate-50">
-        <div className="max-w-[90rem] mx-auto px-6 md:px-12">
-          <div className="text-center max-w-2xl mx-auto mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-3">How it works</h2>
-            <p className="text-slate-500 text-lg">Get the care you need in four simple steps.</p>
+      ══════════════════════════════════════════════════════ */}
+      <section className="py-14 sm:py-20" style={{ background: "#eef2f7" }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-10 sm:mb-14">
+            <p
+              className="text-[11px] font-extrabold uppercase tracking-widest mb-2"
+              style={{ color: ACCENT }}
+            >
+              Simple Process
+            </p>
+            <h2 className="text-[24px] sm:text-[32px] font-extrabold text-slate-900">
+              How it works
+            </h2>
+            <p className="text-slate-500 text-[14px] mt-2">
+              Get the care you need in four simple steps.
+            </p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {STEPS.map((step, idx) => (
-              <div key={idx} className="bg-white rounded-2xl p-7 text-center border border-slate-100 shadow-sm hover:shadow-lg transition-all relative">
-                <div className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-[#0a1628] text-white text-xs font-bold flex items-center justify-center shadow-md">{idx + 1}</div>
-                <div className="w-16 h-16 mx-auto bg-sky-50 rounded-2xl flex items-center justify-center mb-5">
-                  <step.icon className="w-8 h-8 text-sky-600" />
+              <div
+                key={idx}
+                className="bg-white border border-slate-200 rounded-2xl p-6 text-center relative hover:shadow-lg transition-all"
+                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+              >
+                {/* Step number */}
+                <div
+                  className="absolute -top-3 left-1/2 -translate-x-1/2 w-7 h-7 rounded-full text-white text-[11px] font-extrabold flex items-center justify-center shadow-md"
+                  style={{ background: NAV_BG }}
+                >
+                  {idx + 1}
                 </div>
-                <h3 className="text-lg font-bold text-slate-800 mb-2">{step.title}</h3>
-                <p className="text-slate-500 text-sm">{step.description}</p>
+                {/* Connector line (not on last) */}
+                {idx < 3 && (
+                  <div
+                    className="hidden lg:block absolute top-6 left-full w-5 h-0.5 z-10"
+                    style={{
+                      background:
+                        "linear-gradient(90deg, #cbd5e1, transparent)",
+                    }}
+                  />
+                )}
+                <div
+                  className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-4 mt-2"
+                  style={{ background: "#eff6ff" }}
+                >
+                  <step.icon className="w-7 h-7" style={{ color: ACCENT }} />
+                </div>
+                <h3 className="font-extrabold text-[15px] text-slate-800 mb-2">
+                  {step.title}
+                </h3>
+                <p className="text-[12px] text-slate-500 leading-relaxed">
+                  {step.description}
+                </p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════
-          HEALTH INSIGHTS (Blogs)
-          ═══════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-white">
-        <div className="max-w-[90rem] mx-auto px-6 md:px-12">
-          <div className="flex flex-wrap items-end justify-between gap-4 mb-14">
+      {/* ══════════════════════════════════════════════════════
+          HEALTH BLOG
+      ══════════════════════════════════════════════════════ */}
+      <section className="py-14 sm:py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="flex items-end justify-between gap-4 mb-8 sm:mb-12">
             <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-slate-800">Health insights</h2>
-              <p className="text-slate-500 mt-2">Expert articles to help you stay informed.</p>
+              <p
+                className="text-[11px] font-extrabold uppercase tracking-widest mb-1.5"
+                style={{ color: ACCENT }}
+              >
+                Blog
+              </p>
+              <h2 className="text-[24px] sm:text-[32px] font-extrabold text-slate-900">
+                Health Insights
+              </h2>
+              <p className="text-slate-500 text-[14px] mt-1">
+                Expert articles to help you stay informed and healthy.
+              </p>
             </div>
-            <Link href="/blogs" className="flex items-center gap-2 text-sky-600 font-bold hover:text-sky-700 transition-colors">
-              Read more articles <ArrowRight className="w-5 h-5" />
+            <Link
+              href="/blogs"
+              className="hidden sm:flex items-center gap-1.5 text-[13px] font-bold flex-shrink-0"
+              style={{ color: ACCENT }}
+            >
+              All articles <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {BLOGS.map((blog, idx) => (
-              <div key={idx} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all group cursor-pointer">
-                <div className="relative h-56 w-full overflow-hidden bg-slate-100">
-                  <Image src={blog.image} alt={blog.title} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
-                  <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">{blog.category}</div>
-                </div>
-                <div className="p-6">
-                  <p className="text-sm font-semibold text-slate-400 mb-2">{blog.date}</p>
-                  <h3 className="text-xl font-bold text-slate-800 mb-3 group-hover:text-sky-600 transition-colors">{blog.title}</h3>
-                  <div className="inline-flex items-center gap-1 text-sky-600 font-bold text-sm">Read article <ArrowRight className="w-4 h-4" /></div>
+          {/* Desktop: featured big left + 2 stacked right. Mobile: single column */}
+          <div className="grid lg:grid-cols-5 gap-5">
+            {/* Big featured */}
+            <div
+              className="lg:col-span-3 bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all group cursor-pointer"
+              style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}
+            >
+              <div className="relative h-56 sm:h-72 overflow-hidden bg-slate-100">
+                <Image
+                  src={BLOGS[0].image}
+                  alt={BLOGS[0].title}
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-500"
+                  unoptimized
+                />
+                <div
+                  className="absolute top-4 left-4 px-3 py-1 rounded-full text-[11px] font-bold text-white"
+                  style={{ background: ACCENT }}
+                >
+                  {BLOGS[0].category}
                 </div>
               </div>
-            ))}
+              <div className="p-5 sm:p-6">
+                <p className="text-[11px] text-slate-400 font-semibold mb-2">
+                  {BLOGS[0].date}
+                </p>
+                <h3 className="font-extrabold text-[18px] sm:text-[20px] text-slate-900 mb-3 leading-snug group-hover:text-blue-700 transition-colors">
+                  {BLOGS[0].title}
+                </h3>
+                <span
+                  className="inline-flex items-center gap-1 text-[13px] font-bold"
+                  style={{ color: ACCENT }}
+                >
+                  Read article <ArrowRight className="w-4 h-4" />
+                </span>
+              </div>
+            </div>
+
+            {/* 2 stacked */}
+            <div className="lg:col-span-2 flex flex-col gap-5">
+              {BLOGS.slice(1).map((blog, i) => (
+                <div
+                  key={i}
+                  className="flex gap-3 bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-lg transition-all group cursor-pointer"
+                  style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}
+                >
+                  <div className="relative w-28 sm:w-36 flex-shrink-0 bg-slate-100">
+                    <Image
+                      src={blog.image}
+                      alt={blog.title}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      unoptimized
+                    />
+                  </div>
+                  <div className="flex-1 p-3 sm:p-4 flex flex-col justify-center">
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full w-fit mb-2"
+                      style={{ background: "#eff6ff", color: ACCENT }}
+                    >
+                      {blog.category}
+                    </span>
+                    <h3 className="font-bold text-[13px] text-slate-800 leading-snug group-hover:text-blue-700 transition-colors line-clamp-3">
+                      {blog.title}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 mt-1.5 font-medium">
+                      {blog.date}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════
-          CTA BANNER
-          ═══════════════════════════════════════════════════════ */}
-      <section className="bg-[#0a1628] py-16 sm:py-20 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-sky-500/10 rounded-full blur-[120px] pointer-events-none" />
-        <div className="max-w-4xl mx-auto px-6 md:px-12 text-center relative z-10">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Ready to take control of your health?</h2>
-          <p className="text-slate-400 text-lg mb-8 max-w-xl mx-auto">Join thousands of patients who trust Nova for their healthcare needs. Start your journey today.</p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/signup" className="bg-sky-500 hover:bg-sky-600 text-white font-bold px-8 py-4 rounded-full shadow-lg shadow-sky-500/30 transition-all hover:-translate-y-0.5 text-lg">
-              Get Started – It's Free
+      {/* ══════════════════════════════════════════════════════
+          CTA BANNER — dark navy
+      ══════════════════════════════════════════════════════ */}
+      <section
+        className="py-16 sm:py-24 relative overflow-hidden"
+        style={{ background: NAV_BG }}
+      >
+        {/* Glow */}
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full pointer-events-none"
+          style={{
+            background: `radial-gradient(ellipse, rgba(56,189,248,0.12) 0%, transparent 70%)`,
+          }}
+        />
+
+        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 text-center">
+          <p
+            className="text-[11px] font-extrabold uppercase tracking-widest mb-3"
+            style={{ color: SKY }}
+          >
+            Start Today
+          </p>
+          <h2 className="text-[26px] sm:text-[36px] font-extrabold text-white leading-tight mb-4">
+            Ready to take control
+            <br className="hidden sm:block" /> of your health?
+          </h2>
+          <p
+            className="text-[15px] mb-10 max-w-xl mx-auto"
+            style={{ color: "rgba(255,255,255,0.6)" }}
+          >
+            Join thousands of patients who trust MediBook for their healthcare.
+            Book your first consultation in under 2 minutes.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              href="/signup"
+              className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-extrabold text-white text-[15px] transition-all hover:opacity-90 active:scale-95"
+              style={{
+                background: SKY,
+                boxShadow: `0 8px 24px rgba(56,189,248,0.3)`,
+              }}
+            >
+              <Zap className="w-5 h-5" /> Get Started — It's Free
             </Link>
-            <Link href="/doctors" className="bg-white/10 hover:bg-white/15 text-white font-bold px-8 py-4 rounded-full border border-white/10 transition-all hover:-translate-y-0.5 text-lg">
-              Browse Doctors
+            <Link
+              href="/doctors"
+              className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-extrabold text-[15px] transition-all hover:bg-white/15 active:scale-95 border"
+              style={{
+                color: "white",
+                borderColor: "rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.08)",
+              }}
+            >
+              Browse Doctors <ArrowRight className="w-5 h-5" />
             </Link>
+          </div>
+
+          {/* Micro trust signals */}
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mt-10">
+            {[
+              "No subscription needed",
+              "50K+ happy patients",
+              "Available 24/7",
+            ].map((t) => (
+              <div
+                key={t}
+                className="flex items-center gap-1.5 text-[12px] font-semibold"
+                style={{ color: "rgba(255,255,255,0.5)" }}
+              >
+                <CheckCircle className="w-3.5 h-3.5" style={{ color: SKY }} />{" "}
+                {t}
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -360,32 +973,3 @@ export default function LandingPage() {
     </div>
   );
 }
-
-
-/* <div className="flex items-center max-w-lg bg-white/10 backdrop-blur-sm border border-white/10 rounded-full overflow-hidden focus-within:ring-2 focus-within:ring-sky-400 transition-all">
-                <div className="pl-5 pr-3 text-slate-400">
-                  <Search className="w-5 h-5" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Type Doctor name or Specialties"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="flex-1 py-4 pr-2 bg-transparent text-white placeholder-slate-500 focus:outline-none text-sm sm:text-base"
-                />
-                <Link
-                  href={searchTerm ? `/doctors?q=${encodeURIComponent(searchTerm)}` : "/doctors"}
-                  className="flex items-center gap-2 bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm px-6 py-3 mr-1.5 rounded-full transition-colors whitespace-nowrap shadow-lg shadow-sky-500/30"
-                >
-                  <Search className="w-4 h-4" /> Search
-                </Link>
-              </div>
-
-             
-              /*<p className="text-sm text-slate-500">
-                Are you a qualified doctor?{" "}
-                <Link href="/doctor/signup" className="text-sky-400 font-bold underline underline-offset-2 hover:text-sky-300 transition-colors">
-                  Get started now
-                </Link>
-              </p>
-            </div>*/

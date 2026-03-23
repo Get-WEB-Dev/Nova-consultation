@@ -2,8 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { loadUser, getUser, type AuthUser } from "@/lib/supabase/auth";
+import { loadUser } from "@/lib/supabase/auth";
 import Navbar from "@/components/layout/Navbar";
+import { Stethoscope } from "lucide-react";
+
+// ── Palette (matches site-wide theme) ────────────────────────────────────────
+const NAV_BG = "#003580";
+const NAV_DARK = "#00224f";
+const SKY = "#38bdf8";
 
 export default function DashboardLayout({
   children,
@@ -19,7 +25,6 @@ export default function DashboardLayout({
         router.replace("/login");
         return;
       }
-      // Role-based access: only patients can access this dashboard
       if (user.role === "doctor") {
         router.replace("/doctor-dashboard");
         return;
@@ -32,27 +37,89 @@ export default function DashboardLayout({
     });
   }, [router]);
 
+  // ── Loading screen — styled to match the dark navy brand ─────────────────
   if (!ready) {
     return (
-      <div className="min-h-screen bg-slate-50 bg-nova-mesh flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-primary-600 flex items-center justify-center animate-breathe shadow-glow-navy">
-            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: NAV_BG }}
+      >
+        {/* Background glows */}
+        <div
+          className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(56,189,248,0.1) 0%, transparent 70%)",
+            transform: "translate(20%, -20%)",
+          }}
+        />
+        <div
+          className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(0,113,194,0.12) 0%, transparent 70%)",
+            transform: "translate(-20%, 20%)",
+          }}
+        />
+
+        <div className="relative z-10 flex flex-col items-center gap-5">
+          {/* Logo icon */}
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
+            style={{
+              background: SKY,
+              boxShadow: `0 0 40px rgba(56,189,248,0.35)`,
+            }}
+          >
+            <Stethoscope className="w-7 h-7 text-white" />
           </div>
-          <div className="w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-full bg-primary-500/60 rounded-full animate-shimmer" />
+
+          {/* Brand name */}
+          <p className="font-extrabold text-white text-[18px] tracking-tight">
+            MediBook
+          </p>
+
+          {/* Progress bar */}
+          <div
+            className="w-32 h-1 rounded-full overflow-hidden"
+            style={{ background: "rgba(255,255,255,0.12)" }}
+          >
+            <div
+              className="h-full rounded-full animate-pulse"
+              style={{
+                background: SKY,
+                width: "60%",
+                animation: "shimmer 1.6s ease-in-out infinite",
+              }}
+            />
           </div>
+
+          <p
+            className="text-[12px] font-medium"
+            style={{ color: "rgba(255,255,255,0.4)" }}
+          >
+            Loading your dashboard…
+          </p>
         </div>
+
+        {/* Inline keyframe for shimmer */}
+        <style>{`
+          @keyframes shimmer {
+            0%   { width: 20%; opacity: 0.6; }
+            50%  { width: 80%; opacity: 1;   }
+            100% { width: 20%; opacity: 0.6; }
+          }
+        `}</style>
       </div>
     );
   }
 
+  // ── Authenticated layout ──────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-50 bg-nova-mesh">
+    <div className="min-h-screen" style={{ background: "#eef2f7" }}>
       <Navbar />
-      <main className="max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-8">{children}</main>
+      {/* No extra padding/max-width here — the dashboard page controls its own layout */}
+      <main className="pb-24 md:pb-0">{children}</main>
     </div>
   );
 }
