@@ -13,13 +13,15 @@ import {
   Activity,
   ChevronLeft,
   Stethoscope,
+  X,
+  TrendingUp,
 } from "lucide-react";
 import { getUser, loadUser } from "@/lib/supabase/auth";
 import type { ConsultationSession } from "@/lib/types";
 
-const NAV_BG = "#003580";
-const ACCENT = "#0071c2";
-const SKY = "#38bdf8";
+const NAV_BG = "#1a3558";
+const ACCENT = "#1e4470";
+const SKY = "#0cbcad";
 
 type StatusFilter = "all" | "completed" | "missed" | "active";
 
@@ -93,9 +95,15 @@ export default function HistoryPage() {
     );
   }, [sessions, query, statusFilter]);
 
+  // Summary counts
+  const completedCount = sessions.filter(
+    (s) => s.status === "completed",
+  ).length;
+  const missedCount = sessions.filter((s) => s.status === "missed").length;
+
   return (
     <div className="min-h-screen" style={{ background: "#eef2f7" }}>
-      {/* ── Page header band ── */}
+      {/* ── Header band ── */}
       <div
         style={{ background: NAV_BG }}
         className="px-4 sm:px-6 pt-5 pb-10 relative overflow-hidden"
@@ -121,24 +129,51 @@ export default function HistoryPage() {
             <ChevronLeft className="w-4 h-4" /> Back
           </button>
 
-          <div className="flex items-center gap-3 mb-5">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "rgba(56,189,248,0.2)" }}
-            >
-              <Calendar className="w-5 h-5" style={{ color: SKY }} />
-            </div>
-            <div>
-              <h1 className="font-extrabold text-white text-[20px] leading-tight">
-                Consultation History
-              </h1>
-              <p
-                className="text-[12px] mt-0.5"
-                style={{ color: "rgba(255,255,255,0.5)" }}
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(56,189,248,0.2)" }}
               >
-                All your past and current consultations
-              </p>
+                <Calendar className="w-5 h-5" style={{ color: SKY }} />
+              </div>
+              <div>
+                <h1 className="font-extrabold text-white text-[20px] leading-tight">
+                  Consultation History
+                </h1>
+                <p
+                  className="text-[12px] mt-0.5"
+                  style={{ color: "rgba(255,255,255,0.5)" }}
+                >
+                  All your past and current consultations
+                </p>
+              </div>
             </div>
+            {/* Quick count pills */}
+            {!loading && sessions.length > 0 && (
+              <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+                <span
+                  className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full"
+                  style={{
+                    background: "rgba(34,197,94,0.2)",
+                    color: "#4ade80",
+                  }}
+                >
+                  <CheckCircle className="w-3 h-3" /> {completedCount} done
+                </span>
+                {missedCount > 0 && (
+                  <span
+                    className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full"
+                    style={{
+                      background: "rgba(239,68,68,0.2)",
+                      color: "#f87171",
+                    }}
+                  >
+                    <XCircle className="w-3 h-3" /> {missedCount} missed
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Search bar */}
@@ -161,6 +196,11 @@ export default function HistoryPage() {
                 className="flex-1 text-[14px] font-medium outline-none placeholder:text-slate-400"
                 style={{ color: "#1e293b" }}
               />
+              {query && (
+                <button onClick={() => setQuery("")}>
+                  <X className="w-4 h-4 text-slate-300" />
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -168,7 +208,7 @@ export default function HistoryPage() {
 
       {/* ── Content ── */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 -mt-4 space-y-4">
-        {/* Filter tabs — white pill row, floats above the body */}
+        {/* Filter tabs */}
         <div
           className="bg-white border border-slate-200 rounded-2xl p-1.5 flex gap-1"
           style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
@@ -190,7 +230,16 @@ export default function HistoryPage() {
 
         <p className="text-[11px] text-slate-400 px-1">
           <span className="font-bold text-slate-600">{filtered.length}</span>{" "}
-          consultations
+          consultation{filtered.length !== 1 ? "s" : ""}
+          {statusFilter !== "all" && (
+            <button
+              onClick={() => setStatusFilter("all")}
+              className="ml-2 font-bold underline underline-offset-2"
+              style={{ color: ACCENT }}
+            >
+              Clear filter
+            </button>
+          )}
         </p>
 
         {loading ? (
@@ -215,8 +264,20 @@ export default function HistoryPage() {
               No consultations found
             </p>
             <p className="text-[12px] text-slate-400 mt-1">
-              Try adjusting your search or filter
+              {query
+                ? "Try a different search term"
+                : "No sessions match this filter"}
             </p>
+            <button
+              onClick={() => {
+                setQuery("");
+                setStatusFilter("all");
+              }}
+              className="mt-3 text-[12px] font-bold underline underline-offset-2"
+              style={{ color: ACCENT }}
+            >
+              Show all
+            </button>
           </div>
         ) : (
           <div className="space-y-3 pb-8">
@@ -231,7 +292,7 @@ export default function HistoryPage() {
                   style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
                 >
                   <div className="flex items-center gap-4">
-                    {/* Doctor avatar */}
+                    {/* Avatar */}
                     <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100">
                       {s.doctorAvatar ? (
                         <Image
@@ -268,7 +329,6 @@ export default function HistoryPage() {
                             {s.doctorSpecialty}
                           </p>
                         </div>
-                        {/* Status badge */}
                         <span
                           className="flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0"
                           style={{ background: cfg.bg, color: cfg.color }}
@@ -276,7 +336,6 @@ export default function HistoryPage() {
                           <StatusIcon className="w-3 h-3" /> {cfg.label}
                         </span>
                       </div>
-
                       <div className="flex items-center gap-3 mt-1.5 text-[11px] text-slate-400">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />

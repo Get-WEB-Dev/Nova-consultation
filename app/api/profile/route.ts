@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const {
-    userId, name, phone, dob, bio,
+    userId, name, phone, dob, bio, avatar_url,
     bloodType, allergies, emergencyContact,
     medicalHistory, insuranceProvider, insuranceId,
   } = (body ?? {}) as {
@@ -102,6 +102,7 @@ export async function PATCH(req: NextRequest) {
     phone?: string;
     dob?: string;
     bio?: string;
+    avatar_url?: string;
     bloodType?: string;
     allergies?: string;
     emergencyContact?: string;
@@ -127,6 +128,7 @@ export async function PATCH(req: NextRequest) {
       emergency_contact: emergencyContact || null,
     };
     if (name) updatePayload.name = name;
+    if (avatar_url !== undefined) updatePayload.avatar_url = avatar_url;
 
     const { error } = await admin
       .from('users')

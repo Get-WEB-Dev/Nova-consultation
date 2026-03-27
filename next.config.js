@@ -6,8 +6,14 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "randomuser.me" },
       { protocol: "https", hostname: "ui-avatars.com" },
+      {
+        protocol: 'https',
+        hostname: 'kxihzopuzqwkhtmmlfsc.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
     ],
     domains: ["images.unsplash.com"],
+
   },
 };
 

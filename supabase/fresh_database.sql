@@ -158,6 +158,7 @@ CREATE TABLE doctor_profiles (
   consultation_duration_mins INT           NOT NULL DEFAULT 15,
   next_available_slot        TEXT,
   video_provider_identity    TEXT,
+  profile_picture            TEXT,
   slug                       TEXT          UNIQUE,
   is_verified                BOOLEAN       NOT NULL DEFAULT false,
   is_published               BOOLEAN       NOT NULL DEFAULT false,

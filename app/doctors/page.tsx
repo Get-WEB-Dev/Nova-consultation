@@ -25,9 +25,9 @@ import { getUser } from "@/lib/supabase/auth";
 type SortKey = "rating" | "reviews" | "price_low" | "experience";
 
 // ── Palette ──────────────────────────────────────────────────────────────────
-const NAV_BG = "#003580"; // booking.com dark navy
-const NAV_DARK = "#00224f";
-const ACCENT = "#0071c2"; // booking.com link blue
+const NAV_BG = "#1a3558"; // booking.com dark navy
+const NAV_DARK = "#0c192c";
+const ACCENT = "#1e4470"; // booking.com link blue
 
 const CARE_CATEGORIES = [
   { label: "Dermatology", icon: "🧴", specialty: "Dermatologist" },

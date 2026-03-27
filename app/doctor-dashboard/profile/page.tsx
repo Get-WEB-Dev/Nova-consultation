@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { getUser, type AuthUser } from "@/lib/supabase/auth";
 import {
     User, Mail, DollarSign, Stethoscope, Building2, Clock, Globe, Loader2, Save,
@@ -9,8 +9,8 @@ import {
 
 interface Profile { id: string; specialty: string; status: string; fee: number; patients_served: number; rating: number; review_count: number; consultation_duration_mins: number; hospital: string | null; experience_years: number; languages: string[]; gender: string | null; consultation_type: string; slug: string | null; }
 
-const SPECS = ["General Practice","Cardiology","Dermatology","Endocrinology","Gastroenterology","Neurology","Oncology","Orthopedics","Pediatrics","Psychiatry","Pulmonology","Surgery","Urology","Other"];
-const LANGS = ["English","Arabic","French","Spanish","Mandarin","Portuguese","German","Amharic","Tigrinya","Other"];
+const SPECS = ["General Practice", "Cardiology", "Dermatology", "Endocrinology", "Gastroenterology", "Neurology", "Oncology", "Orthopedics", "Pediatrics", "Psychiatry", "Pulmonology", "Surgery", "Urology", "Other"];
+const LANGS = ["English", "Arabic", "French", "Spanish", "Mandarin", "Portuguese", "German", "Amharic", "Tigrinya", "Other"];
 
 export default function ProfilePage() {
     const [user, setUser] = useState<AuthUser | null>(null);
@@ -22,8 +22,10 @@ export default function ProfilePage() {
     const [form, setForm] = useState({
         specialty: "", hospital: "", experience_years: 0, fee: 0,
         consultation_duration_mins: 15, languages: [] as string[],
-        consultation_type: "video", gender: "", bio: "",
+        consultation_type: "video", gender: "", bio: "", profile_picture: ""
     });
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const u = getUser();
@@ -32,16 +34,16 @@ export default function ProfilePage() {
         fetch(`/api/doctor/profile?doctorId=${u.id}`).then(r => r.json()).then(j => {
             if (j.data) {
                 setProfile(j.data);
-                setForm({ specialty: j.data.specialty || "", hospital: j.data.hospital || "", experience_years: j.data.experience_years || 0, fee: j.data.fee || 0, consultation_duration_mins: j.data.consultation_duration_mins || 15, languages: Array.isArray(j.data.languages) ? j.data.languages : ["English"], consultation_type: j.data.consultation_type || "video", gender: j.data.gender || "", bio: j.data.bio || "" });
+                setForm({ specialty: j.data.specialty || "", hospital: j.data.hospital || "", experience_years: j.data.experience_years || 0, fee: j.data.fee || 0, consultation_duration_mins: j.data.consultation_duration_mins || 15, languages: Array.isArray(j.data.languages) ? j.data.languages : ["English"], consultation_type: j.data.consultation_type || "video", gender: j.data.gender || "", bio: j.data.bio || "", profile_picture: j.data.profile_picture || "" });
             }
-        }).catch(() => {}).finally(() => setLoading(false));
+        }).catch(() => { }).finally(() => setLoading(false));
     }, []);
 
     const save = async () => {
         if (!profile) return;
         setSaving(true); setMsg(null);
         try {
-            const res = await fetch("/api/doctor/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorId: profile.id, specialty: form.specialty, hospital: form.hospital, experience_years: Number(form.experience_years), fee: Number(form.fee), consultation_duration_mins: Number(form.consultation_duration_mins), languages: form.languages, consultation_type: form.consultation_type, gender: form.gender }) });
+            const res = await fetch("/api/doctor/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorId: profile.id, specialty: form.specialty, hospital: form.hospital, experience_years: Number(form.experience_years), fee: Number(form.fee), consultation_duration_mins: Number(form.consultation_duration_mins), languages: form.languages, consultation_type: form.consultation_type, gender: form.gender, profile_picture: form.profile_picture }) });
             if (!res.ok) { const j = await res.json(); throw new Error(j.error || "Save failed"); }
             setMsg({ ok: true, text: "Profile updated!" });
         } catch (e: any) { setMsg({ ok: false, text: e.message }); }
@@ -54,6 +56,28 @@ export default function ProfilePage() {
             <div className="h-80 bg-slate-200 rounded-2xl" />
         </div>
     );
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingImage(true);
+        setMsg(null);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("bucket", "profile-pictures");
+            const res = await fetch("/api/upload", { method: "POST", body: fd });
+            if (!res.ok) throw new Error("Image upload failed.");
+            const data = await res.json();
+            setForm(prev => ({ ...prev, profile_picture: data.url }));
+            setMsg({ ok: true, text: "Profile picture uploaded. Don't forget to save." });
+        } catch (e: any) {
+            setMsg({ ok: false, text: e.message || "Upload error" });
+        } finally {
+            setUploadingImage(false);
+            e.target.value = "";
+        }
+    };
 
     return (
         <div className="space-y-5 animate-fade-up max-w-2xl">
@@ -78,13 +102,21 @@ export default function ProfilePage() {
             <div className="relative bg-gradient-to-br from-primary-700 via-primary-600 to-primary-500 rounded-3xl p-5 overflow-hidden">
                 <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 80% 20%, white 0%, transparent 50%)" }} />
                 <div className="relative flex items-center gap-4">
-                    <div className="relative group flex-shrink-0">
-                        <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center border-2 border-white/30">
-                            <span className="text-white font-bold text-2xl">{user?.name?.[0]}</span>
-                        </div>
-                        <div className="absolute inset-0 rounded-2xl bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <div className="relative group flex-shrink-0 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                        {form.profile_picture ? (
+                            <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white/30 relative">
+                                <img src={form.profile_picture} alt="Profile" className="w-full h-full object-cover" />
+                                {uploadingImage && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><Loader2 className="w-5 h-5 text-white animate-spin" /></div>}
+                            </div>
+                        ) : (
+                            <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center border-2 border-white/30 relative">
+                                {uploadingImage ? <Loader2 className="w-6 h-6 text-white animate-spin" /> : <span className="text-white font-bold text-2xl">{user?.name?.[0]}</span>}
+                            </div>
+                        )}
+                        <div className="absolute inset-0 rounded-2xl bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <Camera className="w-5 h-5 text-white" />
                         </div>
+                        <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
                     </div>
                     <div className="flex-1 min-w-0">
                         <h2 className="font-display font-bold text-white text-lg leading-tight">{user?.name}</h2>
@@ -183,7 +215,7 @@ export default function ProfilePage() {
                         <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1.5 block flex items-center gap-1"><Clock className="w-3 h-3" /> Session Duration</label>
                             <select value={form.consultation_duration_mins} onChange={e => setForm(p => ({ ...p, consultation_duration_mins: parseInt(e.target.value) }))} className="input-field text-sm">
-                                {[10,15,20,30,45,60].map(m => <option key={m} value={m}>{m} minutes</option>)}
+                                {[10, 15, 20, 30, 45, 60].map(m => <option key={m} value={m}>{m} minutes</option>)}
                             </select>
                         </div>
                     </div>

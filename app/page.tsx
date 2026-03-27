@@ -32,10 +32,10 @@ import ModernFooter from "@/components/ui/ModernFooter";
 import ModernNavbar from "@/components/ui/ModernNavbar";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const NAV_BG = "#003580"; // dark navy (booking.com)
-const NAV_DARK = "#00224f";
-const ACCENT = "#0071c2"; // sky/booking blue
-const SKY = "#38bdf8"; // lighter sky blue for accents
+const NAV_BG = "#1a3558"; // dark navy (booking.com)
+const NAV_DARK = "#0c192c";
+const ACCENT = "#1e4470"; // sky/booking blue
+const SKY = "#0cbcad"; // lighter sky blue for accents
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 const DOCTORS = [

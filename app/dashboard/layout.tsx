@@ -7,9 +7,9 @@ import Navbar from "@/components/layout/Navbar";
 import { Stethoscope } from "lucide-react";
 
 // ── Palette (matches site-wide theme) ────────────────────────────────────────
-const NAV_BG = "#003580";
-const NAV_DARK = "#00224f";
-const SKY = "#38bdf8";
+const NAV_BG = "#1a3558";
+const NAV_DARK = "#0c192c";
+const SKY = "#0cbcad";
 
 export default function DashboardLayout({
   children,

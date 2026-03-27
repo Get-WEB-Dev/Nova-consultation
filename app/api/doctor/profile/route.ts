@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
     try {
         const body = await req.json();
-        const { doctorId, status, specialty, hospital, experience_years, fee, consultation_duration_mins, languages, consultation_type } = body;
+        const { doctorId, status, specialty, hospital, experience_years, fee, consultation_duration_mins, languages, consultation_type, profile_picture } = body;
 
         if (!doctorId) {
             return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
@@ -48,6 +48,7 @@ export async function PATCH(req: NextRequest) {
         if (consultation_duration_mins !== undefined) updates.consultation_duration_mins = consultation_duration_mins;
         if (languages !== undefined) updates.languages = languages;
         if (consultation_type !== undefined) updates.consultation_type = consultation_type;
+        if (profile_picture !== undefined) updates.profile_picture = profile_picture;
 
         await updateDoctorProfile(resolvedId, updates);
         return NextResponse.json({ success: true });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { signIn, loadUser } from "@/lib/supabase/auth";
 
-const SPECS = ["General Practice","Cardiology","Dermatology","Endocrinology","Gastroenterology","Neurology","Oncology","Orthopedics","Pediatrics","Psychiatry","Surgery","Urology","Other"];
+const SPECS = ["General Practice", "Cardiology", "Dermatology", "Endocrinology", "Gastroenterology", "Neurology", "Oncology", "Orthopedics", "Pediatrics", "Psychiatry", "Surgery", "Urology", "Other"];
 
 type Tab = "login" | "register";
 
@@ -38,6 +38,9 @@ function DoctorLoginForm() {
     // Register step 2
     const [bio, setBio] = useState("");
     const [languages, setLanguages] = useState(["English"]);
+    const [profilePicture, setProfilePicture] = useState<string | null>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         loadUser().then(u => {
@@ -73,7 +76,7 @@ function DoctorLoginForm() {
             const res = await fetch("/api/auth/signup", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password, name: name.trim(), role: "doctor", specialty, hospital: hospital || null, fee: fee ? parseFloat(fee) : 0, experience_years: experience ? parseInt(experience) : 0, languages }),
+                body: JSON.stringify({ email, password, name: name.trim(), role: "doctor", specialty, hospital: hospital || null, fee: fee ? parseFloat(fee) : 0, experience_years: experience ? parseInt(experience) : 0, languages, profile_picture: profilePicture }),
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error || "Sign up failed.");
@@ -84,8 +87,29 @@ function DoctorLoginForm() {
         finally { setLoading(false); }
     };
 
-    const LANG_OPTIONS = ["English","Arabic","French","Spanish","Mandarin","Portuguese","German","Amharic"];
+    const LANG_OPTIONS = ["English", "Arabic", "French", "Spanish", "Mandarin", "Portuguese", "German", "Amharic"];
     const toggleLang = (l: string) => setLanguages(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingImage(true);
+        setError(null);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            fd.append("bucket", "profile-pictures"); // Or just leave empty for default
+            const res = await fetch("/api/upload", { method: "POST", body: fd });
+            if (!res.ok) throw new Error("Image upload failed.");
+            const data = await res.json();
+            setProfilePicture(data.url);
+        } catch (e: any) {
+            setError(e.message || "Upload error");
+        } finally {
+            setUploadingImage(false);
+            e.target.value = "";
+        }
+    };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-accent-50/40 flex flex-col">
@@ -113,7 +137,7 @@ function DoctorLoginForm() {
 
                     {/* Tab switcher */}
                     <div className="flex bg-slate-100 rounded-2xl p-1 mb-6 shadow-inner">
-                        {(["login","register"] as Tab[]).map(t => (
+                        {(["login", "register"] as Tab[]).map(t => (
                             <button key={t} onClick={() => { setTab(t); setError(null); setStep(1); }}
                                 className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${tab === t ? "bg-white text-primary-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
                                 {t === "login" ? "Sign In" : "Register"}
@@ -219,11 +243,28 @@ function DoctorLoginForm() {
                         {/* REGISTER STEP 2 */}
                         {tab === "register" && step === 2 && (
                             <>
-                                <div className="flex items-center gap-2 p-3 bg-primary-50 rounded-xl">
+                                <div className="flex items-center gap-2 p-3 bg-primary-50 rounded-xl mb-4">
                                     <CheckCircle2 className="w-4 h-4 text-primary-600 flex-shrink-0" />
                                     <p className="text-xs font-medium text-primary-700">Basic info saved. Add more to boost your profile.</p>
                                 </div>
-                                <div>
+                                <div className="mb-4">
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block flex items-center gap-1"><Camera className="w-3 h-3" /> Profile Picture</label>
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border-2 border-dashed border-slate-300 hover:border-primary-400 hover:bg-slate-50 cursor-pointer transition-all relative group"
+                                        >
+                                            {profilePicture ? (
+                                                <Image src={profilePicture} alt="Profile preview" fill className="object-cover" />
+                                            ) : (
+                                                uploadingImage ? <Loader2 className="w-6 h-6 animate-spin text-primary-500" /> : <Camera className="w-6 h-6 text-slate-400 group-hover:text-primary-500 transition-colors" />
+                                            )}
+                                        </div>
+                                        <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
+                                        <p className="text-xs text-slate-400 text-center">Click to upload your profile picture</p>
+                                    </div>
+                                </div>
+                                <div className="mb-4">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block flex items-center gap-1"><BookOpen className="w-3 h-3" /> Bio (optional)</label>
                                     <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} placeholder="Tell patients about your expertise, approach, and what makes you unique..."
                                         className="input-field text-sm resize-none" />
@@ -241,11 +282,11 @@ function DoctorLoginForm() {
                                 </div>
                                 <div className="flex gap-3 pt-1">
                                     <button onClick={() => setStep(1)} className="flex-1 btn-secondary py-3 text-sm">Back</button>
-                                    <button onClick={handleRegister} disabled={loading} className="flex-1 btn-primary py-3 text-sm disabled:opacity-60">
+                                    <button onClick={handleRegister} disabled={loading || uploadingImage} className="flex-1 btn-primary py-3 text-sm disabled:opacity-60">
                                         {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : <>Create Account <ArrowRight className="w-4 h-4" /></>}
                                     </button>
                                 </div>
-                                <p className="text-[10px] text-slate-400 text-center">You can update these anytime from your profile.</p>
+                                <p className="text-[10px] text-slate-400 text-center mt-2">You can update these anytime from your profile.</p>
                             </>
                         )}
                     </div>
@@ -253,7 +294,7 @@ function DoctorLoginForm() {
                     {/* Step indicator for register */}
                     {tab === "register" && (
                         <div className="flex items-center justify-center gap-2 mt-4">
-                            {[1,2].map(s => (
+                            {[1, 2].map(s => (
                                 <div key={s} className={`h-1.5 rounded-full transition-all ${s <= step ? "bg-primary-600 w-8" : "bg-slate-200 w-4"}`} />
                             ))}
                         </div>

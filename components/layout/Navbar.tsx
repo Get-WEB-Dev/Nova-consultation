@@ -25,10 +25,10 @@ import {
 } from "lucide-react";
 
 // ── Palette (matches ModernNavbar / landing page) ─────────────────────────────
-const NAV_BG = "#003580";
-const NAV_DARK = "#00224f";
-const ACCENT = "#0071c2";
-const SKY = "#38bdf8";
+const NAV_BG = "#1a3558";
+const NAV_DARK = "#0c192c";
+const ACCENT = "#1e4470";
+const SKY = "#0cbcad";
 
 export type Lang = "en" | "am";
 export function getLang(): Lang {

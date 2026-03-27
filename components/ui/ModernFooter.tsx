@@ -10,10 +10,10 @@ import {
 } from "lucide-react";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const NAV_BG = "#003580";
-const NAV_DARK = "#00224f";
-const ACCENT = "#0071c2";
-const SKY = "#38bdf8";
+const NAV_BG = "#1a3558";
+const NAV_DARK = "#0c192c";
+const ACCENT = "#1e4470";
+const SKY = "#0cbcad";
 
 const FOOTER_LINKS = {
   "For Patients": [

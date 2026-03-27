@@ -52,8 +52,8 @@ import {
 type TabKey = "about" | "reviews" | "posts" | "history";
 
 // ── Palette ──────────────────────────────────────────────────────────────────
-const NAV_BG = "#003580";
-const ACCENT = "#0071c2";
+const NAV_BG = "#1a3558";
+const ACCENT = "#1e4470";
 
 const STATUS_CFG: Record<
   string,
@@ -1208,7 +1208,9 @@ export default function DoctorDetailPage() {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {posts.map((post) => (
-                    <PostThumb key={post.id} post={post} />
+                    <Link key={post.id} href={`/posts/${post.id}`}>
+                      <PostThumb post={post} />
+                    </Link>
                   ))}
                 </div>
               )}

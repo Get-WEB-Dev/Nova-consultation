@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     // Doctor-specific fields
     specialty?: string; hospital?: string; experience_years?: number;
     fee?: number; languages?: string[]; gender?: string;
-    consultation_type?: string;
+    consultation_type?: string; profile_picture?: string;
   };
   try {
     body = await req.json();
@@ -162,6 +162,7 @@ export async function POST(req: NextRequest) {
         tags: [],
         gender: body.gender || null,
         consultation_type: body.consultation_type || "video",
+        profile_picture: body.profile_picture || null,
         status: "offline",
         slug: slug || null,
         is_verified: false,

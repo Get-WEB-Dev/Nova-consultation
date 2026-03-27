@@ -22,6 +22,7 @@ interface DoctorData {
     consultation_type: string;
     location_city: string | null;
     created_at: string;
+    profile_picture: string | null;
     users: { name: string; email: string; avatar_url: string | null };
 }
 
@@ -148,8 +149,12 @@ export default function AdminDoctorsPage() {
                     {filtered.map(d => (
                         <div key={d.id} className="card">
                             <div className="flex items-start gap-3">
-                                <div className="w-11 h-11 rounded-full bg-accent-100 flex items-center justify-center flex-shrink-0">
-                                    <span className="text-accent-700 text-sm font-bold uppercase">{d.users?.name?.[0] || "D"}</span>
+                                <div className="w-11 h-11 rounded-full bg-accent-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                    {(d.profile_picture || d.users?.avatar_url) ? (
+                                        <img src={d.profile_picture || d.users?.avatar_url || ""} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-accent-700 text-sm font-bold uppercase">{d.users?.name?.[0] || "D"}</span>
+                                    )}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
