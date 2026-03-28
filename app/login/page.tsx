@@ -9,7 +9,7 @@ import {
   Stethoscope, Heart, Shield, Eye, EyeOff,
   Loader2, AlertCircle, Sparkles,
 } from "lucide-react";
-import { signIn, signUp, getUser, loadUser } from "@/lib/supabase/auth";
+import { signIn, signUp, signOut, getUser, loadUser } from "@/lib/supabase/auth";
 
 type Tab = "login" | "register";
 type Role = "user";
@@ -62,8 +62,13 @@ function LoginForm() {
   useEffect(() => {
     loadUser().then((user) => {
       if (user) {
-        if (user.role === "doctor") router.replace("/doctor-dashboard");
-        else if (user.role === "admin") router.replace("/admin-dashboard");
+        if (user.role === "doctor") {
+          // Doctors should not be on /login — sign them out
+          signOut();
+          setError("This login is for patients only. Please use the Doctor Portal.");
+          return;
+        }
+        if (user.role === "admin") router.replace("/admin-dashboard");
         else router.replace("/dashboard");
       }
     });
@@ -89,7 +94,10 @@ function LoginForm() {
       }
 
       if (loggedInUser.role === "doctor") {
-        router.push("/doctor-dashboard");
+        // Doctor tried to log in at patient portal — block it
+        await signOut();
+        setError("This login is for patients only. Please use the Doctor Portal at /doctor-login.");
+        setLoading(false);
         return;
       }
       if (loggedInUser.role === "admin") {

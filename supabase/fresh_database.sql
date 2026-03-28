@@ -32,6 +32,7 @@ DROP FUNCTION IF EXISTS get_user_role(UUID) CASCADE;
 
 -- Drop tables (order matters for FK constraints)
 DROP TABLE IF EXISTS blog_likes CASCADE;
+DROP TABLE IF EXISTS blog_bookmarks CASCADE;
 DROP TABLE IF EXISTS blog_comments CASCADE;
 DROP TABLE IF EXISTS blog_posts CASCADE;
 DROP TABLE IF EXISTS blog_categories CASCADE;
@@ -336,6 +337,7 @@ CREATE TABLE blog_posts (
   cover_image      TEXT,
   thumbnail        TEXT,
   video_url        TEXT,
+  views            INT         NOT NULL DEFAULT 0,
   tags             TEXT[]      NOT NULL DEFAULT '{}',
   likes            INT         NOT NULL DEFAULT 0,
   comment_count    INT         NOT NULL DEFAULT 0,
@@ -356,6 +358,7 @@ CREATE INDEX idx_bp_tags      ON blog_posts USING GIN(tags);
 CREATE TABLE blog_comments (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id     UUID        NOT NULL REFERENCES blog_posts(id) ON DELETE CASCADE,
+  parent_id   UUID        REFERENCES blog_comments(id) ON DELETE CASCADE,
   author_id   UUID        NOT NULL REFERENCES users(id),
   body        TEXT        NOT NULL,
   is_approved BOOLEAN     NOT NULL DEFAULT true,
@@ -373,6 +376,17 @@ CREATE TABLE blog_likes (
 );
 CREATE INDEX idx_bl_post ON blog_likes(post_id);
 CREATE INDEX idx_bl_user ON blog_likes(user_id);
+
+-- ── blog_bookmarks ───────────────────────────────────────────
+CREATE TABLE blog_bookmarks (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id    UUID        NOT NULL REFERENCES blog_posts(id) ON DELETE CASCADE,
+  user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (post_id, user_id)
+);
+CREATE INDEX idx_bb_post ON blog_bookmarks(post_id);
+CREATE INDEX idx_bb_user ON blog_bookmarks(user_id);
 
 -- ============================================================
 -- PART 5: FUNCTIONS & TRIGGERS
@@ -506,6 +520,7 @@ ALTER TABLE blog_categories     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blog_posts          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blog_comments       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE blog_likes          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blog_bookmarks      ENABLE ROW LEVEL SECURITY;
 
 -- ── users ────────────────────────────────────────────────────
 CREATE POLICY "users_read_own" ON users FOR SELECT USING (id = auth.uid());
@@ -591,6 +606,11 @@ CREATE POLICY "bl_public_read" ON blog_likes FOR SELECT TO anon, authenticated U
 CREATE POLICY "bl_auth_insert" ON blog_likes FOR INSERT WITH CHECK (user_id = auth.uid());
 CREATE POLICY "bl_own_delete" ON blog_likes FOR DELETE USING (user_id = auth.uid());
 
+-- ── blog_bookmarks ───────────────────────────────────────────
+CREATE POLICY "bb_public_read" ON blog_bookmarks FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "bb_auth_insert" ON blog_bookmarks FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "bb_own_delete" ON blog_bookmarks FOR DELETE USING (user_id = auth.uid());
+
 -- ============================================================
 -- PART 7: SUPABASE REALTIME
 -- ============================================================
@@ -601,6 +621,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE doctor_profiles;
 ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
 ALTER PUBLICATION supabase_realtime ADD TABLE consultations;
 ALTER PUBLICATION supabase_realtime ADD TABLE blog_likes;
+ALTER PUBLICATION supabase_realtime ADD TABLE blog_bookmarks;
+ALTER PUBLICATION supabase_realtime ADD TABLE blog_comments;
 
 -- ============================================================
 -- PART 8: SEED DATA (Minimal — only categories + admin)

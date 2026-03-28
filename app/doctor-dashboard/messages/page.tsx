@@ -195,20 +195,20 @@ export default function MessagesPage() {
           return;
         }
         const res = await fetch(
-          `/api/messages?conversationId=${convo.conversationId}&userId=${user?.id}`,
+          `/api/messages?conversationId=${convo.conversationId}`,
         );
         const j = await res.json();
         setMsgs(
           (j.data || []).map((m: any) => ({
             id: m.id,
             from: m.sender_id === user?.id ? "me" : "other",
-            text: m.content || m.text || "",
+            text: m.body || m.content || m.text || "",
             time: ago(m.created_at),
             createdAt: m.created_at,
             status: m.status || "sent",
-            fileUrl: m.file_url,
-            fileName: m.file_name,
-            fileType: m.file_type,
+            fileUrl: m.attachment_url,
+            fileName: m.attachment_name,
+            fileType: m.attachment_type === "image" ? "image" : m.attachment_url ? "file" : undefined,
           })),
         );
       } catch { }
@@ -229,10 +229,13 @@ export default function MessagesPage() {
           {
             id: m.id,
             from: m.sender_id === user.id ? "me" : "other",
-            text: m.content || m.text || "",
+            text: m.body || m.content || m.text || "",
             time: "now",
             createdAt: m.created_at,
             status: "sent",
+            fileUrl: m.attachment_url,
+            fileName: m.attachment_name,
+            fileType: m.attachment_type === "image" ? "image" : m.attachment_url ? "file" : undefined,
           },
         ]);
       },
@@ -265,9 +268,11 @@ export default function MessagesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversationId: selected.conversationId,
+          doctorId: undefined,
+          patientId: selected.participantId,
           senderId: user.id,
-          recipientId: selected.participantId,
-          content: text,
+          senderRole: 'doctor',
+          body: text,
         }),
       });
       const j = await res.json();
@@ -311,7 +316,50 @@ export default function MessagesPage() {
           isPending: true,
         },
       ]);
-      // Upload logic would go here
+
+      // Upload file to Supabase storage
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("bucket", "chat-attachments");
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+        const uploadJson = await uploadRes.json();
+        if (!uploadRes.ok || !uploadJson.url) throw new Error("Upload failed");
+
+        // Send attachment message
+        const msgRes = await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversationId: selected.conversationId,
+            senderId: user.id,
+            senderRole: "doctor",
+            attachmentUrl: uploadJson.url,
+            attachmentName: file.name,
+            attachmentType: isImage ? "image" : "document",
+            attachmentSize: file.size,
+          }),
+        });
+        const msgJson = await msgRes.json();
+        setMsgs((prev) =>
+          prev.map((m) =>
+            m.id === tmpId
+              ? { ...m, id: msgJson.data?.id || tmpId, fileUrl: uploadJson.url, isPending: false, status: "delivered" as const }
+              : m,
+          ),
+        );
+      } catch (err) {
+        console.error("File upload error:", err);
+        setMsgs((prev) =>
+          prev.map((m) => (m.id === tmpId ? { ...m, isPending: false } : m)),
+        );
+      }
+
+      // Reset file input
+      if (fileRef.current) fileRef.current.value = "";
     },
     [selected, user],
   );
@@ -637,8 +685,8 @@ export default function MessagesPage() {
                         ) : (
                           <div
                             className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${isMe
-                                ? "text-white rounded-br-sm"
-                                : "text-slate-800 bg-white border border-slate-200 rounded-bl-sm"
+                              ? "text-white rounded-br-sm"
+                              : "text-slate-800 bg-white border border-slate-200 rounded-bl-sm"
                               }`}
                             style={isMe ? { background: NAV_BG } : {}}
                           >

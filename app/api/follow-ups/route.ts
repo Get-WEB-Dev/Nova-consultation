@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
         // If the ID looks like a user_id, map it to doctor_id
         let finalDoctorId = doctorId;
         try {
-            const profile = await fetchDoctorProfileByUserId(doctorId);
+            const profile = await fetchDoctorProfileByUserId(doctorId) as any;
             if (profile) finalDoctorId = profile.id;
         } catch (e) { /* ignore */ }
 

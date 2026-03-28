@@ -533,7 +533,7 @@ export async function fetchBlogPosts(params?: {
   let query = admin
     .from("blog_posts")
     .select(
-      "*, doctor_profiles!doctor_id(specialty, users!user_id(name, avatar_url))",
+      "*, doctor_profiles!doctor_id(user_id, specialty, users!user_id(name, avatar_url))",
     )
     .eq('is_published', true)
     .order("published_at", { ascending: false })
@@ -554,7 +554,7 @@ export async function fetchBlogPostBySlug(
   const { data, error } = await admin
     .from("blog_posts")
     .select(
-      "*, doctor_profiles!doctor_id(specialty, users!user_id(name, avatar_url))",
+      "*, doctor_profiles!doctor_id(user_id, specialty, users!user_id(name, avatar_url))",
     )
     .eq("slug", slug)
     .eq('is_published', true)
@@ -627,6 +627,7 @@ export async function fetchBlogComments(postId: string) {
 
 export async function createBlogComment(params: {
   postId: string;
+  parentId?: string;
   authorId: string;
   body: string;
 }) {
@@ -635,6 +636,7 @@ export async function createBlogComment(params: {
     .from("blog_comments")
     .insert({
       post_id: params.postId,
+      parent_id: params.parentId || null,
       author_id: params.authorId,
       body: params.body,
     } as any)
@@ -716,6 +718,60 @@ export async function hasUserLikedPost(
   const admin = createAdminClient();
   const { data } = await admin
     .from("blog_likes")
+    .select("id")
+    .eq("post_id", postId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return !!data;
+}
+
+// ============================================================
+// BLOG BOOKMARKS & VIEWS
+// ============================================================
+
+export async function incrementBlogViews(postId: string) {
+  const admin = createAdminClient();
+  const { data: postRow } = await admin
+    .from("blog_posts")
+    .select("views")
+    .eq("id", postId)
+    .single();
+  if (postRow) {
+    await admin
+      .from("blog_posts")
+      .update({ views: (postRow as any).views + 1 } as never)
+      .eq("id", postId);
+  }
+}
+
+export async function bookmarkBlogPost(postId: string, userId: string) {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("blog_bookmarks")
+    .upsert({ post_id: postId, user_id: userId } as any, {
+      onConflict: "post_id,user_id",
+      ignoreDuplicates: true,
+    });
+  if (error) throw error;
+}
+
+export async function unbookmarkBlogPost(postId: string, userId: string) {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("blog_bookmarks")
+    .delete()
+    .eq("post_id", postId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function hasUserBookmarkedPost(
+  postId: string,
+  userId: string,
+): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("blog_bookmarks")
     .select("id")
     .eq("post_id", postId)
     .eq("user_id", userId)

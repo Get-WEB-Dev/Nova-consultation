@@ -573,7 +573,7 @@ export default function DoctorHomePage() {
                   Today's Follow-Ups
                 </h3>
                 <Link
-                  href="/doctor/follow-ups"
+                  href="/doctor-dashboard/followups"
                   className="text-[11px] font-bold flex items-center gap-0.5"
                   style={{ color: ACCENT }}
                 >

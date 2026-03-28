@@ -1,14 +1,21 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
   "/api/notifications/route": "app/api/notifications/route.js",
-  "/api/queue/route": "app/api/queue/route.js",
   "/api/doctor/profile/route": "app/api/doctor/profile/route.js",
+  "/api/queue/route": "app/api/queue/route.js",
+  "/api/doctor/consultations/route": "app/api/doctor/consultations/route.js",
   "/api/follow-ups/route": "app/api/follow-ups/route.js",
   "/api/doctor/pending-tasks/route": "app/api/doctor/pending-tasks/route.js",
-  "/api/doctor/consultations/route": "app/api/doctor/consultations/route.js",
+  "/doctor-login/page": "app/doctor-login/page.js",
+  "/api/posts/route": "app/api/posts/route.js",
+  "/api/upload/route": "app/api/upload/route.js",
+  "/api/doctors/route": "app/api/doctors/route.js",
+  "/api/reviews/route": "app/api/reviews/route.js",
+  "/api/consultations/route": "app/api/consultations/route.js",
+  "/api/saved-doctors/route": "app/api/saved-doctors/route.js",
+  "/api/remind-me/route": "app/api/remind-me/route.js",
+  "/doctor-dashboard/page": "app/doctor-dashboard/page.js",
+  "/doctor-dashboard/feed/page": "app/doctor-dashboard/feed/page.js",
+  "/posts/[id]/page": "app/posts/[id]/page.js",
   "/doctor-dashboard/messages/page": "app/doctor-dashboard/messages/page.js",
-  "/doctor-dashboard/followups/page": "app/doctor-dashboard/followups/page.js",
-  "/doctor-dashboard/history/page": "app/doctor-dashboard/history/page.js",
-  "/meeting/page": "app/meeting/page.js",
-  "/doctor-dashboard/page": "app/doctor-dashboard/page.js"
+  "/doctor/[id]/page": "app/doctor/[id]/page.js"
 }

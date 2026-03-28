@@ -44,18 +44,29 @@ interface Comment {
 interface Post {
   id: string;
   doctorId: string;
+  authorUserId?: string;
   doctorName: string;
   doctorSpecialty: string;
   title: string;
   content: string;
   imageUrl: string | null;
   videoUrl: string | null;
+  thumbnailUrl?: string | null;
   likes: number;
   comments: Comment[];
   tags: string[];
   createdAt: string;
   liked: boolean;
   saved: boolean;
+}
+
+interface PendingPost {
+  title: string;
+  content: string;
+  tags: string[];
+  imageFile: File | null;
+  videoFile: File | null;
+  thumbnailFile: File | null;
 }
 
 const TAGS = [
@@ -213,10 +224,25 @@ function PostCard({
   onUpdate: (p: Post) => void;
 }) {
   const [showComments, setShowComments] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [saved, setSaved] = useState(post.saved);
+
+  useEffect(() => {
+    if (showComments && post.comments.length === 0) {
+      setLoadingComments(true);
+      fetch(`/api/posts/${post.id}/comments`)
+        .then(res => res.json())
+        .then(json => {
+          if (json.data) {
+            onUpdate({ ...post, comments: json.data });
+          }
+        })
+        .finally(() => setLoadingComments(false));
+    }
+  }, [showComments, post.id]);
   const long = post.content.length > 250;
   const isOwn = post.doctorId === me.id;
 
@@ -227,25 +253,47 @@ function PostCard({
       likes: post.liked ? post.likes - 1 : post.likes + 1,
     });
 
-  const handleSave = () => {
-    setSaved(!saved);
-    // API call would go here
+  const handleSave = async () => {
+    const newSaved = !saved;
+    setSaved(newSaved);
+    try {
+      await fetch(`/api/posts/${post.id}/bookmark`, {
+        method: newSaved ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: me.id }),
+      });
+    } catch {
+      setSaved(saved);
+    }
   };
 
-  const handleComment = () => {
+  const handleComment = async () => {
     if (!commentText.trim()) return;
+    const text = commentText.trim();
+    setCommentText("");
+
     const newComment: Comment = {
-      id: `c-${Date.now()}`,
+      id: `temp-${Date.now()}`,
       authorId: me.id,
       authorName: `Dr. ${me.name}`,
-      text: commentText.trim(),
+      text,
       createdAt: new Date().toISOString(),
       likes: 0,
       liked: false,
       replies: [],
     };
     onUpdate({ ...post, comments: [...post.comments, newComment] });
-    setCommentText("");
+
+    try {
+      const res = await fetch(`/api/posts/${post.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authorId: me.id, body: text })
+      });
+      if (!res.ok) throw new Error("Comment failed");
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleCommentLike = (id: string) => {
@@ -262,7 +310,7 @@ function PostCard({
     onUpdate({ ...post, comments: toggleLike(post.comments) });
   };
 
-  const handleReply = (commentId: string, text: string) => {
+  const handleReply = async (commentId: string, text: string) => {
     const addReply = (comments: Comment[]): Comment[] =>
       comments.map((c) =>
         c.id === commentId
@@ -271,7 +319,7 @@ function PostCard({
             replies: [
               ...c.replies,
               {
-                id: `r-${Date.now()}`,
+                id: `temp-r-${Date.now()}`,
                 authorId: me.id,
                 authorName: `Dr. ${me.name}`,
                 text,
@@ -285,6 +333,16 @@ function PostCard({
           : { ...c, replies: addReply(c.replies) },
       );
     onUpdate({ ...post, comments: addReply(post.comments) });
+
+    try {
+      await fetch(`/api/posts/${post.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authorId: me.id, parentId: commentId, body: text })
+      });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
@@ -393,7 +451,12 @@ function PostCard({
         </p>
         {long && (
           <button
-            onClick={() => setExpanded(!expanded)}
+            onClick={() => {
+              if (!expanded) {
+                fetch(`/api/posts/${post.id}/view`, { method: "POST" }).catch(() => { });
+              }
+              setExpanded(!expanded);
+            }}
             className="text-[12px] font-semibold mt-1 hover:underline"
             style={{ color: ACCENT }}
           >
@@ -487,7 +550,9 @@ function PostCard({
 
           {/* Comments list */}
           <div className="space-y-3">
-            {post.comments.map((c) => (
+            {loadingComments ? (
+              <div className="flex justify-center p-2"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
+            ) : post.comments.map((c) => (
               <CommentItem
                 key={c.id}
                 comment={c}
@@ -496,7 +561,7 @@ function PostCard({
                 currentUserId={me.id}
               />
             ))}
-            {post.comments.length === 0 && (
+            {!loadingComments && post.comments.length === 0 && (
               <p className="text-[12px] text-slate-400 text-center py-3">
                 No comments yet. Be the first to comment.
               </p>
@@ -515,20 +580,21 @@ function CreatePostModal({
 }: {
   me: AuthUser;
   onClose: () => void;
-  onPost: (post: Post) => void;
+  onPost: (data: PendingPost) => void;
 }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
-  const [imageName, setImageName] = useState("");
-  const [videoName, setVideoName] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [posting, setPosting] = useState(false);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [error, setError] = useState("");
   const imgRef = useRef<HTMLInputElement>(null);
   const vidRef = useRef<HTMLInputElement>(null);
+  const thumbRef = useRef<HTMLInputElement>(null);
 
   const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -539,9 +605,11 @@ function CreatePostModal({
     }
     const url = URL.createObjectURL(file);
     setImagePreview(url);
-    setImageName(file.name);
+    setImageFile(file);
     setVideoPreview(null);
-    setVideoName("");
+    setVideoFile(null);
+    setThumbnailPreview(null);
+    setThumbnailFile(null);
   };
 
   const handleVideo = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -553,44 +621,36 @@ function CreatePostModal({
     }
     const url = URL.createObjectURL(file);
     setVideoPreview(url);
-    setVideoName(file.name);
+    setVideoFile(file);
     setImagePreview(null);
-    setImageName("");
+    setImageFile(null);
   };
 
-  const handlePost = async () => {
+  const handleThumbnail = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Thumbnail must be under 5MB");
+      return;
+    }
+    setThumbnailPreview(URL.createObjectURL(file));
+    setThumbnailFile(file);
+  };
+
+  const handlePost = () => {
     if (!title.trim() || !content.trim()) {
       setError("Title and content are required");
       return;
     }
-    setPosting(true);
-    setError("");
-    try {
-      // In production: upload files to storage first, then create post via API
-      await new Promise((r) => setTimeout(r, 800));
-      const newPost: Post = {
-        id: `p-${Date.now()}`,
-        doctorId: me.id,
-        doctorName: me.name,
-        doctorSpecialty: "Doctor",
-        title: title.trim(),
-        content: content.trim(),
-        imageUrl: imagePreview,
-        videoUrl: videoPreview,
-        likes: 0,
-        comments: [],
-        tags,
-        createdAt: new Date().toISOString(),
-        liked: false,
-        saved: false,
-      };
-      onPost(newPost);
-      onClose();
-    } catch {
-      setError("Failed to create post. Please try again.");
-    } finally {
-      setPosting(false);
-    }
+    onPost({
+      title: title.trim(),
+      content: content.trim(),
+      tags,
+      imageFile,
+      videoFile,
+      thumbnailFile,
+    });
+    onClose();
   };
 
   const toggleTag = (tag: string) =>
@@ -666,7 +726,7 @@ function CreatePostModal({
               <button
                 onClick={() => {
                   setImagePreview(null);
-                  setImageName("");
+                  setImageFile(null);
                   if (imgRef.current) imgRef.current.value = "";
                 }}
                 className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white"
@@ -676,18 +736,56 @@ function CreatePostModal({
             </div>
           )}
           {videoPreview && (
-            <div className="relative rounded-xl overflow-hidden border border-slate-200">
-              <video src={videoPreview} controls className="w-full max-h-48" />
-              <button
-                onClick={() => {
-                  setVideoPreview(null);
-                  setVideoName("");
-                  if (vidRef.current) vidRef.current.value = "";
-                }}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+            <div className="space-y-3">
+              <div className="relative rounded-xl overflow-hidden border border-slate-200">
+                <video src={videoPreview} controls className="w-full max-h-48" />
+                <button
+                  onClick={() => {
+                    setVideoPreview(null);
+                    setVideoFile(null);
+                    setThumbnailPreview(null);
+                    setThumbnailFile(null);
+                    if (vidRef.current) vidRef.current.value = "";
+                  }}
+                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {/* Thumbnail picker */}
+              <div className="p-3 rounded-xl border border-dashed border-slate-300 bg-slate-50">
+                <p className="text-[11px] font-bold text-slate-500 mb-2">📸 Video Thumbnail / Cover Image</p>
+                <input
+                  ref={thumbRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleThumbnail}
+                />
+                {thumbnailPreview ? (
+                  <div className="relative rounded-lg overflow-hidden border border-slate-200">
+                    <img src={thumbnailPreview} alt="thumbnail" className="w-full max-h-28 object-cover" />
+                    <button
+                      onClick={() => {
+                        setThumbnailPreview(null);
+                        setThumbnailFile(null);
+                        if (thumbRef.current) thumbRef.current.value = "";
+                      }}
+                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => thumbRef.current?.click()}
+                    className="w-full py-3 rounded-lg border border-slate-200 bg-white text-[12px] font-semibold text-slate-500 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Img className="w-3.5 h-3.5 text-blue-400" />
+                    Upload Cover Image
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -755,16 +853,12 @@ function CreatePostModal({
           </div>
           <button
             onClick={handlePost}
-            disabled={posting || !title.trim() || !content.trim()}
+            disabled={!title.trim() || !content.trim()}
             className="ml-auto flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-extrabold text-white disabled:opacity-50 transition-all"
             style={{ background: NAV_BG }}
           >
-            {posting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4" />
-            )}
-            {posting ? "Posting…" : "Publish Post"}
+            <Sparkles className="w-4 h-4" />
+            Publish Post
           </button>
         </div>
       </div>
@@ -777,20 +871,29 @@ export default function FeedPage() {
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
   const [loading, setLoading] = useState(true);
   const [activeTag, setActiveTag] = useState("all");
+  const [viewTab, setViewTab] = useState<"all" | "my" | "liked">("all");
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
+
+  // Upload progress state
+  const [uploadState, setUploadState] = useState<{
+    active: boolean;
+    percent: number;
+    title: string;
+    status: "uploading" | "processing" | "done" | "error";
+    message?: string;
+  }>({ active: false, percent: 0, title: "", status: "uploading" });
 
   useEffect(() => {
     const u = getUser();
     if (u) setMe(u);
-    // Load real posts
     const load = async () => {
       if (!u) {
         setLoading(false);
         return;
       }
       try {
-        const res = await fetch(`/api/posts?doctorId=${u.id}`);
+        const res = await fetch(`/api/posts?userId=${u.id}`);
         if (res.ok) {
           const j = await res.json();
           if (j.data?.length) {
@@ -807,22 +910,139 @@ export default function FeedPage() {
   }, []);
 
   const filtered = posts.filter((p) => {
+    const matchView =
+      viewTab === "all" ? true :
+        viewTab === "my" ? p.authorUserId === me?.id :
+          viewTab === "liked" ? p.liked : true;
+
     const matchTag = activeTag === "all" || p.tags.includes(activeTag);
     const matchSearch =
       !search ||
       p.title.toLowerCase().includes(search.toLowerCase()) ||
       p.content.toLowerCase().includes(search.toLowerCase());
-    return matchTag && matchSearch;
+    return matchView && matchTag && matchSearch;
   });
 
-  const handlePost = (post: Post) => {
-    setPosts((prev) => [post, ...prev]);
-    // API call: POST /api/posts
+  // XHR upload helper with progress
+  const uploadFileWithProgress = (file: File, bucket: string, onProgress: (pct: number) => void): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bucket", bucket);
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/upload");
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const json = JSON.parse(xhr.responseText);
+            if (json.url) resolve(json.url);
+            else reject(new Error("No URL in response"));
+          } catch { reject(new Error("Invalid response")); }
+        } else { reject(new Error(`Upload failed (${xhr.status})`)); }
+      };
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.send(formData);
+    });
   };
+
+  // Background upload handler — called from CreatePostModal
+  const handlePost = useCallback(async (pending: PendingPost) => {
+    if (!me) return;
+
+    setUploadState({ active: true, percent: 0, title: pending.title, status: "uploading" });
+
+    try {
+      let finalImageUrl: string | null = null;
+      let finalVideoUrl: string | null = null;
+      let finalThumbnailUrl: string | null = null;
+
+      const totalFiles = [pending.imageFile, pending.videoFile, pending.thumbnailFile].filter(Boolean).length;
+      let completedFiles = 0;
+
+      const trackProgress = (filePct: number) => {
+        const base = totalFiles > 0 ? (completedFiles / totalFiles) * 100 : 0;
+        const filePortion = totalFiles > 0 ? (1 / totalFiles) * filePct : 0;
+        setUploadState((s) => ({ ...s, percent: Math.round(base + filePortion) }));
+      };
+
+      if (pending.imageFile) {
+        finalImageUrl = await uploadFileWithProgress(pending.imageFile, "blog-media", trackProgress);
+        completedFiles++;
+      }
+
+      if (pending.videoFile) {
+        finalVideoUrl = await uploadFileWithProgress(pending.videoFile, "blog-media", trackProgress);
+        completedFiles++;
+      }
+
+      if (pending.thumbnailFile) {
+        finalThumbnailUrl = await uploadFileWithProgress(pending.thumbnailFile, "blog-media", trackProgress);
+        completedFiles++;
+      }
+
+      setUploadState((s) => ({ ...s, percent: 100, status: "processing" }));
+
+      const res = await fetch("/api/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctorId: me.id,
+          title: pending.title,
+          content: pending.content,
+          tags: pending.tags,
+          imageUrl: finalImageUrl,
+          videoUrl: finalVideoUrl,
+          thumbnailUrl: finalThumbnailUrl,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create post");
+      const { data } = await res.json();
+
+      const newPost: Post = {
+        id: data.id,
+        doctorId: me.id,
+        authorUserId: me.id,
+        doctorName: me.name,
+        doctorSpecialty: "Doctor",
+        title: pending.title,
+        content: pending.content,
+        imageUrl: finalImageUrl,
+        videoUrl: finalVideoUrl,
+        thumbnailUrl: finalThumbnailUrl,
+        likes: 0,
+        comments: [],
+        tags: pending.tags,
+        createdAt: new Date().toISOString(),
+        liked: false,
+        saved: false,
+      };
+      setPosts((prev) => [newPost, ...prev]);
+
+      setUploadState({ active: true, percent: 100, title: pending.title, status: "done" });
+      setTimeout(() => setUploadState((s) => ({ ...s, active: false })), 3000);
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      setUploadState({ active: true, percent: 0, title: pending.title, status: "error", message: err.message });
+      setTimeout(() => setUploadState((s) => ({ ...s, active: false })), 5000);
+    }
+  }, [me]);
 
   const handleUpdate = (post: Post) => {
     setPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)));
-    // API call: PATCH /api/posts/[id]
+    if (post.liked !== posts.find(p => p.id === post.id)?.liked) {
+      if (!me) return;
+      fetch(`/api/posts/${post.id}/like`, {
+        method: post.liked ? 'POST' : 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: me.id })
+      }).catch(() => { });
+    }
   };
 
   if (!me)
@@ -874,8 +1094,28 @@ export default function FeedPage() {
         </div>
       </button>
 
+      {/* View Tabs */}
+      <div className="flex border-b border-slate-200 mb-4">
+        {[
+          { id: "all", label: "All Posts" },
+          { id: "my", label: "My Posts" },
+          { id: "liked", label: "Liked Posts" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setViewTab(tab.id as any)}
+            className={`px-4 py-2.5 text-[13px] font-bold border-b-2 transition-colors ${viewTab === tab.id
+              ? "border-blue-500 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+              }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Tag filter */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto pb-1 mt-2">
         {TAGS.map((tag) => (
           <button
             key={tag}
@@ -941,6 +1181,66 @@ export default function FeedPage() {
           onPost={handlePost}
         />
       )}
+
+      {/* ── Instagram-style upload progress toast ─── */}
+      {uploadState.active && (
+        <div
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] w-[92%] max-w-md animate-fade-up"
+          style={{ animationDuration: "0.3s" }}
+        >
+          <div
+            className="rounded-2xl p-4 shadow-2xl border border-slate-200 backdrop-blur-md"
+            style={{ background: "rgba(255,255,255,0.97)" }}
+          >
+            <div className="flex items-center gap-3">
+              {uploadState.status === "done" ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+              ) : uploadState.status === "error" ? (
+                <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />
+              ) : (
+                <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" style={{ color: ACCENT }} />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-bold text-slate-800 truncate">
+                  {uploadState.status === "done"
+                    ? "Post published!"
+                    : uploadState.status === "error"
+                      ? "Upload failed"
+                      : uploadState.status === "processing"
+                        ? "Creating post…"
+                        : `Uploading "${uploadState.title}"`}
+                </p>
+                {uploadState.status === "error" && uploadState.message && (
+                  <p className="text-[11px] text-rose-500 mt-0.5">{uploadState.message}</p>
+                )}
+                {(uploadState.status === "uploading" || uploadState.status === "processing") && (
+                  <div className="mt-2 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${uploadState.percent}%`,
+                        background: `linear-gradient(90deg, ${ACCENT}, #00a1e4)`,
+                      }}
+                    />
+                  </div>
+                )}
+                {uploadState.status === "uploading" && (
+                  <p className="text-[10px] text-slate-400 mt-1">{uploadState.percent}% uploaded</p>
+                )}
+              </div>
+              {uploadState.status === "done" && (
+                <button
+                  onClick={() => setUploadState((s) => ({ ...s, active: false }))}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

@@ -44,7 +44,7 @@ function Timer({ start }: { start: Date }) {
 
 function PatientAvatar({ name, size = "md" }: { name: string; size?: "sm" | "md" | "lg" }) {
   const sz = { sm: "w-8 h-8 text-xs", md: "w-10 h-10 text-sm", lg: "w-14 h-14 text-xl" }[size];
-  return <div className={`${sz} rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center flex-shrink-0`}><span className="text-white font-bold">{name[0]}</span></div>;
+  return <div className={`${sz} rounded-full bg-gradient-to-br from-[#0071c2] to-[#003580] flex items-center justify-center flex-shrink-0`}><span className="text-white font-bold">{name[0]}</span></div>;
 }
 
 /* ────────────────────────────────────────────────────────────── */

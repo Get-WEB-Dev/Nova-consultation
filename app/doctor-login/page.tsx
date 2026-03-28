@@ -9,7 +9,7 @@ import {
     Loader2, AlertCircle, User, Building2, DollarSign, Clock,
     Camera, CheckCircle2, Globe, BookOpen,
 } from "lucide-react";
-import { signIn, loadUser } from "@/lib/supabase/auth";
+import { signIn, signOut, loadUser } from "@/lib/supabase/auth";
 
 const SPECS = ["General Practice", "Cardiology", "Dermatology", "Endocrinology", "Gastroenterology", "Neurology", "Oncology", "Orthopedics", "Pediatrics", "Psychiatry", "Surgery", "Urology", "Other"];
 
@@ -45,9 +45,13 @@ function DoctorLoginForm() {
     useEffect(() => {
         loadUser().then(u => {
             if (!u) return;
-            if (u.role === "doctor") router.replace("/doctor-dashboard");
-            else if (u.role === "admin") router.replace("/admin-dashboard");
-            else router.replace("/dashboard");
+            if (u.role === "doctor") {
+                router.replace("/doctor-dashboard");
+            } else {
+                // Non-doctor should not be here — sign out and show error
+                signOut();
+                setError("This portal is for doctors only. Please use the Patient Login.");
+            }
         });
     }, [router]);
 
@@ -56,7 +60,12 @@ function DoctorLoginForm() {
         setLoading(true); setError(null);
         try {
             const u = await signIn(email, password);
-            if (u.role !== "doctor") { setError("This account is not a doctor account. Please use the patient login."); return; }
+            if (u.role !== "doctor") {
+                await signOut();
+                setError("This account is not a doctor account. Please use the Patient Login at /login.");
+                setLoading(false);
+                return;
+            }
             router.push("/doctor-dashboard");
         } catch (e: any) { setError(e.message || "Sign in failed."); }
         finally { setLoading(false); }

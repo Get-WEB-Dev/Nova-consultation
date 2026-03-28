@@ -13,19 +13,42 @@ import { createAdminClient } from '@/lib/supabase/client';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const consultationId = searchParams.get('consultationId');
+  const conversationId = searchParams.get('conversationId');
   const doctorId = searchParams.get('doctorId');
   const patientId = searchParams.get('patientId');
 
-  if (!consultationId && (!doctorId || !patientId)) {
-    return NextResponse.json({ data: [], error: 'Either consultationId or both doctorId and patientId are required' }, { status: 400 });
+  // We need at least one way to identify the message thread
+  if (!consultationId && !conversationId && (!doctorId || !patientId)) {
+    return NextResponse.json({ data: [], error: 'consultationId, conversationId, or both doctorId and patientId are required' }, { status: 400 });
   }
 
   try {
     const { fetchMessages } = await import('@/lib/server/queries');
+
+    let resolvedDoctorId = doctorId ?? undefined;
+    let resolvedPatientId = patientId ?? undefined;
+
+    // If conversationId is provided, look up the conversation to get doctor_id and patient_id
+    if (conversationId && !consultationId && (!doctorId || !patientId)) {
+      const admin = createAdminClient();
+      const { data: conv } = await admin
+        .from('conversations')
+        .select('doctor_id, patient_id')
+        .eq('id', conversationId)
+        .single() as { data: { doctor_id: string; patient_id: string } | null };
+
+      if (conv) {
+        resolvedDoctorId = conv.doctor_id;
+        resolvedPatientId = conv.patient_id;
+      } else {
+        return NextResponse.json({ data: [], error: 'Conversation not found' }, { status: 404 });
+      }
+    }
+
     const data = await fetchMessages({
       consultationId: consultationId ?? undefined,
-      doctorId: doctorId ?? undefined,
-      patientId: patientId ?? undefined,
+      doctorId: resolvedDoctorId,
+      patientId: resolvedPatientId,
     });
 
     return NextResponse.json({ data });
@@ -45,6 +68,7 @@ export async function POST(req: NextRequest) {
 
   const {
     consultationId,
+    conversationId,
     doctorId,
     patientId,
     senderId,
@@ -67,11 +91,27 @@ export async function POST(req: NextRequest) {
     const { sendMessage, sendAttachmentMessage } = await import('@/lib/server/queries');
     let message: any;
 
+    // Resolve conversationId → doctorId + patientId if needed
+    let resolvedDoctorId = doctorId;
+    let resolvedPatientId = patientId;
+    if (conversationId && (!doctorId || !patientId)) {
+      const admin = createAdminClient();
+      const { data: conv } = await admin
+        .from('conversations')
+        .select('doctor_id, patient_id')
+        .eq('id', conversationId)
+        .single() as { data: { doctor_id: string; patient_id: string } | null };
+      if (conv) {
+        resolvedDoctorId = resolvedDoctorId || conv.doctor_id;
+        resolvedPatientId = resolvedPatientId || conv.patient_id;
+      }
+    }
+
     if (attachmentUrl) {
       message = await sendAttachmentMessage({
         consultationId,
-        doctorId,
-        patientId,
+        doctorId: resolvedDoctorId,
+        patientId: resolvedPatientId,
         senderId,
         senderRole: senderRole ?? 'patient',
         attachmentUrl,
@@ -82,8 +122,8 @@ export async function POST(req: NextRequest) {
     } else {
       message = await sendMessage({
         consultationId,
-        doctorId,
-        patientId,
+        doctorId: resolvedDoctorId,
+        patientId: resolvedPatientId,
         senderId,
         senderRole: senderRole ?? 'patient',
         body: text,

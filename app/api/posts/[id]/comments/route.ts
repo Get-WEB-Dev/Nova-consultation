@@ -19,15 +19,35 @@ export async function GET(
         const { fetchBlogComments } = await import('@/lib/server/queries');
         const comments = await fetchBlogComments(postId);
 
-        const formatted = comments.map((c: any) => ({
-            id: c.id,
-            postId: c.post_id,
-            author: c.author_name ?? 'Anonymous',
-            avatar: c.author_avatar
-                ?? `https://ui-avatars.com/api/?name=${encodeURIComponent(c.author_name ?? 'A')}&background=eef4fa&color=1B3A5C&size=40`,
-            text: c.body,
-            created_at: c.created_at,
-        }));
+        // Group by parent_id to support 1 level of nesting
+        const rootComments = comments.filter((c: any) => !c.parent_id);
+        const replyComments = comments.filter((c: any) => c.parent_id);
+
+        const formatted = rootComments.map((c: any) => {
+            const replies = replyComments
+                .filter((r: any) => r.parent_id === c.id)
+                .map((r: any) => ({
+                    id: r.id,
+                    authorId: r.author_id,
+                    authorName: r.author_name ?? 'Anonymous',
+                    text: r.body,
+                    createdAt: r.created_at,
+                    likes: 0,
+                    liked: false,
+                    replies: [],
+                }));
+
+            return {
+                id: c.id,
+                authorId: c.author_id,
+                authorName: c.author_name ?? 'Anonymous',
+                text: c.body,
+                createdAt: c.created_at,
+                likes: 0,
+                liked: false,
+                replies,
+            };
+        });
 
         return NextResponse.json({ data: formatted, count: formatted.length });
     } catch (err: any) {
@@ -48,7 +68,7 @@ export async function POST(
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { authorId, body: text } = body ?? {};
+    const { authorId, parentId, body: text } = body ?? {};
     if (!authorId || !text) {
         return NextResponse.json(
             { error: 'authorId and body are required' },
@@ -60,6 +80,7 @@ export async function POST(
         const { createBlogComment, createNotification } = await import('@/lib/server/queries');
         const comment = await createBlogComment({
             postId,
+            parentId,
             authorId,
             body: text,
         });

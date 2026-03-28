@@ -28,11 +28,22 @@ export async function GET(req: NextRequest) {
     const admin = createAdminClient();
 
     if (doctorId) {
+      // Resolve: if doctorId is actually a user_id, map it to doctor_profiles.id
+      let resolvedDoctorId = doctorId;
+      try {
+        const { data: profile } = await admin
+          .from('doctor_profiles')
+          .select('id')
+          .eq('user_id', doctorId)
+          .maybeSingle() as { data: { id: string } | null };
+        if (profile) resolvedDoctorId = profile.id;
+      } catch { /* use as-is */ }
+
       // Fetch all conversations for this doctor
       const { data: convs, error } = await admin
         .from('conversations')
         .select('*')
-        .eq('doctor_id', doctorId)
+        .eq('doctor_id', resolvedDoctorId)
         .order('last_message_time', { ascending: false });
 
       if (error) throw error;

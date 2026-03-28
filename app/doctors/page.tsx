@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
   Building2,
   Filter,
+  MessageSquare,
 } from "lucide-react";
 import type { Doctor } from "@/lib/types";
 import { getUser } from "@/lib/supabase/auth";
@@ -76,11 +77,13 @@ function DoctorCard({
   saved,
   onSave,
   onOpen,
+  onMessage,
 }: {
   doc: Doctor;
   saved: boolean;
   onSave: () => void;
   onOpen: () => void;
+  onMessage: () => void;
 }) {
   const st = STATUS[doc.status] ?? STATUS.offline;
   const isOffline = doc.status === "offline";
@@ -204,6 +207,15 @@ function DoctorCard({
               className="flex-1 text-[11px] font-semibold py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 active:scale-95 transition-all"
             >
               View Profile
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onMessage();
+              }}
+              className="flex items-center justify-center gap-1 text-[11px] font-semibold py-1.5 px-2.5 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 active:scale-95 transition-all"
+            >
+              <MessageSquare className="w-3 h-3" />
             </button>
             {isOffline ? (
               <button
@@ -505,7 +517,7 @@ export default function DoctorsPage() {
         method: isSaved ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patientId: user.id, doctorId: dId }),
-      }).catch(() => {});
+      }).catch(() => { });
     },
     [user, savedIds, router],
   );
@@ -719,10 +731,10 @@ export default function DoctorsPage() {
                 specialty === "All"
                   ? { background: NAV_BG, color: "white", borderColor: NAV_BG }
                   : {
-                      background: "white",
-                      color: "#475569",
-                      borderColor: "#e2e8f0",
-                    }
+                    background: "white",
+                    color: "#475569",
+                    borderColor: "#e2e8f0",
+                  }
               }
             >
               🏥 All Care
@@ -739,15 +751,15 @@ export default function DoctorsPage() {
                 style={
                   specialty === cat.specialty
                     ? {
-                        background: NAV_BG,
-                        color: "white",
-                        borderColor: NAV_BG,
-                      }
+                      background: NAV_BG,
+                      color: "white",
+                      borderColor: NAV_BG,
+                    }
                     : {
-                        background: "white",
-                        color: "#475569",
-                        borderColor: "#e2e8f0",
-                      }
+                      background: "white",
+                      color: "#475569",
+                      borderColor: "#e2e8f0",
+                    }
                 }
               >
                 {cat.icon} {cat.label}
@@ -854,6 +866,13 @@ export default function DoctorsPage() {
                   saved={savedIds.has(doc.id)}
                   onSave={() => toggleSave(doc.id)}
                   onOpen={() => router.push(`/doctor/${doc.id}`)}
+                  onMessage={() => {
+                    if (!user) {
+                      router.push('/login');
+                      return;
+                    }
+                    router.push(`/doctor/${doc.id}?tab=chat`);
+                  }}
                 />
               ))}
             </div>
