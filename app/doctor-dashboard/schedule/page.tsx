@@ -1,169 +1,597 @@
 "use client";
-
-import { useEffect, useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  CalendarDays,
+  Clock,
+  Plus,
+  X,
+  Save,
+  Check,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Bell,
+  Zap,
+  AlertCircle,
+  Edit3,
+  Trash2,
+  Moon,
+  Sun,
+  Coffee,
+  Activity,
+  CheckCircle2,
+} from "lucide-react";
 import { getUser } from "@/lib/supabase/auth";
-import { Clock, Save, Loader2, CheckCircle2, AlertCircle, Calendar, Info } from "lucide-react";
 
-const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-const ABBR: Record<string, string> = { Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri",Saturday:"Sat",Sunday:"Sun" };
-const HOURS = Array.from({ length: 24 }, (_, i) => ({
-    value: `${i.toString().padStart(2,"0")}:00`,
-    label: i === 0 ? "12:00 AM" : i < 12 ? `${i}:00 AM` : i === 12 ? "12:00 PM" : `${i-12}:00 PM`,
-}));
+const NAV_BG = "#003580";
+const ACCENT = "#0071c2";
 
-interface DaySchedule { enabled: boolean; start: string; end: string; }
+const DAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+const SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const HOURS = Array.from({ length: 24 }, (_, i) => {
+  const h = i;
+  const ampm = h < 12 ? "AM" : "PM";
+  const display =
+    h === 0
+      ? "12:00 AM"
+      : h < 12
+        ? `${h}:00 AM`
+        : h === 12
+          ? "12:00 PM"
+          : `${h - 12}:00 PM`;
+  return { value: `${String(h).padStart(2, "0")}:00`, label: display };
+});
 
-const DEFAULT: Record<string, DaySchedule> = {
-    Monday: { enabled:true,start:"09:00",end:"17:00" },
-    Tuesday: { enabled:true,start:"09:00",end:"17:00" },
-    Wednesday: { enabled:true,start:"09:00",end:"17:00" },
-    Thursday: { enabled:true,start:"09:00",end:"17:00" },
-    Friday: { enabled:true,start:"09:00",end:"17:00" },
-    Saturday: { enabled:false,start:"10:00",end:"14:00" },
-    Sunday: { enabled:false,start:"10:00",end:"14:00" },
+interface TimeSlot {
+  start: string;
+  end: string;
+}
+
+interface DaySchedule {
+  enabled: boolean;
+  slots: TimeSlot[];
+}
+
+type WeekSchedule = Record<string, DaySchedule>;
+
+const DEFAULT_SCHEDULE: WeekSchedule = {
+  Monday: { enabled: true, slots: [{ start: "09:00", end: "17:00" }] },
+  Tuesday: { enabled: true, slots: [{ start: "09:00", end: "17:00" }] },
+  Wednesday: { enabled: true, slots: [{ start: "09:00", end: "13:00" }] },
+  Thursday: { enabled: true, slots: [{ start: "09:00", end: "17:00" }] },
+  Friday: { enabled: true, slots: [{ start: "09:00", end: "15:00" }] },
+  Saturday: { enabled: false, slots: [] },
+  Sunday: { enabled: false, slots: [] },
 };
 
-export default function SchedulePage() {
-    const [schedule, setSchedule] = useState(DEFAULT);
-    const [duration, setDuration] = useState(15);
-    const [saving, setSaving] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+function SlotRow({
+  slot,
+  onUpdate,
+  onDelete,
+}: {
+  slot: TimeSlot;
+  onUpdate: (slot: TimeSlot) => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={slot.start}
+        onChange={(e) => onUpdate({ ...slot, start: e.target.value })}
+        className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] font-semibold text-slate-700 bg-white outline-none focus:border-blue-400 cursor-pointer"
+      >
+        {HOURS.map((h) => (
+          <option key={h.value} value={h.value}>
+            {h.label}
+          </option>
+        ))}
+      </select>
+      <span className="text-slate-400 text-[12px] font-semibold flex-shrink-0">
+        to
+      </span>
+      <select
+        value={slot.end}
+        onChange={(e) => onUpdate({ ...slot, end: e.target.value })}
+        className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[12px] font-semibold text-slate-700 bg-white outline-none focus:border-blue-400 cursor-pointer"
+      >
+        {HOURS.map((h) => (
+          <option key={h.value} value={h.value}>
+            {h.label}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={onDelete}
+        className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition-colors flex-shrink-0"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
 
-    useEffect(() => {
-        const u = getUser();
-        if (!u) return;
-        fetch(`/api/doctor/profile?doctorId=${u.id}`).then(r => r.json()).then(j => {
-            if (j.data?.consultation_duration_mins) setDuration(j.data.consultation_duration_mins);
-        }).catch(() => {}).finally(() => setLoading(false));
-    }, []);
+function DayCard({
+  day,
+  schedule,
+  onUpdate,
+}: {
+  day: string;
+  schedule: DaySchedule;
+  onUpdate: (s: DaySchedule) => void;
+}) {
+  const totalHours = schedule.slots.reduce((sum, s) => {
+    const [sh, sm] = s.start.split(":").map(Number);
+    const [eh, em] = s.end.split(":").map(Number);
+    return sum + Math.max(0, (eh * 60 + em - sh * 60 - sm) / 60);
+  }, 0);
 
-    const save = async () => {
-        const u = getUser();
-        if (!u) return;
-        setSaving(true); setMsg(null);
-        try {
-            await fetch("/api/doctor/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorId: u.id, consultation_duration_mins: duration }) });
-            setMsg({ ok: true, text: "Schedule saved!" });
-        } catch { setMsg({ ok: false, text: "Failed to save." }); }
-        finally { setSaving(false); setTimeout(() => setMsg(null), 3000); }
-    };
+  const addSlot = () => {
+    const lastEnd = schedule.slots[schedule.slots.length - 1]?.end || "09:00";
+    const [h] = lastEnd.split(":").map(Number);
+    const newStart = `${String(Math.min(h + 1, 22)).padStart(2, "0")}:00`;
+    const newEnd = `${String(Math.min(h + 3, 23)).padStart(2, "0")}:00`;
+    onUpdate({
+      ...schedule,
+      slots: [...schedule.slots, { start: newStart, end: newEnd }],
+    });
+  };
 
-    const enabledDays = Object.values(schedule).filter(d => d.enabled).length;
-    const totalHours = Object.entries(schedule).filter(([,d]) => d.enabled).reduce((sum,[,d]) => sum + Math.max(0, parseInt(d.end) - parseInt(d.start)), 0);
+  const updateSlot = (i: number, slot: TimeSlot) =>
+    onUpdate({
+      ...schedule,
+      slots: schedule.slots.map((s, idx) => (idx === i ? slot : s)),
+    });
 
-    if (loading) return <div className="space-y-4 animate-pulse">{[1,2,3].map(i => <div key={i} className="h-16 bg-slate-200 rounded-2xl" />)}</div>;
+  const deleteSlot = (i: number) =>
+    onUpdate({
+      ...schedule,
+      slots: schedule.slots.filter((_, idx) => idx !== i),
+    });
 
-    return (
-        <div className="space-y-5 animate-fade-up max-w-2xl">
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <h1 className="font-display font-bold text-xl text-slate-800">My Schedule</h1>
-                    <p className="text-xs text-slate-500 mt-0.5">Set your weekly availability</p>
-                </div>
-                <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2 text-sm flex-shrink-0">
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save
-                </button>
-            </div>
-
-            {msg && (
-                <div className={`flex items-center gap-2 p-3.5 rounded-2xl text-sm font-medium ${msg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200"}`}>
-                    {msg.ok ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
-                    {msg.text}
-                </div>
-            )}
-
-            {/* Summary chips */}
-            <div className="flex flex-wrap gap-2">
-                {[
-                    { label: `${enabledDays} days/week`, icon: Calendar, color: "text-primary-600 bg-primary-50" },
-                    { label: `${duration}min sessions`, icon: Clock, color: "text-amber-600 bg-amber-50" },
-                    { label: `${totalHours}h/week`, icon: Clock, color: "text-emerald-600 bg-emerald-50" },
-                ].map(({ label, icon: Icon, color }) => (
-                    <div key={label} className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full ${color}`}>
-                        <Icon className="w-3.5 h-3.5" />{label}
-                    </div>
-                ))}
-            </div>
-
-            {/* Session duration */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-                <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2"><Clock className="w-4 h-4 text-primary-500" />Session Duration</h2>
-                <div className="flex flex-wrap gap-2">
-                    {[10,15,20,30,45,60].map(m => (
-                        <button key={m} onClick={() => setDuration(m)}
-                            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${duration === m ? "bg-primary-600 text-white shadow-sm shadow-primary-600/25" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-                            {m} min
-                        </button>
-                    ))}
-                </div>
-                <p className="text-xs text-slate-400 mt-3 flex items-center gap-1"><Info className="w-3 h-3" />Patients see this when booking consultations.</p>
-            </div>
-
-            {/* Week schedule */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-slate-100 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-primary-500" />
-                    <h2 className="text-sm font-semibold text-slate-700">Weekly Availability</h2>
-                </div>
-                <div className="divide-y divide-slate-50">
-                    {DAYS.map(day => {
-                        const d = schedule[day];
-                        return (
-                            <div key={day} className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${d.enabled ? "" : "opacity-60"}`}>
-                                <button onClick={() => setSchedule(prev => ({ ...prev, [day]: { ...prev[day], enabled: !prev[day].enabled } }))}
-                                    className={`relative w-10 h-5.5 rounded-full transition-all flex-shrink-0 focus:outline-none ${d.enabled ? "bg-primary-600" : "bg-slate-300"}`}
-                                    style={{ height: "22px", minWidth: "40px" }}>
-                                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${d.enabled ? "left-5" : "left-0.5"}`} />
-                                </button>
-                                <div className="w-24 flex-shrink-0">
-                                    <p className={`text-sm font-semibold ${d.enabled ? "text-slate-800" : "text-slate-400"}`}>{day}</p>
-                                </div>
-                                {d.enabled ? (
-                                    <div className="flex items-center gap-2 flex-1 flex-wrap">
-                                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 min-w-[110px]">
-                                            <Clock className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                                            <select value={d.start} onChange={e => setSchedule(prev => ({ ...prev, [day]: { ...prev[day], start: e.target.value } }))}
-                                                className="bg-transparent text-xs text-slate-700 outline-none cursor-pointer">
-                                                {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
-                                            </select>
-                                        </div>
-                                        <span className="text-slate-400 text-xs">→</span>
-                                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 min-w-[110px]">
-                                            <Clock className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                                            <select value={d.end} onChange={e => setSchedule(prev => ({ ...prev, [day]: { ...prev[day], end: e.target.value } }))}
-                                                className="bg-transparent text-xs text-slate-700 outline-none cursor-pointer">
-                                                {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
-                                            </select>
-                                        </div>
-                                        <span className="text-xs text-slate-400 hidden sm:block">{Math.max(0, parseInt(d.end) - parseInt(d.start))}h</span>
-                                    </div>
-                                ) : <p className="text-xs text-slate-400 italic flex-1">Day off</p>}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* Visual week bar */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-                <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2"><Calendar className="w-4 h-4 text-primary-500" />Week Overview</h2>
-                <div className="grid grid-cols-7 gap-1.5">
-                    {DAYS.map(day => {
-                        const d = schedule[day];
-                        const h = d.enabled ? Math.max(0, parseInt(d.end) - parseInt(d.start)) : 0;
-                        return (
-                            <div key={day} className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase">{ABBR[day]}</p>
-                                <div className={`h-16 rounded-xl flex flex-col items-center justify-center text-xs font-bold transition-all
-                                    ${d.enabled ? "bg-primary-600 text-white shadow-sm" : "bg-slate-100 text-slate-400"}`}>
-                                    {d.enabled ? <><span>{h}h</span><span className="text-[9px] opacity-70 mt-0.5">{d.start.split(":")[0]}-{d.end.split(":")[0]}</span></> : <span className="text-[9px]">Off</span>}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+  return (
+    <div
+      className={`rounded-2xl border p-4 transition-all ${schedule.enabled ? "bg-white border-slate-200" : "bg-slate-50 border-slate-100"}`}
+      style={{
+        boxShadow: schedule.enabled ? "0 1px 4px rgba(0,0,0,0.06)" : "none",
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() =>
+              onUpdate({ ...schedule, enabled: !schedule.enabled })
+            }
+            className={`w-10 h-5.5 rounded-full flex items-center transition-all duration-300 ${schedule.enabled ? "bg-blue-500" : "bg-slate-200"}`}
+            style={{ width: 40, height: 22 }}
+          >
+            <span
+              className={`w-4 h-4 rounded-full bg-white shadow-sm ml-0.5 transition-transform duration-300 ${schedule.enabled ? "translate-x-[18px]" : "translate-x-0"}`}
+            />
+          </button>
+          <p
+            className={`font-extrabold text-[14px] ${schedule.enabled ? "text-slate-900" : "text-slate-400"}`}
+          >
+            {day}
+          </p>
         </div>
+        {schedule.enabled && (
+          <div className="flex items-center gap-2">
+            {totalHours > 0 && (
+              <span className="text-[11px] font-semibold text-slate-400">
+                {totalHours.toFixed(1)}h
+              </span>
+            )}
+            <button
+              onClick={addSlot}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border border-blue-200 transition-colors"
+              style={{ color: ACCENT, background: "#eff6ff" }}
+            >
+              <Plus className="w-3 h-3" /> Add
+            </button>
+          </div>
+        )}
+      </div>
+
+      {schedule.enabled ? (
+        schedule.slots.length === 0 ? (
+          <button
+            onClick={addSlot}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-slate-200 text-[12px] font-semibold text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add time slot
+          </button>
+        ) : (
+          <div className="space-y-2">
+            {schedule.slots.map((slot, i) => (
+              <SlotRow
+                key={i}
+                slot={slot}
+                onUpdate={(s) => updateSlot(i, s)}
+                onDelete={() => deleteSlot(i)}
+              />
+            ))}
+          </div>
+        )
+      ) : (
+        <p className="text-[12px] text-slate-400 text-center py-2">
+          Not available
+        </p>
+      )}
+    </div>
+  );
+}
+
+function WeekCalendarPreview({ schedule }: { schedule: WeekSchedule }) {
+  const now = new Date();
+  const currentDay = DAYS[now.getDay() === 0 ? 6 : now.getDay() - 1];
+
+  return (
+    <div
+      className="bg-white rounded-2xl border border-slate-200 p-4"
+      style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+    >
+      <h3 className="font-extrabold text-[14px] text-slate-900 mb-3">
+        Weekly Overview
+      </h3>
+      <div className="grid grid-cols-7 gap-1">
+        {DAYS.map((day, i) => {
+          const sched = schedule[day];
+          const isToday = day === currentDay;
+          const totalHours = sched.enabled
+            ? sched.slots.reduce((sum, s) => {
+                const [sh] = s.start.split(":").map(Number);
+                const [eh] = s.end.split(":").map(Number);
+                return sum + Math.max(0, eh - sh);
+              }, 0)
+            : 0;
+
+          return (
+            <div
+              key={day}
+              className={`rounded-xl p-2 text-center transition-all ${isToday ? "ring-2" : ""}`}
+              style={{
+                background: sched.enabled ? "#eff6ff" : "#f8fafc",
+                borderColor: isToday ? ACCENT : "transparent",
+              }}
+            >
+              <p className="text-[10px] font-bold text-slate-400 mb-1">
+                {SHORT[i]}
+              </p>
+              {sched.enabled ? (
+                <>
+                  <div
+                    className="w-5 h-5 rounded-full flex items-center justify-center mx-auto mb-1"
+                    style={{ background: ACCENT }}
+                  >
+                    <Activity className="w-2.5 h-2.5 text-white" />
+                  </div>
+                  <p className="text-[9px] font-bold" style={{ color: ACCENT }}>
+                    {totalHours}h
+                  </p>
+                </>
+              ) : (
+                <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center mx-auto mb-1">
+                  <Moon className="w-2.5 h-2.5 text-slate-400" />
+                </div>
+              )}
+              {isToday && (
+                <div
+                  className="w-1 h-1 rounded-full mx-auto mt-0.5"
+                  style={{ background: ACCENT }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function SchedulePage() {
+  const [schedule, setSchedule] = useState<WeekSchedule>(DEFAULT_SCHEDULE);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [breakDuration, setBreakDuration] = useState(15);
+  const [maxPerDay, setMaxPerDay] = useState(10);
+  const [notifications, setNotifications] = useState({
+    email: true,
+    sms: false,
+    inApp: true,
+    reminderBefore: 30,
+  });
+
+  useEffect(() => {
+    const load = async () => {
+      const u = getUser();
+      if (!u) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/doctor/schedule?doctorId=${u.id}`);
+        if (res.ok) {
+          const j = await res.json();
+          if (j.data?.schedule) setSchedule(j.data.schedule);
+          if (j.data?.maxPerDay) setMaxPerDay(j.data.maxPerDay);
+          if (j.data?.breakDuration) setBreakDuration(j.data.breakDuration);
+        }
+      } catch {}
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const handleSave = async () => {
+    const u = getUser();
+    if (!u || saving) return;
+    setSaving(true);
+    try {
+      await fetch("/api/doctor/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctorId: u.id,
+          schedule,
+          maxPerDay,
+          breakDuration,
+        }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {}
+    setSaving(false);
+  };
+
+  const updateDay = (day: string, sched: DaySchedule) =>
+    setSchedule((prev) => ({ ...prev, [day]: sched }));
+
+  const activeDays = Object.values(schedule).filter((s) => s.enabled).length;
+  const totalWeeklyHours = Object.values(schedule).reduce((total, sched) => {
+    if (!sched.enabled) return total;
+    return (
+      total +
+      sched.slots.reduce((sum, s) => {
+        const [sh, sm] = s.start.split(":").map(Number);
+        const [eh, em] = s.end.split(":").map(Number);
+        return sum + Math.max(0, (eh * 60 + em - sh * 60 - sm) / 60);
+      }, 0)
     );
+  }, 0);
+
+  if (loading)
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-16 bg-white rounded-2xl" />
+        <div className="h-48 bg-white rounded-2xl" />
+        <div className="h-96 bg-white rounded-2xl" />
+      </div>
+    );
+
+  return (
+    <div className="space-y-5 max-w-2xl pb-10">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-extrabold text-slate-900 text-[20px]">
+            Availability Schedule
+          </h1>
+          <p className="text-[12px] text-slate-400 mt-0.5">
+            {activeDays} active days · {totalWeeklyHours.toFixed(1)} hrs/week
+          </p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-[13px] text-white transition-all active:scale-95 disabled:opacity-70"
+          style={{ background: saved ? "#16a34a" : NAV_BG }}
+        >
+          {saving ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : saved ? (
+            <CheckCircle2 className="w-4 h-4" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          {saving ? "Saving…" : saved ? "Saved!" : "Save Schedule"}
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          {
+            label: "Active Days",
+            value: activeDays,
+            icon: CalendarDays,
+            color: ACCENT,
+          },
+          {
+            label: "Weekly Hours",
+            value: `${totalWeeklyHours.toFixed(0)}h`,
+            icon: Clock,
+            color: "#7c3aed",
+          },
+          {
+            label: "Max/Day",
+            value: maxPerDay,
+            icon: Activity,
+            color: "#16a34a",
+          },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <div
+            key={label}
+            className="bg-white rounded-xl p-3.5 border border-slate-200 text-center"
+            style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+          >
+            <Icon className="w-4 h-4 mx-auto mb-1" style={{ color }} />
+            <p className="font-extrabold text-[18px] text-slate-900">{value}</p>
+            <p className="text-[10px] text-slate-400 font-semibold">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Weekly preview */}
+      <WeekCalendarPreview schedule={schedule} />
+
+      {/* Session settings */}
+      <div
+        className="bg-white rounded-2xl border border-slate-200 p-5"
+        style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+      >
+        <h3 className="font-extrabold text-[14px] text-slate-900 mb-4">
+          Session Settings
+        </h3>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">
+              Max patients per day
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setMaxPerDay((p) => Math.max(1, p - 1))}
+                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-600 font-bold text-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
+              >
+                −
+              </button>
+              <span className="flex-1 text-center font-extrabold text-[17px] text-slate-900">
+                {maxPerDay}
+              </span>
+              <button
+                onClick={() => setMaxPerDay((p) => p + 1)}
+                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-600 font-bold text-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
+              >
+                +
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">
+              Break between patients (min)
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setBreakDuration((p) => Math.max(0, p - 5))}
+                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-600 font-bold text-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
+              >
+                −
+              </button>
+              <span className="flex-1 text-center font-extrabold text-[17px] text-slate-900">
+                {breakDuration}
+              </span>
+              <button
+                onClick={() => setBreakDuration((p) => p + 5)}
+                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-600 font-bold text-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Day schedule editor */}
+      <div className="space-y-3">
+        <h3 className="font-extrabold text-[14px] text-slate-900">
+          Daily Availability
+        </h3>
+        {DAYS.map((day) => (
+          <DayCard
+            key={day}
+            day={day}
+            schedule={schedule[day]}
+            onUpdate={(s) => updateDay(day, s)}
+          />
+        ))}
+      </div>
+
+      {/* Notifications */}
+      <div
+        className="bg-white rounded-2xl border border-slate-200 p-5"
+        style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+      >
+        <h3 className="font-extrabold text-[14px] text-slate-900 mb-4 flex items-center gap-2">
+          <Bell className="w-4 h-4" style={{ color: ACCENT }} />
+          Notification Preferences
+        </h3>
+        <div className="space-y-3">
+          {[
+            { key: "email", label: "Email notifications" },
+            { key: "sms", label: "SMS notifications" },
+            { key: "inApp", label: "In-app notifications" },
+          ].map(({ key, label }) => (
+            <div key={key} className="flex items-center justify-between">
+              <span className="text-[13px] text-slate-700">{label}</span>
+              <button
+                onClick={() =>
+                  setNotifications((n) => ({
+                    ...n,
+                    [key]: !n[key as keyof typeof n],
+                  }))
+                }
+                className={`w-10 h-5.5 rounded-full flex items-center transition-all duration-300 ${notifications[key as keyof typeof notifications] ? "bg-blue-500" : "bg-slate-200"}`}
+                style={{ width: 40, height: 22 }}
+              >
+                <span
+                  className={`w-4 h-4 rounded-full bg-white shadow-sm ml-0.5 transition-transform duration-300 ${notifications[key as keyof typeof notifications] ? "translate-x-[18px]" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+          ))}
+          <div className="pt-2 border-t border-slate-100">
+            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">
+              Reminder before appointment (min)
+            </label>
+            <div className="flex gap-2">
+              {[15, 30, 60, 120].map((m) => (
+                <button
+                  key={m}
+                  onClick={() =>
+                    setNotifications((n) => ({ ...n, reminderBefore: m }))
+                  }
+                  className="flex-1 py-1.5 rounded-lg text-[11px] font-bold border transition-all"
+                  style={
+                    notifications.reminderBefore === m
+                      ? {
+                          background: ACCENT,
+                          color: "white",
+                          borderColor: ACCENT,
+                        }
+                      : { borderColor: "#e2e8f0", color: "#64748b" }
+                  }
+                >
+                  {m < 60 ? `${m}m` : `${m / 60}h`}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Save bottom */}
+      <div className="pt-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full py-3.5 rounded-2xl font-extrabold text-[14px] text-white transition-all active:scale-[0.99]"
+          style={{ background: saved ? "#16a34a" : NAV_BG }}
+        >
+          {saving
+            ? "Saving…"
+            : saved
+              ? "✓ Schedule Saved!"
+              : "Save Availability"}
+        </button>
+      </div>
+    </div>
+  );
 }

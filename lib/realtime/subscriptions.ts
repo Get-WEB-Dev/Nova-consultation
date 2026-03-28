@@ -210,7 +210,7 @@ export function subscribeToNotifications(
 // ── 8. Conversation list updates (sidebar refresh) ────────────
 export function subscribeToConversations(
   doctorId: string,
-  onUpdate: () => void
+  onUpdate: (convo: any) => void
 ): () => void {
   const channel = supabase
     .channel(`conversations:doctor:${doctorId}`)
@@ -219,7 +219,7 @@ export function subscribeToConversations(
       schema: 'public',
       table: 'conversations',
       filter: `doctor_id=eq.${doctorId}`,
-    }, () => { onUpdate(); })
+    }, (payload) => { onUpdate(payload.new); })
     .subscribe();
   return () => { supabase.removeChannel(channel); };
 }

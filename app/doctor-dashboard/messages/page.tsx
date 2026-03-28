@@ -1,8 +1,30 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
-  Search, Send, Paperclip, ChevronLeft, MessageSquare,
-  Image as Img, MoreVertical, Check, CheckCheck, Phone, Video, Loader2, Star
+  Search,
+  Send,
+  Paperclip,
+  ChevronLeft,
+  MessageSquare,
+  Image as Img,
+  MoreVertical,
+  Check,
+  CheckCheck,
+  Loader2,
+  Star,
+  Users,
+  UserCheck,
+  Phone,
+  Video,
+  X,
+  Smile,
+  File,
+  Circle,
+  Wifi,
+  WifiOff,
+  Clock,
+  Stethoscope,
+  Plus,
 } from "lucide-react";
 import { loadUser, getUser } from "@/lib/supabase/auth";
 import {
@@ -12,15 +34,21 @@ import {
   initPresence,
 } from "@/lib/realtime/subscriptions";
 
+const NAV_BG = "#003580";
+const ACCENT = "#0071c2";
+
 interface Convo {
   conversationId: string;
-  patientId: string;
-  patientName: string;
-  patientAvatar: string | null;
+  participantId: string;
+  participantName: string;
+  participantAvatar: string | null;
+  participantRole: "patient" | "doctor";
+  participantSpecialty?: string;
   lastMessage: string;
   lastMessageTime: string;
   unreadCount: number;
   online?: boolean;
+  status?: string;
 }
 
 interface Msg {
@@ -29,7 +57,7 @@ interface Msg {
   text: string;
   time: string;
   createdAt?: string;
-  status?: "sent" | "read";
+  status?: "sent" | "delivered" | "read";
   fileUrl?: string;
   fileName?: string;
   fileType?: "image" | "file";
@@ -42,15 +70,14 @@ interface Review {
   rating: number;
   text: string;
   date: string;
-  avatar: string;
 }
 
-type SidebarTab = "patients" | "doctors" | "reviews";
+type Tab = "patients" | "doctors" | "reviews";
 
-function formatRelativeTime(iso: string): string {
+function ago(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
+  if (mins < 1) return "now";
   if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h`;
@@ -60,16 +87,88 @@ function formatRelativeTime(iso: string): string {
 function StarRating({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5">
-      {[1,2,3,4,5].map(i => (
-        <Star key={i} className={`w-3.5 h-3.5 ${i <= rating ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} />
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={`w-3.5 h-3.5 ${i <= rating ? "fill-amber-400 text-amber-400" : "text-slate-200"}`}
+        />
       ))}
     </div>
   );
 }
 
+// Mock doctor conversations (doctor-to-doctor)
+const MOCK_DOCTOR_CONVOS: Convo[] = [
+  {
+    conversationId: "dc1",
+    participantId: "d2",
+    participantName: "Daniel Tesfaye",
+    participantAvatar: null,
+    participantRole: "doctor",
+    participantSpecialty: "General Practice",
+    lastMessage: "Agreed on the referral. I'll prep the patient.",
+    lastMessageTime: new Date(Date.now() - 900000).toISOString(),
+    unreadCount: 1,
+    online: true,
+    status: "available",
+  },
+  {
+    conversationId: "dc2",
+    participantId: "d5",
+    participantName: "Hiwot Alemu",
+    participantAvatar: null,
+    participantRole: "doctor",
+    participantSpecialty: "Neurology",
+    lastMessage: "The MRI results suggest cortical involvement. Let's discuss.",
+    lastMessageTime: new Date(Date.now() - 3600000).toISOString(),
+    unreadCount: 0,
+    online: false,
+    status: "offline",
+  },
+];
+
+const MOCK_DOCTOR_MSGS: Msg[] = [
+  {
+    id: "m1",
+    from: "other",
+    text: "Hi, I have a patient with recurring migraines that aren't responding to triptans. Can I get a second opinion?",
+    time: "2h ago",
+    status: "read",
+  },
+  {
+    id: "m2",
+    from: "me",
+    text: "Of course. What's the frequency and duration of attacks? Any aura?",
+    time: "1h 50m ago",
+    status: "read",
+  },
+  {
+    id: "m3",
+    from: "other",
+    text: "2-3x per month, lasting 12-24 hours. Occasional visual aura. Tried sumatriptan and rizatriptan without relief.",
+    time: "1h 45m ago",
+    status: "read",
+  },
+  {
+    id: "m4",
+    from: "me",
+    text: "Given the frequency, consider preventive therapy. CGRP antagonists like erenumab or fremanezumab are worth trialing. Also confirm no MOH if she's using analgesics frequently.",
+    time: "1h 40m ago",
+    status: "read",
+  },
+  {
+    id: "m5",
+    from: "other",
+    text: "The MRI results suggest cortical involvement. Let's discuss.",
+    time: "10m ago",
+    status: "delivered",
+  },
+];
+
 export default function MessagesPage() {
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("patients");
+  const [tab, setTab] = useState<Tab>("patients");
   const [convos, setConvos] = useState<Convo[]>([]);
+  const [doctorConvos] = useState<Convo[]>(MOCK_DOCTOR_CONVOS);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [selected, setSelected] = useState<Convo | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -77,531 +176,637 @@ export default function MessagesPage() {
   const [search, setSearch] = useState("");
   const [loadingConvos, setLoadingConvos] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
-  const [loadingReviews, setLoadingReviews] = useState(false);
-  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
-
+  const [typing, setTyping] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [doctorUserId, setDoctorUserId] = useState<string | null>(null);
-  const [doctorProfileId, setDoctorProfileId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const typingTimeout = useRef<NodeJS.Timeout>();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
-      let user = getUser();
-      if (!user) user = await loadUser();
-      if (!user) return;
-      setDoctorUserId(user.id);
-      const cleanup = initPresence(user.id);
-      return cleanup;
+      const u = await loadUser();
+      setUser(u);
+      if (!u) return;
+      initPresence(u.id);
+
+      // Load patient conversations
+      try {
+        const res = await fetch(`/api/messages/conversations?userId=${u.id}`);
+        const j = await res.json();
+        if (j.data) {
+          setConvos(
+            j.data.map((c: any) => ({
+              conversationId: c.conversationId || c.id,
+              participantId: c.patientId || c.participantId,
+              participantName: c.patientName || c.participantName,
+              participantAvatar: c.patientAvatar || null,
+              participantRole: "patient" as const,
+              lastMessage: c.lastMessage || "",
+              lastMessageTime: c.lastMessageTime || new Date().toISOString(),
+              unreadCount: c.unreadCount || 0,
+              online: c.online,
+            })),
+          );
+        }
+      } catch {}
+      setLoadingConvos(false);
+
+      // Load reviews
+      try {
+        const res = await fetch(`/api/doctor/reviews?doctorId=${u.id}`);
+        const j = await res.json();
+        if (j.data) setReviews(j.data);
+      } catch {}
+
+      // Subscribe to real-time
+      const unsub1 = subscribeToConversations(u.id, (convo: any) => {
+        setConvos((prev) => {
+          const idx = prev.findIndex((c) => c.conversationId === convo.id);
+          const updated: Convo = {
+            conversationId: convo.id,
+            participantId: convo.patientId,
+            participantName: convo.patientName,
+            participantAvatar: convo.patientAvatar,
+            participantRole: "patient",
+            lastMessage: convo.lastMessage,
+            lastMessageTime: convo.lastMessageTime,
+            unreadCount: convo.unreadCount,
+            online: convo.online,
+          };
+          if (idx >= 0) {
+            const n = [...prev];
+            n[idx] = updated;
+            return n;
+          }
+          return [updated, ...prev];
+        });
+      });
+      return () => {
+        unsub1?.();
+      };
     })();
   }, []);
 
-  useEffect(() => {
-    if (!doctorUserId) return;
-    fetch(`/api/doctor/profile?doctorId=${doctorUserId}`)
-      .then(r => r.json())
-      .then(d => { if (d.data?.id) setDoctorProfileId(d.data.id); })
-      .catch(() => {});
-  }, [doctorUserId]);
-
-  const fetchConvos = useCallback(async () => {
-    const dId = doctorProfileId || doctorUserId;
-    if (!dId) return;
-    try {
-      const res = await fetch(`/api/conversations?doctorId=${dId}`);
-      const json = await res.json();
-      if (json.data) setConvos(json.data);
-    } catch {}
-    setLoadingConvos(false);
-  }, [doctorProfileId, doctorUserId]);
-
-  useEffect(() => { fetchConvos(); }, [fetchConvos]);
-
-  const fetchReviews = useCallback(async () => {
-    const dId = doctorProfileId || doctorUserId;
-    if (!dId) return;
-    setLoadingReviews(true);
-    try {
-      const res = await fetch(`/api/reviews?doctorId=${dId}`);
-      const json = await res.json();
-      if (json.data) setReviews(json.data);
-    } catch {}
-    setLoadingReviews(false);
-  }, [doctorProfileId, doctorUserId]);
-
-  useEffect(() => {
-    if (sidebarTab === "reviews") fetchReviews();
-  }, [sidebarTab, fetchReviews]);
-
-  // Realtime + polling fallback for conversations
-  useEffect(() => {
-    const dId = doctorProfileId || doctorUserId;
-    if (!dId) return;
-    const unsub = subscribeToConversations(dId, () => fetchConvos());
-    const interval = setInterval(() => fetchConvos(), 10000);
-    return () => { unsub(); clearInterval(interval); };
-  }, [doctorProfileId, doctorUserId, fetchConvos]);
+  const loadMsgs = useCallback(
+    async (convo: Convo) => {
+      setSelected(convo);
+      setLoadingMsgs(true);
+      setMsgs([]);
+      try {
+        if (convo.participantRole === "doctor") {
+          setMsgs(MOCK_DOCTOR_MSGS);
+          setLoadingMsgs(false);
+          return;
+        }
+        const res = await fetch(
+          `/api/messages?conversationId=${convo.conversationId}&userId=${user?.id}`,
+        );
+        const j = await res.json();
+        setMsgs(
+          (j.data || []).map((m: any) => ({
+            id: m.id,
+            from: m.sender_id === user?.id ? "me" : "other",
+            text: m.content || m.text || "",
+            time: ago(m.created_at),
+            createdAt: m.created_at,
+            status: m.status || "sent",
+            fileUrl: m.file_url,
+            fileName: m.file_name,
+            fileType: m.file_type,
+          })),
+        );
+      } catch {}
+      setLoadingMsgs(false);
+    },
+    [user],
+  );
 
   useEffect(() => {
-    const unsub = subscribeToPresence((ids) => setOnlineUserIds(new Set(ids)));
-    return unsub;
-  }, []);
-
-  const fetchMsgs = useCallback(async (convo: Convo, silent = false) => {
-    const dId = doctorProfileId || doctorUserId;
-    if (!dId) return;
-    if (!silent) setLoadingMsgs(true);
-    try {
-      const res = await fetch(`/api/messages?doctorId=${dId}&patientId=${convo.patientId}`);
-      const json = await res.json();
-      if (json.data) {
-        const formatted: Msg[] = json.data.map((m: any) => ({
-          id: m.id,
-          from: m.sender_role === "doctor" ? "me" : "other",
-          text: m.body ?? "",
-          time: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          createdAt: m.created_at,
-          status: "read",
-          fileUrl: m.attachment_url ?? undefined,
-          fileName: m.attachment_name ?? undefined,
-          fileType: m.attachment_type === "image" ? "image" : m.attachment_url ? "file" : undefined,
-        }));
-        setMsgs(prev => {
-          const serverIds = new Set(formatted.map(m => m.id));
-          const pending = prev.filter(m => m.isPending && !serverIds.has(m.id));
-          return [...formatted, ...pending];
-        });
-      }
-    } catch {}
-    if (!silent) setLoadingMsgs(false);
-  }, [doctorProfileId, doctorUserId]);
-
-  const openConvo = useCallback((convo: Convo) => {
-    setSelected(convo);
-    setMsgs([]);
-    setConvos(prev => prev.map(c =>
-      c.patientId === convo.patientId ? { ...c, unreadCount: 0 } : c
-    ));
-  }, []);
-
-  useEffect(() => {
-    if (!selected) return;
-    fetchMsgs(selected);
-  }, [selected, fetchMsgs]);
-
-  // Realtime + polling fallback for messages
-  useEffect(() => {
-    const dId = doctorProfileId || doctorUserId;
-    if (!selected || !dId) return;
-
-    const unsub = subscribeToDirectMessages(dId, selected.patientId, (newMsg) => {
-      const formatted: Msg = {
-        id: newMsg.id,
-        from: newMsg.sender_role === "doctor" ? "me" : "other",
-        text: newMsg.body ?? "",
-        time: new Date(newMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        createdAt: newMsg.created_at,
-        status: "read",
-        fileUrl: newMsg.attachment_url ?? undefined,
-        fileName: newMsg.attachment_name ?? undefined,
-        fileType: newMsg.attachment_type === "image" ? "image" : newMsg.attachment_url ? "file" : undefined,
-      };
-      setMsgs(prev => {
-        if (prev.some(m => m.id === newMsg.id)) return prev;
-        const filtered = prev.filter(m => {
-          if (!m.isPending || m.from !== "me") return true;
-          const ageDiff = Math.abs(Date.now() - new Date(newMsg.created_at).getTime());
-          return !(m.text === newMsg.body && ageDiff < 10000);
-        });
-        return [...filtered, formatted];
-      });
-      fetchConvos();
-    });
-
-    const interval = setInterval(() => fetchMsgs(selected, true), 3000);
-    return () => { unsub(); clearInterval(interval); };
-  }, [selected, doctorProfileId, doctorUserId, fetchConvos, fetchMsgs]);
+    if (!selected || !user) return;
+    if (selected.participantRole === "doctor") return; // mock
+    const unsub = subscribeToDirectMessages(
+      selected.conversationId,
+      user.id,
+      (m: any) => {
+        setMsgs((prev) => [
+          ...prev,
+          {
+            id: m.id,
+            from: m.sender_id === user.id ? "me" : "other",
+            text: m.content || m.text || "",
+            time: "now",
+            createdAt: m.created_at,
+            status: "sent",
+          },
+        ]);
+      },
+    );
+    return () => unsub?.();
+  }, [selected, user]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs]);
 
-  const groupedMessages = useMemo(() => {
-    const groups: { date: string; items: Msg[] }[] = [];
-    msgs.forEach((m) => {
-      const d = m.createdAt ? new Date(m.createdAt).toDateString() : new Date().toDateString();
-      const label = d === new Date().toDateString() ? "Today" : d;
-      let group = groups.find(g => g.date === label);
-      if (!group) { group = { date: label, items: [] }; groups.push(group); }
-      group.items.push(m);
-    });
-    return groups;
-  }, [msgs]);
-
-  const send = useCallback(async () => {
-    const dId = doctorProfileId || doctorUserId;
-    if (!input.trim() || !selected || !dId || !doctorUserId) return;
-    const msgText = input.trim();
+  const sendMsg = useCallback(async () => {
+    if (!input.trim() || !selected || !user) return;
+    const text = input.trim();
     setInput("");
-
-    const tempId = `opt-${Date.now()}`;
-    const now = new Date();
-    setMsgs(prev => [...prev, {
-      id: tempId, from: "me", text: msgText,
-      time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      createdAt: now.toISOString(), status: "sent", isPending: true,
-    }]);
+    const tmpId = `tmp-${Date.now()}`;
+    const pending: Msg = {
+      id: tmpId,
+      from: "me",
+      text,
+      time: "now",
+      status: "sent",
+      isPending: true,
+    };
+    setMsgs((prev) => [...prev, pending]);
 
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          doctorId: dId, patientId: selected.patientId,
-          senderId: doctorUserId, senderRole: "doctor", body: msgText,
+          conversationId: selected.conversationId,
+          senderId: user.id,
+          recipientId: selected.participantId,
+          content: text,
         }),
       });
-      if (!res.ok) throw new Error("Send failed");
-      const json = await res.json();
-      setMsgs(prev => prev.map(m => m.id === tempId ? {
-        ...m, id: json.data?.id ?? tempId, status: "read", isPending: false,
-      } : m));
-      fetchConvos();
+      const j = await res.json();
+      setMsgs((prev) =>
+        prev.map((m) =>
+          m.id === tmpId
+            ? {
+                ...m,
+                id: j.data?.id || tmpId,
+                isPending: false,
+                status: "delivered",
+              }
+            : m,
+        ),
+      );
     } catch {
-      setMsgs(prev => prev.map(m => m.id === tempId ? { ...m, isPending: false } : m));
+      setMsgs((prev) =>
+        prev.map((m) => (m.id === tmpId ? { ...m, isPending: false } : m)),
+      );
     }
-  }, [input, selected, doctorProfileId, doctorUserId, fetchConvos]);
+  }, [input, selected, user]);
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const dId = doctorProfileId || doctorUserId;
-    if (!file || !selected || !dId || !doctorUserId) return;
-
-    const isImage = file.type.startsWith("image/");
-    const tempId = `opt-file-${Date.now()}`;
-    const tempUrl = URL.createObjectURL(file);
-    const now = new Date();
-
-    setMsgs(prev => [...prev, {
-      id: tempId, from: "me", text: "",
-      time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      createdAt: now.toISOString(), status: "sent",
-      fileUrl: tempUrl, fileName: file.name,
-      fileType: isImage ? "image" : "file", isPending: true,
-    }]);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!uploadRes.ok) throw new Error("Upload failed");
-      const uploadData = await uploadRes.json();
-
-      const msgRes = await fetch("/api/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          doctorId: dId, patientId: selected.patientId,
-          senderId: doctorUserId, senderRole: "doctor",
-          attachmentUrl: uploadData.url,
-          attachmentName: uploadData.name ?? file.name,
-          attachmentType: isImage ? "image" : "document",
-          attachmentSize: uploadData.size ?? file.size,
-        }),
-      });
-      const msgJson = await msgRes.json();
-      URL.revokeObjectURL(tempUrl);
-      setMsgs(prev => prev.map(m => m.id === tempId ? {
-        ...m, id: msgJson.data?.id ?? tempId,
-        fileUrl: uploadData.url, isPending: false, status: "read",
-      } : m));
-      fetchConvos();
-    } catch {
-      setMsgs(prev => prev.map(m => m.id === tempId ? { ...m, isPending: false } : m));
-    } finally {
-      e.target.value = "";
-    }
-  }, [selected, doctorProfileId, doctorUserId, fetchConvos]);
-
-  const filteredConvos = convos.filter(c =>
-    c.patientName.toLowerCase().includes(search.toLowerCase())
+  const handleFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !selected || !user) return;
+      const isImage = file.type.startsWith("image/");
+      const tmpId = `tmp-file-${Date.now()}`;
+      const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
+      setMsgs((prev) => [
+        ...prev,
+        {
+          id: tmpId,
+          from: "me",
+          text: "",
+          time: "now",
+          status: "sent",
+          fileUrl: previewUrl,
+          fileName: file.name,
+          fileType: isImage ? "image" : "file",
+          isPending: true,
+        },
+      ]);
+      // Upload logic would go here
+    },
+    [selected, user],
   );
-  const totalUnread = convos.reduce((s, c) => s + (c.unreadCount ?? 0), 0);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMsg();
+    }
+  };
+
+  const activeConvos =
+    tab === "patients" ? convos : tab === "doctors" ? doctorConvos : [];
+  const filteredConvos = activeConvos.filter((c) =>
+    c.participantName.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const totalUnread =
+    convos.reduce((a, c) => a + c.unreadCount, 0) +
+    doctorConvos.reduce((a, c) => a + c.unreadCount, 0);
 
   return (
-    <div className="animate-fade-up">
-      <h1 className="font-bold text-xl text-slate-800 dark:text-white mb-4 lg:hidden">
-        Messages
-        {totalUnread > 0 && (
-          <span className="ml-2 text-xs bg-rose-500 text-white px-2 py-0.5 rounded-full">{totalUnread}</span>
-        )}
-      </h1>
-
+    <div
+      className="flex h-[calc(100vh-56px)] lg:h-[calc(100vh-56px)] bg-white rounded-2xl overflow-hidden border border-slate-200"
+      style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}
+    >
+      {/* Sidebar */}
       <div
-        className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 shadow-card overflow-hidden"
-        style={{ height: "calc(100vh - 9.5rem)", minHeight: "400px" }}
+        className={`${selected ? "hidden sm:flex" : "flex"} flex-col w-full sm:w-80 lg:w-72 xl:w-80 border-r border-slate-100 flex-shrink-0`}
       >
-        <div className="flex h-full">
-          {/* Sidebar */}
-          <div className={`${selected && sidebarTab === "patients" ? "hidden lg:flex" : "flex"} flex-col w-full lg:w-72 xl:w-80 border-r border-slate-100 dark:border-slate-700 flex-shrink-0`}>
-
-            {/* Tabs */}
-            <div className="flex border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
-              {(["patients", "doctors", "reviews"] as SidebarTab[]).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => { setSidebarTab(tab); if (tab !== "patients") setSelected(null); }}
-                  className={`flex-1 py-3 text-xs font-semibold capitalize transition-colors ${
-                    sidebarTab === tab
-                      ? "text-primary-600 border-b-2 border-primary-600 bg-primary-50/50 dark:bg-primary-900/10"
-                      : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                  }`}
+        {/* Header */}
+        <div className="px-4 py-3.5 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-extrabold text-slate-900 text-[15px]">
+              Messages
+              {totalUnread > 0 && (
+                <span
+                  className="ml-2 text-[11px] font-bold px-2 py-0.5 rounded-full text-white"
+                  style={{ background: "#ef4444" }}
                 >
-                  {tab}
-                  {tab === "patients" && totalUnread > 0 && (
-                    <span className="ml-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full inline-flex items-center justify-center">
-                      {totalUnread > 9 ? "9+" : totalUnread}
+                  {totalUnread}
+                </span>
+              )}
+            </h2>
+            <button className="p-1.5 rounded-xl hover:bg-slate-50">
+              <Plus className="w-4 h-4 text-slate-500" />
+            </button>
+          </div>
+          {/* Tabs */}
+          <div className="flex gap-1 p-0.5 rounded-xl bg-slate-100">
+            {(["patients", "doctors", "reviews"] as Tab[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  setTab(t);
+                  setSelected(null);
+                }}
+                className="flex-1 py-1.5 rounded-lg text-[11px] font-bold capitalize transition-all"
+                style={
+                  tab === t
+                    ? {
+                        background: "white",
+                        color: NAV_BG,
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+                      }
+                    : { color: "#64748b" }
+                }
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="px-3 pt-2.5 pb-1.5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder={`Search ${tab}…`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-[12px] outline-none focus:border-blue-400 bg-slate-50 transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Convo list */}
+        <div className="flex-1 overflow-y-auto">
+          {tab === "reviews" ? (
+            <div className="p-3 space-y-2">
+              {reviews.length === 0 ? (
+                <div className="text-center py-10">
+                  <Star className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                  <p className="text-[12px] text-slate-400">No reviews yet</p>
+                </div>
+              ) : (
+                reviews.map((r) => (
+                  <div
+                    key={r.id}
+                    className="p-3 rounded-xl border border-slate-100 bg-slate-50"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-bold text-[13px] text-slate-800">
+                        {r.author}
+                      </p>
+                      <StarRating rating={r.rating} />
+                    </div>
+                    <p className="text-[12px] text-slate-600 leading-relaxed">
+                      {r.text}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">{r.date}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : loadingConvos ? (
+            <div className="p-3 space-y-2">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-16 bg-slate-100 rounded-xl animate-pulse"
+                />
+              ))}
+            </div>
+          ) : filteredConvos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4">
+              <MessageSquare className="w-9 h-9 text-slate-200 mb-2" />
+              <p className="font-bold text-slate-500 text-[13px] text-center">
+                No {tab} conversations
+              </p>
+              {tab === "doctors" && (
+                <p className="text-[11px] text-slate-400 mt-1 text-center">
+                  Message colleagues from the Doctor Directory
+                </p>
+              )}
+            </div>
+          ) : (
+            <div>
+              {filteredConvos.map((convo) => (
+                <button
+                  key={convo.conversationId}
+                  onClick={() => loadMsgs(convo)}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 relative ${selected?.conversationId === convo.conversationId ? "bg-blue-50/70" : ""}`}
+                >
+                  {/* Avatar */}
+                  <div className="relative flex-shrink-0">
+                    <div
+                      className="w-11 h-11 rounded-full flex items-center justify-center text-white font-extrabold text-[14px]"
+                      style={{
+                        background:
+                          convo.participantRole === "doctor"
+                            ? "#7c3aed"
+                            : NAV_BG,
+                      }}
+                    >
+                      {convo.participantName[0]}
+                    </div>
+                    {convo.online !== undefined && (
+                      <span
+                        className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${convo.online ? "bg-emerald-400" : "bg-slate-300"}`}
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <p
+                        className={`text-[13px] truncate ${convo.unreadCount > 0 ? "font-extrabold text-slate-900" : "font-semibold text-slate-700"}`}
+                      >
+                        {convo.participantRole === "doctor" ? "Dr. " : ""}
+                        {convo.participantName}
+                      </p>
+                      <span className="text-[10px] text-slate-400 flex-shrink-0">
+                        {ago(convo.lastMessageTime)}
+                      </span>
+                    </div>
+                    {convo.participantSpecialty && (
+                      <p
+                        className="text-[10px] font-semibold mb-0.5"
+                        style={{ color: "#7c3aed" }}
+                      >
+                        {convo.participantSpecialty}
+                      </p>
+                    )}
+                    <p
+                      className={`text-[11px] truncate ${convo.unreadCount > 0 ? "text-slate-700 font-semibold" : "text-slate-400"}`}
+                    >
+                      {convo.lastMessage || "No messages yet"}
+                    </p>
+                  </div>
+
+                  {convo.unreadCount > 0 && (
+                    <span
+                      className="w-5 h-5 rounded-full text-white text-[10px] font-extrabold flex items-center justify-center flex-shrink-0"
+                      style={{ background: ACCENT }}
+                    >
+                      {convo.unreadCount}
                     </span>
                   )}
                 </button>
               ))}
             </div>
-
-            {/* Search */}
-            {sidebarTab !== "reviews" && (
-              <div className="px-3 py-2.5 border-b border-slate-50 dark:border-slate-700 flex-shrink-0">
-                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-700 rounded-xl px-3 py-2">
-                  <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                  <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder={sidebarTab === "patients" ? "Search patients…" : "Search doctors…"}
-                    className="flex-1 bg-transparent text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* List content */}
-            <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-700/50">
-
-              {sidebarTab === "patients" && (
-                loadingConvos ? (
-                  <div className="flex justify-center items-center py-12">
-                    <Loader2 className="w-5 h-5 text-primary-400 animate-spin" />
-                  </div>
-                ) : filteredConvos.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full p-6">
-                    <MessageSquare className="w-10 h-10 text-slate-200 mb-2" />
-                    <p className="text-sm text-slate-400">No patient conversations yet</p>
-                  </div>
-                ) : filteredConvos.map(c => {
-                  const isOnline = onlineUserIds.has(c.patientId);
-                  const isSelected = selected?.patientId === c.patientId;
-                  return (
-                    <button
-                      key={c.patientId}
-                      onClick={() => openConvo({ ...c, online: isOnline })}
-                      className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-left transition-colors ${isSelected ? "bg-primary-50 dark:bg-primary-900/20 border-l-[3px] border-primary-500" : ""}`}
-                    >
-                      <div className="relative flex-shrink-0">
-                        {c.patientAvatar ? (
-                          <img src={c.patientAvatar} alt={c.patientName} className="w-10 h-10 rounded-full object-cover" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
-                            <span className="text-white font-bold text-sm">{c.patientName[0]}</span>
-                          </div>
-                        )}
-                        <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-800 ${isOnline ? "bg-emerald-400" : "bg-slate-300"}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <p className={`text-sm truncate ${c.unreadCount > 0 ? "font-bold text-slate-800 dark:text-white" : "font-medium text-slate-700 dark:text-slate-300"}`}>{c.patientName}</p>
-                          <span className="text-[11px] text-slate-400 ml-2 flex-shrink-0">{formatRelativeTime(c.lastMessageTime)}</span>
-                        </div>
-                        <div className="flex items-center justify-between mt-0.5">
-                          <p className={`text-xs truncate ${c.unreadCount > 0 ? "text-slate-600 dark:text-slate-300 font-medium" : "text-slate-400 dark:text-slate-500"}`}>
-                            {c.lastMessage || "No messages yet"}
-                          </p>
-                          {c.unreadCount > 0 && (
-                            <span className="w-5 h-5 bg-primary-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center ml-2 flex-shrink-0">
-                              {c.unreadCount}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-
-              {sidebarTab === "doctors" && (
-                <div className="flex flex-col items-center justify-center h-full p-6">
-                  <MessageSquare className="w-10 h-10 text-slate-200 mb-2" />
-                  <p className="text-sm text-slate-400 text-center">Doctor-to-doctor messaging</p>
-                  <p className="text-xs text-slate-300 mt-1 text-center">Coming soon</p>
-                </div>
-              )}
-
-              {sidebarTab === "reviews" && (
-                loadingReviews ? (
-                  <div className="flex justify-center items-center py-12">
-                    <Loader2 className="w-5 h-5 text-primary-400 animate-spin" />
-                  </div>
-                ) : reviews.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full p-6">
-                    <Star className="w-10 h-10 text-slate-200 mb-2" />
-                    <p className="text-sm text-slate-400">No reviews yet</p>
-                  </div>
-                ) : reviews.map(r => (
-                  <div key={r.id} className="px-4 py-3.5">
-                    <div className="flex items-start gap-3">
-                      <img src={r.avatar} alt={r.author} className="w-9 h-9 rounded-full flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{r.author}</p>
-                          <span className="text-[10px] text-slate-400 ml-2 flex-shrink-0">{formatRelativeTime(r.date)}</span>
-                        </div>
-                        <StarRating rating={r.rating} />
-                        {r.text && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">{r.text}</p>}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Chat area */}
-          {selected && sidebarTab === "patients" ? (
-            <div className="flex-1 flex flex-col min-w-0">
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex-shrink-0 bg-white dark:bg-slate-800">
-                <button onClick={() => setSelected(null)} className="lg:hidden p-1.5 -ml-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700">
-                  <ChevronLeft className="w-5 h-5 text-slate-500" />
-                </button>
-                <div className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
-                  {selected.patientAvatar ? (
-                    <img src={selected.patientAvatar} alt={selected.patientName} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">{selected.patientName[0]}</span>
-                    </div>
-                  )}
-                  <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-800 ${onlineUserIds.has(selected.patientId) ? "bg-emerald-400" : "bg-slate-300"}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-800 dark:text-white text-sm">{selected.patientName}</p>
-                  <p className="text-xs text-slate-400">{onlineUserIds.has(selected.patientId) ? "Online now" : "Offline"}</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-primary-500"><Phone className="w-4 h-4" /></button>
-                  <button className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-primary-500"><Video className="w-4 h-4" /></button>
-                  <button className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"><MoreVertical className="w-4 h-4" /></button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 dark:bg-slate-900/30">
-                {loadingMsgs ? (
-                  <div className="flex justify-center pt-8">
-                    <div className="flex gap-1.5">
-                      {[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary-300 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
-                    </div>
-                  </div>
-                ) : msgs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <MessageSquare className="w-10 h-10 text-slate-200 mb-2" />
-                    <p className="text-sm text-slate-400">No messages yet</p>
-                  </div>
-                ) : groupedMessages.map((group) => (
-                  <div key={group.date} className="space-y-3">
-                    <div className="flex justify-center my-2">
-                      <span className="text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-500 px-3 py-1 rounded-full uppercase tracking-wider">{group.date}</span>
-                    </div>
-                    {group.items.map((msg) => (
-                      <div key={msg.id} className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"} ${msg.isPending ? "opacity-70" : ""}`}>
-                        {msg.from === "other" && (
-                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center mr-2 mt-1 flex-shrink-0">
-                            <span className="text-white text-xs font-bold">{selected.patientName[0]}</span>
-                          </div>
-                        )}
-                        <div className={`max-w-[72%] px-4 py-2.5 rounded-2xl text-sm ${msg.from === "me"
-                          ? "bg-primary-600 text-white rounded-br-sm shadow-sm"
-                          : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-bl-sm shadow-sm border border-slate-100 dark:border-slate-600"
-                        }`}>
-                          {msg.fileUrl ? (
-                            msg.fileType === "image" ? (
-                              <div className="space-y-1">
-                                <img src={msg.fileUrl} alt={msg.fileName ?? "image"} className="rounded-lg max-w-full h-auto max-h-60 object-contain"
-                                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                                {msg.text && <p className="leading-relaxed">{msg.text}</p>}
-                              </div>
-                            ) : (
-                              <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-2 p-2 bg-black/5 dark:bg-white/5 rounded-lg hover:bg-black/10 transition-colors">
-                                <Paperclip className="w-4 h-4 flex-shrink-0" />
-                                <span className="text-xs truncate max-w-[150px]">{msg.fileName ?? "attachment"}</span>
-                              </a>
-                            )
-                          ) : (
-                            <p className="leading-relaxed">{msg.text}</p>
-                          )}
-                          <div className={`flex items-center justify-end gap-1 mt-0.5 ${msg.from === "me" ? "text-primary-200" : "text-slate-400"}`}>
-                            <span className="text-[10px]">{msg.time}</span>
-                            {msg.from === "me" && (
-                              msg.isPending ? <Check className="w-3 h-3 opacity-50" /> :
-                              msg.status === "read" ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                <div ref={bottomRef} />
-              </div>
-
-              <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} accept="image/*,.pdf,.doc,.docx" />
-                <div className="flex items-end gap-2">
-                  <div className="flex-1 flex items-end gap-2 bg-slate-50 dark:bg-slate-700 rounded-2xl border border-slate-200 dark:border-slate-600 px-3.5 py-2.5">
-                    <button onClick={() => fileInputRef.current?.click()} className="text-slate-400 hover:text-primary-500 pb-0.5 flex-shrink-0">
-                      <Paperclip className="w-4 h-4" />
-                    </button>
-                    <input
-                      value={input}
-                      onChange={e => setInput(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
-                      placeholder="Type a message…"
-                      className="flex-1 bg-transparent text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none min-w-0"
-                    />
-                    <button onClick={() => fileInputRef.current?.click()} className="text-slate-400 hover:text-primary-500 pb-0.5 flex-shrink-0">
-                      <Img className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <button onClick={send} disabled={!input.trim()}
-                    className="w-11 h-11 bg-primary-600 rounded-xl flex items-center justify-center disabled:opacity-40 transition-all active:scale-95 flex-shrink-0 shadow-sm">
-                    <Send className="w-4 h-4 text-white" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="hidden lg:flex flex-1 items-center justify-center bg-slate-50/40 dark:bg-slate-800/40">
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-700 shadow-card flex items-center justify-center mx-auto mb-3 border border-slate-100 dark:border-slate-600">
-                  {sidebarTab === "reviews" ? <Star className="w-7 h-7 text-slate-300" /> : <MessageSquare className="w-7 h-7 text-slate-300" />}
-                </div>
-                <p className="font-medium text-slate-500 text-sm">
-                  {sidebarTab === "reviews" ? "Reviews shown in the sidebar" : "Select a conversation"}
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {sidebarTab === "doctors" ? "Doctor messaging coming soon" : "Choose from the list to start messaging"}
-                </p>
-              </div>
-            </div>
           )}
         </div>
       </div>
+
+      {/* Chat area */}
+      {selected ? (
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Chat header */}
+          <div
+            className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 bg-white flex-shrink-0"
+            style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
+          >
+            <button
+              onClick={() => setSelected(null)}
+              className="sm:hidden p-1.5 rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-slate-500" />
+            </button>
+            <div className="relative flex-shrink-0">
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-extrabold"
+                style={{
+                  background:
+                    selected.participantRole === "doctor" ? "#7c3aed" : NAV_BG,
+                }}
+              >
+                {selected.participantName[0]}
+              </div>
+              {selected.online !== undefined && (
+                <span
+                  className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${selected.online ? "bg-emerald-400" : "bg-slate-300"}`}
+                />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-extrabold text-slate-900 text-[14px]">
+                {selected.participantRole === "doctor" ? "Dr. " : ""}
+                {selected.participantName}
+              </p>
+              <p
+                className="text-[11px]"
+                style={{ color: selected.online ? "#16a34a" : "#94a3b8" }}
+              >
+                {selected.participantSpecialty ||
+                  (selected.online ? "Online" : "Offline")}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              <button className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
+                <Video className="w-4 h-4 text-slate-500" />
+              </button>
+              <button className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
+                <Phone className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div
+            className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+            style={{ background: "#f8fafc" }}
+          >
+            {loadingMsgs ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+              </div>
+            ) : msgs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <MessageSquare className="w-9 h-9 text-slate-200 mb-2" />
+                <p className="text-[13px] font-semibold text-slate-400">
+                  No messages yet
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Send a message to start the conversation
+                </p>
+              </div>
+            ) : (
+              <>
+                {msgs.map((msg, i) => {
+                  const isMe = msg.from === "me";
+                  const showAvatar =
+                    !isMe && (i === 0 || msgs[i - 1].from !== "other");
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex gap-2 ${isMe ? "justify-end" : "justify-start"}`}
+                    >
+                      {!isMe && (
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-extrabold flex-shrink-0 mt-auto ${showAvatar ? "opacity-100" : "opacity-0"}`}
+                          style={{ background: NAV_BG }}
+                        >
+                          {selected.participantName[0]}
+                        </div>
+                      )}
+                      <div
+                        className={`max-w-[70%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-0.5`}
+                      >
+                        {msg.fileUrl && msg.fileType === "image" ? (
+                          <div
+                            className="rounded-2xl overflow-hidden border border-slate-200"
+                            style={{ maxWidth: 240 }}
+                          >
+                            <img
+                              src={msg.fileUrl}
+                              alt="image"
+                              className="w-full"
+                            />
+                          </div>
+                        ) : msg.fileUrl ? (
+                          <div
+                            className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl border ${isMe ? "border-blue-200 bg-blue-50" : "bg-white border-slate-200"}`}
+                          >
+                            <File className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                            <span className="text-[12px] font-semibold text-slate-700 truncate max-w-[150px]">
+                              {msg.fileName}
+                            </span>
+                          </div>
+                        ) : (
+                          <div
+                            className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${
+                              isMe
+                                ? "text-white rounded-br-sm"
+                                : "text-slate-800 bg-white border border-slate-200 rounded-bl-sm"
+                            }`}
+                            style={isMe ? { background: NAV_BG } : {}}
+                          >
+                            {msg.text}
+                          </div>
+                        )}
+                        <div
+                          className={`flex items-center gap-1.5 px-1 ${isMe ? "justify-end" : ""}`}
+                        >
+                          <span className="text-[10px] text-slate-400">
+                            {msg.time}
+                          </span>
+                          {isMe &&
+                            (msg.isPending ? (
+                              <Clock className="w-2.5 h-2.5 text-slate-300" />
+                            ) : msg.status === "read" ? (
+                              <CheckCheck className="w-3 h-3 text-blue-400" />
+                            ) : (
+                              <Check className="w-3 h-3 text-slate-300" />
+                            ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {typing && (
+                  <div className="flex gap-2 items-end">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-extrabold"
+                      style={{ background: NAV_BG }}
+                    >
+                      {selected.participantName[0]}
+                    </div>
+                    <div className="px-4 py-3 rounded-2xl rounded-bl-sm bg-white border border-slate-200 flex gap-1">
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"
+                          style={{ animationDelay: `${i * 0.15}s` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div ref={bottomRef} />
+              </>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="px-4 py-3 border-t border-slate-100 bg-white flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                className="hidden"
+                onChange={handleFile}
+              />
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="p-2 rounded-xl hover:bg-slate-100 transition-colors flex-shrink-0"
+              >
+                <Paperclip className="w-4 h-4 text-slate-400" />
+              </button>
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Type a message…"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-[13px] outline-none focus:border-blue-400 transition-colors"
+              />
+              <button
+                onClick={sendMsg}
+                disabled={!input.trim()}
+                className="p-2.5 rounded-xl text-white disabled:opacity-40 transition-all active:scale-95 flex-shrink-0"
+                style={{ background: input.trim() ? ACCENT : "#cbd5e1" }}
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="hidden sm:flex flex-1 items-center justify-center bg-slate-50">
+          <div className="text-center">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+              style={{ background: "#eff6ff" }}
+            >
+              <MessageSquare className="w-7 h-7" style={{ color: ACCENT }} />
+            </div>
+            <p className="font-extrabold text-slate-700 text-[15px]">
+              Select a conversation
+            </p>
+            <p className="text-[12px] text-slate-400 mt-1.5">
+              Choose from your patient or doctor conversations
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

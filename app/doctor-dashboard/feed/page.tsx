@@ -1,82 +1,584 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { getUser, type AuthUser } from "@/lib/supabase/auth";
 import {
-  Heart, MessageCircle, Plus, X, Loader2, Bookmark,
-  MoreHorizontal, Send, Share2, Edit3, Image as Img, Sparkles
+  Heart,
+  MessageCircle,
+  Plus,
+  X,
+  Loader2,
+  Bookmark,
+  MoreHorizontal,
+  Send,
+  Share2,
+  Edit3,
+  Image as Img,
+  Film,
+  Trash2,
+  Flag,
+  Reply,
+  ChevronDown,
+  Tag,
+  Sparkles,
+  Globe,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 
-interface Post {
-  id: string; doctorId: string; doctorName: string; doctorSpecialty: string;
-  title: string; content: string; image?: string | null;
-  likes: number; comments: number; tags: string[]; created_at: string;
-  liked?: boolean; saved?: boolean;
+const NAV_BG = "#003580";
+const ACCENT = "#0071c2";
+
+interface Comment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
+  likes: number;
+  liked: boolean;
+  replies: Comment[];
+  showReplies?: boolean;
 }
 
-const TAGS = ["all", "cardiology", "nutrition", "mental-health", "pediatrics", "prevention", "dermatology", "general", "tips"];
+interface Post {
+  id: string;
+  doctorId: string;
+  doctorName: string;
+  doctorSpecialty: string;
+  title: string;
+  content: string;
+  imageUrl: string | null;
+  videoUrl: string | null;
+  likes: number;
+  comments: Comment[];
+  tags: string[];
+  createdAt: string;
+  liked: boolean;
+  saved: boolean;
+}
+
+const TAGS = [
+  "all",
+  "cardiology",
+  "nutrition",
+  "mental-health",
+  "pediatrics",
+  "prevention",
+  "dermatology",
+  "general",
+  "tips",
+  "research",
+];
 
 function ago(d: string) {
   const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
-  if (m < 1) return "just now"; if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60); if (h < 24) return `${h}h`; return `${Math.floor(h / 24)}d`;
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
-function PostCard({ post, me, onUpdate }: { post: Post; me: string; onUpdate: (p: Post) => void }) {
-  const [cmt, setCmt] = useState(false);
-  const [cmtTxt, setCmtTxt] = useState("");
-  const [exp, setExp] = useState(false);
-  const long = post.content.length > 220;
+const MOCK_POSTS: Post[] = [
+  {
+    id: "p1",
+    doctorId: "d1",
+    doctorName: "Aisha Kamara",
+    doctorSpecialty: "Cardiology",
+    title: "5 Early Warning Signs of Heart Disease You Shouldn't Ignore",
+    content:
+      "Cardiovascular disease remains the leading cause of death worldwide, yet many warning signs are dismissed or overlooked. As a cardiologist, I've seen patients who waited too long before seeking care. Here are 5 signs that should prompt an immediate evaluation:\n\n1. Chest discomfort or pressure that comes and goes\n2. Shortness of breath with mild exertion\n3. Unexplained fatigue lasting more than 2 weeks\n4. Swelling in the legs or ankles\n5. Irregular heartbeat (palpitations)\n\nEarly intervention saves lives. Don't wait for a crisis.",
+    imageUrl: null,
+    videoUrl: null,
+    likes: 142,
+    tags: ["cardiology", "prevention"],
+    createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
+    liked: false,
+    saved: false,
+    comments: [
+      {
+        id: "c1",
+        authorId: "d2",
+        authorName: "Dr. Daniel T.",
+        text: "Excellent summary. I'd add that women often present with atypical symptoms — nausea and jaw pain are common.",
+        createdAt: new Date(Date.now() - 3600000).toISOString(),
+        likes: 12,
+        liked: false,
+        replies: [
+          {
+            id: "c1r1",
+            authorId: "d1",
+            authorName: "Dr. Aisha K.",
+            text: "Absolutely correct! The gender gap in cardiac symptom recognition is a serious issue.",
+            createdAt: new Date(Date.now() - 1800000).toISOString(),
+            likes: 5,
+            liked: false,
+            replies: [],
+          },
+        ],
+      },
+      {
+        id: "c2",
+        authorId: "d3",
+        authorName: "Dr. Miriam G.",
+        text: "Sharing this with my patients. Thank you for making complex information accessible.",
+        createdAt: new Date(Date.now() - 1200000).toISOString(),
+        likes: 8,
+        liked: false,
+        replies: [],
+      },
+    ],
+  },
+  {
+    id: "p2",
+    doctorId: "d3",
+    doctorName: "Miriam Gebre",
+    doctorSpecialty: "Pediatrics",
+    title: "Managing Screen Time in Children: Evidence-Based Guidelines",
+    content:
+      "With digital devices increasingly integrated into daily life, parents often ask me how much screen time is appropriate for their children. Here's what the evidence tells us:\n\n• Under 18 months: Avoid screens except video calls\n• 18-24 months: High-quality programming only, with parental interaction\n• 2-5 years: Maximum 1 hour/day of educational content\n• 6+ years: Consistent limits balancing screen time with physical activity\n\nQuality matters more than quantity. Passive consumption is more harmful than interactive or educational content.",
+    imageUrl: null,
+    videoUrl: null,
+    likes: 87,
+    tags: ["pediatrics", "mental-health"],
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    liked: true,
+    saved: true,
+    comments: [
+      {
+        id: "c3",
+        authorId: "d5",
+        authorName: "Dr. Hiwot A.",
+        text: "The data on blue light exposure and sleep disruption in children is also worth mentioning!",
+        createdAt: new Date(Date.now() - 43200000).toISOString(),
+        likes: 4,
+        liked: false,
+        replies: [],
+      },
+    ],
+  },
+];
+
+function CommentItem({
+  comment,
+  onLike,
+  onReply,
+  currentUserId,
+  depth = 0,
+}: {
+  comment: Comment;
+  onLike: (id: string) => void;
+  onReply: (id: string, text: string) => void;
+  currentUserId: string;
+  depth?: number;
+}) {
+  const [showReplyInput, setShowReplyInput] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [showReplies, setShowReplies] = useState(false);
+
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-card overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3.5">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center flex-shrink-0">
-          <span className="text-white font-bold text-sm">{post.doctorName[0]}</span>
+    <div
+      className={`${depth > 0 ? "ml-8 border-l-2 border-slate-100 pl-4" : ""}`}
+    >
+      <div className="flex gap-2.5">
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-extrabold flex-shrink-0"
+          style={{ background: NAV_BG }}
+        >
+          {comment.authorName[0]}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-slate-800 dark:text-white text-sm">{post.doctorName}</p>
+          <div className="bg-slate-50 rounded-xl px-3 py-2.5">
+            <p className="text-[12px] font-bold text-slate-800">
+              {comment.authorName}
+            </p>
+            <p className="text-[13px] text-slate-600 mt-0.5 leading-relaxed">
+              {comment.text}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 mt-1.5 px-1">
+            <span className="text-[10px] text-slate-400">
+              {ago(comment.createdAt)}
+            </span>
+            <button
+              onClick={() => onLike(comment.id)}
+              className={`flex items-center gap-1 text-[11px] font-semibold ${comment.liked ? "text-rose-500" : "text-slate-400 hover:text-rose-400"}`}
+            >
+              <Heart
+                className={`w-3 h-3 ${comment.liked ? "fill-rose-500" : ""}`}
+              />
+              {comment.likes > 0 && comment.likes}
+            </button>
+            {depth === 0 && (
+              <button
+                onClick={() => setShowReplyInput(!showReplyInput)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-blue-500"
+              >
+                <Reply className="w-3 h-3" /> Reply
+              </button>
+            )}
+            {comment.replies?.length > 0 && (
+              <button
+                onClick={() => setShowReplies(!showReplies)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-blue-500"
+              >
+                <ChevronDown
+                  className={`w-3 h-3 transition-transform ${showReplies ? "rotate-180" : ""}`}
+                />
+                {comment.replies.length}{" "}
+                {comment.replies.length === 1 ? "reply" : "replies"}
+              </button>
+            )}
+          </div>
+
+          {showReplyInput && (
+            <div className="flex gap-2 mt-2">
+              <input
+                type="text"
+                placeholder="Write a reply…"
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && replyText.trim()) {
+                    onReply(comment.id, replyText.trim());
+                    setReplyText("");
+                    setShowReplyInput(false);
+                  }
+                }}
+                className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-[12px] outline-none focus:border-blue-400 transition-colors"
+              />
+              <button
+                onClick={() => {
+                  if (replyText.trim()) {
+                    onReply(comment.id, replyText.trim());
+                    setReplyText("");
+                    setShowReplyInput(false);
+                  }
+                }}
+                className="p-2 rounded-xl text-white"
+                style={{ background: ACCENT }}
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {showReplies &&
+            comment.replies?.map((r) => (
+              <CommentItem
+                key={r.id}
+                comment={r}
+                onLike={onLike}
+                onReply={onReply}
+                currentUserId={currentUserId}
+                depth={depth + 1}
+              />
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PostCard({
+  post,
+  me,
+  onUpdate,
+}: {
+  post: Post;
+  me: AuthUser;
+  onUpdate: (p: Post) => void;
+}) {
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [saved, setSaved] = useState(post.saved);
+  const long = post.content.length > 250;
+  const isOwn = post.doctorId === me.id;
+
+  const handleLike = () =>
+    onUpdate({
+      ...post,
+      liked: !post.liked,
+      likes: post.liked ? post.likes - 1 : post.likes + 1,
+    });
+
+  const handleSave = () => {
+    setSaved(!saved);
+    // API call would go here
+  };
+
+  const handleComment = () => {
+    if (!commentText.trim()) return;
+    const newComment: Comment = {
+      id: `c-${Date.now()}`,
+      authorId: me.id,
+      authorName: `Dr. ${me.name}`,
+      text: commentText.trim(),
+      createdAt: new Date().toISOString(),
+      likes: 0,
+      liked: false,
+      replies: [],
+    };
+    onUpdate({ ...post, comments: [...post.comments, newComment] });
+    setCommentText("");
+  };
+
+  const handleCommentLike = (id: string) => {
+    const toggleLike = (comments: Comment[]): Comment[] =>
+      comments.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              liked: !c.liked,
+              likes: c.liked ? c.likes - 1 : c.likes + 1,
+            }
+          : { ...c, replies: toggleLike(c.replies) },
+      );
+    onUpdate({ ...post, comments: toggleLike(post.comments) });
+  };
+
+  const handleReply = (commentId: string, text: string) => {
+    const addReply = (comments: Comment[]): Comment[] =>
+      comments.map((c) =>
+        c.id === commentId
+          ? {
+              ...c,
+              replies: [
+                ...c.replies,
+                {
+                  id: `r-${Date.now()}`,
+                  authorId: me.id,
+                  authorName: `Dr. ${me.name}`,
+                  text,
+                  createdAt: new Date().toISOString(),
+                  likes: 0,
+                  liked: false,
+                  replies: [],
+                },
+              ],
+            }
+          : { ...c, replies: addReply(c.replies) },
+      );
+    onUpdate({ ...post, comments: addReply(post.comments) });
+  };
+
+  return (
+    <div
+      className="bg-white border border-slate-200 rounded-2xl overflow-hidden"
+      style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}
+    >
+      {/* Author */}
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0"
+          style={{ background: NAV_BG }}
+        >
+          {post.doctorName[0]}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-slate-800 text-[14px]">
+            {post.doctorName}
+          </p>
           <div className="flex items-center gap-1.5">
-            <p className="text-xs text-primary-500 font-semibold">{post.doctorSpecialty}</p>
-            <span className="text-slate-200 dark:text-slate-700 text-xs">·</span>
-            <p className="text-xs text-slate-400">{ago(post.created_at)}</p>
+            <p className="text-[11px] font-semibold" style={{ color: ACCENT }}>
+              {post.doctorSpecialty}
+            </p>
+            <span className="text-slate-300">·</span>
+            <p className="text-[11px] text-slate-400">{ago(post.createdAt)}</p>
+            <span className="text-slate-300">·</span>
+            <Globe className="w-3 h-3 text-slate-300" />
           </div>
         </div>
-        <button className="p-1.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"><MoreHorizontal className="w-4 h-4 text-slate-400" /></button>
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-1.5 rounded-xl hover:bg-slate-50 transition-colors"
+          >
+            <MoreHorizontal className="w-4 h-4 text-slate-400" />
+          </button>
+          {showMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setShowMenu(false)}
+              />
+              <div className="absolute right-0 top-full mt-1 w-36 bg-white rounded-xl border border-slate-200 shadow-xl z-20 overflow-hidden">
+                {isOwn ? (
+                  <>
+                    <button className="w-full flex items-center gap-2 px-3 py-2.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                      <Edit3 className="w-3.5 h-3.5 text-slate-400" /> Edit Post
+                    </button>
+                    <button className="w-full flex items-center gap-2 px-3 py-2.5 text-[12px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleSave}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Bookmark className="w-3.5 h-3.5 text-slate-400" />
+                      {saved ? "Unsave" : "Save"}
+                    </button>
+                    <button className="w-full flex items-center gap-2 px-3 py-2.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+                      <Flag className="w-3.5 h-3.5 text-slate-400" /> Report
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-      {post.image && <div className="aspect-video overflow-hidden bg-slate-100 dark:bg-slate-800"><img src={post.image} alt={post.title} className="w-full h-full object-cover" /></div>}
-      <div className="px-4 pb-1 pt-3">
-        <p className="font-bold text-slate-800 dark:text-white text-base mb-2 leading-tight">{post.title}</p>
-        <p className={`text-slate-600 dark:text-slate-300 text-sm leading-relaxed ${!exp && long ? "line-clamp-3" : ""}`}>{post.content}</p>
-        {long && <button onClick={() => setExp(!exp)} className="text-primary-500 text-xs font-semibold mt-1 hover:text-primary-600">{exp ? "Show less" : "Read more"}</button>}
+
+      {/* Media */}
+      {post.imageUrl && (
+        <div
+          className="overflow-hidden bg-slate-100"
+          style={{ maxHeight: 400 }}
+        >
+          <img
+            src={post.imageUrl}
+            alt={post.title}
+            className="w-full object-cover"
+          />
+        </div>
+      )}
+      {post.videoUrl && (
+        <div className="overflow-hidden bg-black" style={{ maxHeight: 400 }}>
+          <video
+            src={post.videoUrl}
+            controls
+            className="w-full"
+            style={{ maxHeight: 400 }}
+          />
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="px-4 pb-2 pt-3">
+        <p className="font-extrabold text-slate-900 text-[15px] mb-2 leading-tight">
+          {post.title}
+        </p>
+        <p
+          className={`text-slate-600 text-[13px] leading-relaxed whitespace-pre-line ${!expanded && long ? "line-clamp-4" : ""}`}
+        >
+          {post.content}
+        </p>
+        {long && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-[12px] font-semibold mt-1 hover:underline"
+            style={{ color: ACCENT }}
+          >
+            {expanded ? "Show less" : "Read more"}
+          </button>
+        )}
+
+        {/* Tags */}
         {post.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3">
-            {post.tags.slice(0, 5).map(t => <span key={t} className="text-[11px] font-semibold text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 px-2.5 py-0.5 rounded-full">#{t}</span>)}
+            {post.tags.map((t) => (
+              <span
+                key={t}
+                className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+                style={{ background: "#eff6ff", color: ACCENT }}
+              >
+                #{t}
+              </span>
+            ))}
           </div>
         )}
       </div>
-      <div className="flex items-center justify-between px-4 py-2 text-xs text-slate-400">
-        <span>{post.likes} likes</span><span>{post.comments} comments</span>
-      </div>
-      <div className="flex items-center border-t border-slate-50 dark:border-slate-800 px-2 py-1.5">
-        <button onClick={() => onUpdate({ ...post, liked: !post.liked, likes: post.liked ? post.likes - 1 : post.likes + 1 })}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold transition-all ${post.liked ? "text-rose-500" : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"}`}>
-          <Heart className={`w-4 h-4 ${post.liked ? "fill-rose-500" : ""}`} />Like
+
+      {/* Stats */}
+      <div className="flex items-center justify-between px-4 py-1.5 text-[11px] text-slate-400">
+        <button onClick={() => {}} className="hover:underline">
+          {post.likes} likes
         </button>
-        <button onClick={() => setCmt(!cmt)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-          <MessageCircle className="w-4 h-4" />Comment
-        </button>
-        <button className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
-          <Share2 className="w-4 h-4" />Share
-        </button>
-        <button onClick={() => onUpdate({ ...post, saved: !post.saved })}
-          className={`flex items-center justify-center p-2 rounded-xl transition-all ${post.saved ? "text-primary-600" : "text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"}`}>
-          <Bookmark className={`w-4 h-4 ${post.saved ? "fill-primary-600" : ""}`} />
+        <button
+          onClick={() => setShowComments(!showComments)}
+          className="hover:underline"
+        >
+          {post.comments.length} comments
         </button>
       </div>
-      {cmt && (
-        <div className="px-4 pb-3 border-t border-slate-50 dark:border-slate-800 pt-2">
-          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2">
-            <input value={cmtTxt} onChange={e => setCmtTxt(e.target.value)} placeholder="Write a comment…" className="flex-1 bg-transparent text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none" />
-            <button disabled={!cmtTxt.trim()} className="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center disabled:opacity-40 flex-shrink-0"><Send className="w-3.5 h-3.5 text-white" /></button>
+
+      {/* Actions */}
+      <div className="flex items-center border-t border-slate-100 px-2 py-1">
+        <button
+          onClick={handleLike}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-semibold transition-all ${post.liked ? "text-rose-500" : "text-slate-500 hover:bg-slate-50 hover:text-rose-400"}`}
+        >
+          <Heart className={`w-4 h-4 ${post.liked ? "fill-rose-500" : ""}`} />
+          {post.liked ? "Liked" : "Like"}
+        </button>
+        <button
+          onClick={() => setShowComments(!showComments)}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-semibold text-slate-500 hover:bg-slate-50 transition-all"
+        >
+          <MessageCircle className="w-4 h-4" /> Comment
+        </button>
+        <button
+          onClick={handleSave}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-semibold transition-all ${saved ? "text-amber-500" : "text-slate-500 hover:bg-slate-50"}`}
+        >
+          <Bookmark className={`w-4 h-4 ${saved ? "fill-amber-400" : ""}`} />
+          {saved ? "Saved" : "Save"}
+        </button>
+      </div>
+
+      {/* Comments section */}
+      {showComments && (
+        <div className="border-t border-slate-100 px-4 py-3 space-y-3">
+          {/* Comment input */}
+          <div className="flex gap-2.5">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-extrabold flex-shrink-0"
+              style={{ background: ACCENT }}
+            >
+              {me.name[0]}
+            </div>
+            <div className="flex-1 flex gap-2">
+              <input
+                type="text"
+                placeholder="Write a comment…"
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleComment()}
+                className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-[12px] outline-none focus:border-blue-400 transition-colors bg-slate-50"
+              />
+              <button
+                onClick={handleComment}
+                disabled={!commentText.trim()}
+                className="p-2 rounded-xl text-white disabled:opacity-50 transition-all"
+                style={{ background: ACCENT }}
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Comments list */}
+          <div className="space-y-3">
+            {post.comments.map((c) => (
+              <CommentItem
+                key={c.id}
+                comment={c}
+                onLike={handleCommentLike}
+                onReply={handleReply}
+                currentUserId={me.id}
+              />
+            ))}
+            {post.comments.length === 0 && (
+              <p className="text-[12px] text-slate-400 text-center py-3">
+                No comments yet. Be the first to comment.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -84,106 +586,438 @@ function PostCard({ post, me, onUpdate }: { post: Post; me: string; onUpdate: (p
   );
 }
 
-export default function BlogPage() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [doctorProfileId, setDoctorProfileId] = useState<string | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [tag, setTag] = useState("all");
-  const [form, setForm] = useState({ title: "", content: "", tags: [] as string[] });
+function CreatePostModal({
+  me,
+  onClose,
+  onPost,
+}: {
+  me: AuthUser;
+  onClose: () => void;
+  onPost: (post: Post) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [imageName, setImageName] = useState("");
+  const [videoName, setVideoName] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [error, setError] = useState("");
+  const imgRef = useRef<HTMLInputElement>(null);
+  const vidRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const u = getUser(); if (!u) return; setUser(u);
-    // Fetch doctor_profiles.id from auth user ID
-    fetch(`/api/doctor/profile?doctorId=${u.id}`)
-      .then(r => r.json())
-      .then(j => { if (j.data?.id) setDoctorProfileId(j.data.id); })
-      .catch(() => { });
-    fetch("/api/posts").then(r => r.json()).then(j => setPosts((j.data || []).map((p: Post) => ({ ...p, liked: false, saved: false })))).catch(() => { }).finally(() => setLoading(false));
-  }, []);
-
-  const doPost = async () => {
-    if (!user || !doctorProfileId || !form.title.trim() || !form.content.trim()) return;
-    setPosting(true);
-    try {
-      const r = await fetch("/api/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorId: doctorProfileId, ...form }) });
-      const j = await r.json();
-      if (j.data) { setPosts(p => [{ ...j.data, doctorName: user.name, doctorSpecialty: "", liked: false, saved: false }, ...p]); setCreating(false); setForm({ title: "", content: "", tags: [] }); }
-    } catch { }
-    setPosting(false);
+  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Image must be under 10MB");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setImagePreview(url);
+    setImageName(file.name);
+    setVideoPreview(null);
+    setVideoName("");
   };
 
-  const filtered = tag === "all" ? posts : posts.filter(p => p.tags.includes(tag));
+  const handleVideo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 100 * 1024 * 1024) {
+      setError("Video must be under 100MB");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setVideoPreview(url);
+    setVideoName(file.name);
+    setImagePreview(null);
+    setImageName("");
+  };
+
+  const handlePost = async () => {
+    if (!title.trim() || !content.trim()) {
+      setError("Title and content are required");
+      return;
+    }
+    setPosting(true);
+    setError("");
+    try {
+      // In production: upload files to storage first, then create post via API
+      await new Promise((r) => setTimeout(r, 800));
+      const newPost: Post = {
+        id: `p-${Date.now()}`,
+        doctorId: me.id,
+        doctorName: me.name,
+        doctorSpecialty: "Doctor",
+        title: title.trim(),
+        content: content.trim(),
+        imageUrl: imagePreview,
+        videoUrl: videoPreview,
+        likes: 0,
+        comments: [],
+        tags,
+        createdAt: new Date().toISOString(),
+        liked: false,
+        saved: false,
+      };
+      onPost(newPost);
+      onClose();
+    } catch {
+      setError("Failed to create post. Please try again.");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const toggleTag = (tag: string) =>
+    setTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
 
   return (
-    <div className="animate-fade-up space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-bold text-xl text-slate-800 dark:text-white">Medical Blog</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Share knowledge with the community</p>
+    <>
+      <div
+        className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="fixed inset-x-3 top-[4%] bottom-[4%] z-50 bg-white rounded-2xl shadow-2xl flex flex-col max-w-lg mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0"
+            style={{ background: NAV_BG }}
+          >
+            {me.name[0]}
+          </div>
+          <div className="flex-1">
+            <p className="font-bold text-slate-800 text-[14px]">
+              Dr. {me.name}
+            </p>
+            <p className="text-[11px] text-slate-400">Create a post</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl hover:bg-slate-50 transition-colors"
+          >
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
         </div>
-        <button onClick={() => setCreating(true)} className="flex items-center gap-2 bg-primary-600 text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow-sm shadow-primary-600/20 hover:bg-primary-700 transition-colors active:scale-95">
-          <Plus className="w-4 h-4" /><span className="hidden sm:block">Write Post</span><span className="sm:hidden">Post</span>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-100">
+              <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+              <p className="text-[12px] text-rose-600">{error}</p>
+            </div>
+          )}
+
+          <div>
+            <input
+              type="text"
+              placeholder="Post title (required)"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 text-[15px] font-bold outline-none focus:border-blue-400 transition-colors"
+            />
+          </div>
+
+          <div>
+            <textarea
+              placeholder="Share your medical insights, tips, research, or cases…"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={6}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 text-[13px] outline-none focus:border-blue-400 transition-colors resize-none leading-relaxed"
+            />
+          </div>
+
+          {/* Media preview */}
+          {imagePreview && (
+            <div className="relative rounded-xl overflow-hidden border border-slate-200">
+              <img
+                src={imagePreview}
+                alt="preview"
+                className="w-full max-h-48 object-cover"
+              />
+              <button
+                onClick={() => {
+                  setImagePreview(null);
+                  setImageName("");
+                  if (imgRef.current) imgRef.current.value = "";
+                }}
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          {videoPreview && (
+            <div className="relative rounded-xl overflow-hidden border border-slate-200">
+              <video src={videoPreview} controls className="w-full max-h-48" />
+              <button
+                onClick={() => {
+                  setVideoPreview(null);
+                  setVideoName("");
+                  if (vidRef.current) vidRef.current.value = "";
+                }}
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Tags */}
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2">
+              Tags
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {TAGS.filter((t) => t !== "all").map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all"
+                  style={
+                    tags.includes(tag)
+                      ? {
+                          background: ACCENT,
+                          color: "white",
+                          borderColor: ACCENT,
+                        }
+                      : {
+                          background: "#f8fafc",
+                          color: "#64748b",
+                          borderColor: "#e2e8f0",
+                        }
+                  }
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-slate-100 flex items-center gap-3 flex-shrink-0 bg-white">
+          <div className="flex gap-2">
+            <input
+              ref={imgRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImage}
+            />
+            <input
+              ref={vidRef}
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={handleVideo}
+            />
+            <button
+              onClick={() => imgRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              <Img className="w-3.5 h-3.5 text-emerald-500" /> Photo
+            </button>
+            <button
+              onClick={() => vidRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              <Film className="w-3.5 h-3.5 text-blue-500" /> Video
+            </button>
+          </div>
+          <button
+            onClick={handlePost}
+            disabled={posting || !title.trim() || !content.trim()}
+            className="ml-auto flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-extrabold text-white disabled:opacity-50 transition-all"
+            style={{ background: NAV_BG }}
+          >
+            {posting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            {posting ? "Posting…" : "Publish Post"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export default function FeedPage() {
+  const [me, setMe] = useState<AuthUser | null>(null);
+  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
+  const [loading, setLoading] = useState(true);
+  const [activeTag, setActiveTag] = useState("all");
+  const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const u = getUser();
+    if (u) setMe(u);
+    // Load real posts
+    const load = async () => {
+      if (!u) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/posts?doctorId=${u.id}`);
+        if (res.ok) {
+          const j = await res.json();
+          if (j.data?.length) {
+            setPosts(j.data);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 600));
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const filtered = posts.filter((p) => {
+    const matchTag = activeTag === "all" || p.tags.includes(activeTag);
+    const matchSearch =
+      !search ||
+      p.title.toLowerCase().includes(search.toLowerCase()) ||
+      p.content.toLowerCase().includes(search.toLowerCase());
+    return matchTag && matchSearch;
+  });
+
+  const handlePost = (post: Post) => {
+    setPosts((prev) => [post, ...prev]);
+    // API call: POST /api/posts
+  };
+
+  const handleUpdate = (post: Post) => {
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)));
+    // API call: PATCH /api/posts/[id]
+  };
+
+  if (!me)
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+      </div>
+    );
+
+  return (
+    <div className="space-y-5 max-w-2xl pb-10">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="font-extrabold text-slate-900 text-[20px]">
+            Medical Feed
+          </h1>
+          <p className="text-[12px] text-slate-400 mt-0.5">
+            Knowledge sharing among colleagues
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-[13px] text-white transition-all active:scale-95"
+          style={{ background: NAV_BG }}
+        >
+          <Plus className="w-4 h-4" /> Create Post
         </button>
       </div>
 
+      {/* Create post prompt */}
+      <button
+        onClick={() => setShowCreate(true)}
+        className="w-full flex items-center gap-3 p-4 bg-white rounded-2xl border border-slate-200 text-left hover:shadow-md transition-all"
+        style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+      >
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0"
+          style={{ background: ACCENT }}
+        >
+          {me.name[0]}
+        </div>
+        <span className="text-slate-400 text-[13px]">
+          Share a medical insight, tip, or case…
+        </span>
+        <div className="ml-auto flex gap-2">
+          <Img className="w-4 h-4 text-emerald-400" />
+          <Film className="w-4 h-4 text-blue-400" />
+        </div>
+      </button>
+
       {/* Tag filter */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
-        {TAGS.map(t => (
-          <button key={t} onClick={() => setTag(t)}
-            className={`flex-shrink-0 text-xs font-bold px-3.5 py-1.5 rounded-full transition-all ${tag === t ? "bg-primary-600 text-white shadow-sm" : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:border-primary-200 hover:text-primary-600"}`}>
-            {t === "all" ? "All Posts" : `#${t}`}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {TAGS.map((tag) => (
+          <button
+            key={tag}
+            onClick={() => setActiveTag(tag)}
+            className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all capitalize"
+            style={
+              activeTag === tag
+                ? { background: ACCENT, color: "white", borderColor: ACCENT }
+                : {
+                    background: "white",
+                    color: "#64748b",
+                    borderColor: "#e2e8f0",
+                  }
+            }
+          >
+            {tag === "all" ? "All Posts" : `#${tag}`}
           </button>
         ))}
       </div>
 
-      {loading
-        ? <div className="space-y-4">{[1, 2].map(i => <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl h-52 animate-shimmer border border-slate-100 dark:border-slate-800" />)}</div>
-        : filtered.length === 0
-          ? <div className="flex flex-col items-center justify-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-            <Sparkles className="w-12 h-12 text-slate-200 mb-3" />
-            <p className="font-semibold text-slate-400">No posts yet</p>
-            <button onClick={() => setCreating(true)} className="text-primary-500 text-sm font-semibold mt-2">Be the first to post</button>
-          </div>
-          : <div className="space-y-4">{filtered.map(p => <PostCard key={p.id} post={p} me={user?.id || ""} onUpdate={u => setPosts(prev => prev.map(x => x.id === u.id ? u : x))} />)}</div>
-      }
+      {/* Posts */}
+      {loading ? (
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div
+              key={i}
+              className="h-48 bg-white rounded-2xl animate-pulse border border-slate-100"
+            />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 bg-white border border-dashed border-slate-200 rounded-2xl">
+          <Sparkles className="w-9 h-9 text-slate-200 mb-3" />
+          <p className="font-bold text-slate-500">No posts found</p>
+          <p className="text-[12px] text-slate-400 mt-1">
+            Be the first to share something!
+          </p>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="mt-4 px-4 py-2 rounded-xl text-[12px] font-bold text-white"
+            style={{ background: ACCENT }}
+          >
+            Create First Post
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filtered.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              me={me}
+              onUpdate={handleUpdate}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Create modal */}
-      {creating && (
-        <>
-          <div className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm" onClick={() => setCreating(false)} />
-          <div className="fixed inset-x-4 top-14 z-50 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden max-w-lg mx-auto animate-scale-in">
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-              <Edit3 className="w-4 h-4 text-primary-600" />
-              <p className="font-bold text-slate-800 dark:text-white">Write a Post</p>
-              <button onClick={() => setCreating(false)} className="ml-auto p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-4 h-4 text-slate-400" /></button>
-            </div>
-            <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
-              <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Give your post a title…" className="w-full text-lg font-bold text-slate-800 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 border-b-2 border-slate-100 dark:border-slate-800 focus:border-primary-200 pb-2 focus:outline-none transition-colors bg-transparent" />
-              <textarea value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} placeholder="Share your medical insights, tips, or case studies…" rows={5} className="w-full text-sm text-slate-600 dark:text-slate-300 placeholder-slate-400 focus:outline-none resize-none leading-relaxed bg-transparent" />
-              <div>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Add Tags</p>
-                <div className="flex flex-wrap gap-2">
-                  {TAGS.filter(t => t !== "all").map(t => (
-                    <button key={t} onClick={() => setForm(f => ({ ...f, tags: f.tags.includes(t) ? f.tags.filter(x => x !== t) : [...f.tags, t] }))}
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-full transition-all ${form.tags.includes(t) ? "bg-primary-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200"}`}>
-                      #{t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-              <button className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-primary-500 transition-colors"><Img className="w-4 h-4" />Add image</button>
-              <button onClick={doPost} disabled={posting || !form.title.trim() || !form.content.trim()}
-                className="flex items-center gap-2 bg-primary-600 text-white text-sm font-bold px-5 py-2 rounded-xl disabled:opacity-50 transition-opacity shadow-sm hover:bg-primary-700">
-                {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}Publish
-              </button>
-            </div>
-          </div>
-        </>
+      {showCreate && (
+        <CreatePostModal
+          me={me}
+          onClose={() => setShowCreate(false)}
+          onPost={handlePost}
+        />
       )}
     </div>
   );
