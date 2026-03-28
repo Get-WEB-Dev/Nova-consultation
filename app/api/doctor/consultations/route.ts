@@ -33,6 +33,14 @@ export async function GET(req: NextRequest) {
             isFollowUp: row.is_follow_up,
             followUpScheduledAt: row.follow_up_scheduled_at,
             created_at: row.created_at,
+            // Structured note fields
+            diagnosis: row.diagnosis ?? null,
+            prescription: row.prescription ?? null,
+            clinicalNotes: row.clinical_notes ?? null,
+            chiefComplaint: row.chief_complaint ?? null,
+            followUpPlan: row.follow_up_plan ?? null,
+            outcome: row.outcome ?? null,
+            followUpPriority: row.follow_up_priority ?? null,
         }));
 
         return NextResponse.json({ data: formatted });
@@ -45,14 +53,27 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
     try {
         const body = await req.json();
-        const { consultationId, status, notes, summary } = body;
+        const { consultationId, status, notes, summary, outcome, followUpPriority,
+            diagnosis, prescription, clinicalNotes, chiefComplaint, followUpPlan,
+            isFollowUp, followUpScheduledAt, durationMinutes } = body;
 
         if (!consultationId || !status) {
             return NextResponse.json({ error: 'consultationId and status required' }, { status: 400 });
         }
 
         const { updateConsultationStatus } = await import('@/lib/server/doctor-queries');
-        const updated = await updateConsultationStatus(consultationId, status, notes, summary);
+        const updated = await updateConsultationStatus(consultationId, status, notes, summary, {
+            outcome,
+            follow_up_priority: followUpPriority,
+            diagnosis,
+            prescription,
+            clinical_notes: clinicalNotes,
+            chief_complaint: chiefComplaint,
+            follow_up_plan: followUpPlan,
+            is_follow_up: isFollowUp,
+            follow_up_scheduled_at: followUpScheduledAt,
+            duration_minutes: durationMinutes,
+        });
         return NextResponse.json({ data: updated });
     } catch (err: any) {
         console.error('[doctor/consultations PATCH]', err.message);

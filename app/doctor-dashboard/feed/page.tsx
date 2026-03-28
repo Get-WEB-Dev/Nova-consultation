@@ -80,85 +80,7 @@ function ago(d: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-const MOCK_POSTS: Post[] = [
-  {
-    id: "p1",
-    doctorId: "d1",
-    doctorName: "Aisha Kamara",
-    doctorSpecialty: "Cardiology",
-    title: "5 Early Warning Signs of Heart Disease You Shouldn't Ignore",
-    content:
-      "Cardiovascular disease remains the leading cause of death worldwide, yet many warning signs are dismissed or overlooked. As a cardiologist, I've seen patients who waited too long before seeking care. Here are 5 signs that should prompt an immediate evaluation:\n\n1. Chest discomfort or pressure that comes and goes\n2. Shortness of breath with mild exertion\n3. Unexplained fatigue lasting more than 2 weeks\n4. Swelling in the legs or ankles\n5. Irregular heartbeat (palpitations)\n\nEarly intervention saves lives. Don't wait for a crisis.",
-    imageUrl: null,
-    videoUrl: null,
-    likes: 142,
-    tags: ["cardiology", "prevention"],
-    createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
-    liked: false,
-    saved: false,
-    comments: [
-      {
-        id: "c1",
-        authorId: "d2",
-        authorName: "Dr. Daniel T.",
-        text: "Excellent summary. I'd add that women often present with atypical symptoms — nausea and jaw pain are common.",
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        likes: 12,
-        liked: false,
-        replies: [
-          {
-            id: "c1r1",
-            authorId: "d1",
-            authorName: "Dr. Aisha K.",
-            text: "Absolutely correct! The gender gap in cardiac symptom recognition is a serious issue.",
-            createdAt: new Date(Date.now() - 1800000).toISOString(),
-            likes: 5,
-            liked: false,
-            replies: [],
-          },
-        ],
-      },
-      {
-        id: "c2",
-        authorId: "d3",
-        authorName: "Dr. Miriam G.",
-        text: "Sharing this with my patients. Thank you for making complex information accessible.",
-        createdAt: new Date(Date.now() - 1200000).toISOString(),
-        likes: 8,
-        liked: false,
-        replies: [],
-      },
-    ],
-  },
-  {
-    id: "p2",
-    doctorId: "d3",
-    doctorName: "Miriam Gebre",
-    doctorSpecialty: "Pediatrics",
-    title: "Managing Screen Time in Children: Evidence-Based Guidelines",
-    content:
-      "With digital devices increasingly integrated into daily life, parents often ask me how much screen time is appropriate for their children. Here's what the evidence tells us:\n\n• Under 18 months: Avoid screens except video calls\n• 18-24 months: High-quality programming only, with parental interaction\n• 2-5 years: Maximum 1 hour/day of educational content\n• 6+ years: Consistent limits balancing screen time with physical activity\n\nQuality matters more than quantity. Passive consumption is more harmful than interactive or educational content.",
-    imageUrl: null,
-    videoUrl: null,
-    likes: 87,
-    tags: ["pediatrics", "mental-health"],
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    liked: true,
-    saved: true,
-    comments: [
-      {
-        id: "c3",
-        authorId: "d5",
-        authorName: "Dr. Hiwot A.",
-        text: "The data on blue light exposure and sleep disruption in children is also worth mentioning!",
-        createdAt: new Date(Date.now() - 43200000).toISOString(),
-        likes: 4,
-        liked: false,
-        replies: [],
-      },
-    ],
-  },
-];
+const MOCK_POSTS: Post[] = [];
 
 function CommentItem({
   comment,
@@ -331,10 +253,10 @@ function PostCard({
       comments.map((c) =>
         c.id === id
           ? {
-              ...c,
-              liked: !c.liked,
-              likes: c.liked ? c.likes - 1 : c.likes + 1,
-            }
+            ...c,
+            liked: !c.liked,
+            likes: c.liked ? c.likes - 1 : c.likes + 1,
+          }
           : { ...c, replies: toggleLike(c.replies) },
       );
     onUpdate({ ...post, comments: toggleLike(post.comments) });
@@ -345,21 +267,21 @@ function PostCard({
       comments.map((c) =>
         c.id === commentId
           ? {
-              ...c,
-              replies: [
-                ...c.replies,
-                {
-                  id: `r-${Date.now()}`,
-                  authorId: me.id,
-                  authorName: `Dr. ${me.name}`,
-                  text,
-                  createdAt: new Date().toISOString(),
-                  likes: 0,
-                  liked: false,
-                  replies: [],
-                },
-              ],
-            }
+            ...c,
+            replies: [
+              ...c.replies,
+              {
+                id: `r-${Date.now()}`,
+                authorId: me.id,
+                authorName: `Dr. ${me.name}`,
+                text,
+                createdAt: new Date().toISOString(),
+                likes: 0,
+                liked: false,
+                replies: [],
+              },
+            ],
+          }
           : { ...c, replies: addReply(c.replies) },
       );
     onUpdate({ ...post, comments: addReply(post.comments) });
@@ -497,7 +419,7 @@ function PostCard({
 
       {/* Stats */}
       <div className="flex items-center justify-between px-4 py-1.5 text-[11px] text-slate-400">
-        <button onClick={() => {}} className="hover:underline">
+        <button onClick={() => { }} className="hover:underline">
           {post.likes} likes
         </button>
         <button
@@ -783,15 +705,15 @@ function CreatePostModal({
                   style={
                     tags.includes(tag)
                       ? {
-                          background: ACCENT,
-                          color: "white",
-                          borderColor: ACCENT,
-                        }
+                        background: ACCENT,
+                        color: "white",
+                        borderColor: ACCENT,
+                      }
                       : {
-                          background: "#f8fafc",
-                          color: "#64748b",
-                          borderColor: "#e2e8f0",
-                        }
+                        background: "#f8fafc",
+                        color: "#64748b",
+                        borderColor: "#e2e8f0",
+                      }
                   }
                 >
                   #{tag}
@@ -877,7 +799,7 @@ export default function FeedPage() {
             return;
           }
         }
-      } catch {}
+      } catch { }
       await new Promise((r) => setTimeout(r, 600));
       setLoading(false);
     };
@@ -963,10 +885,10 @@ export default function FeedPage() {
               activeTag === tag
                 ? { background: ACCENT, color: "white", borderColor: ACCENT }
                 : {
-                    background: "white",
-                    color: "#64748b",
-                    borderColor: "#e2e8f0",
-                  }
+                  background: "white",
+                  color: "#64748b",
+                  borderColor: "#e2e8f0",
+                }
             }
           >
             {tag === "all" ? "All Posts" : `#${tag}`}

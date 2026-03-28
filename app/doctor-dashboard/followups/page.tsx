@@ -58,124 +58,7 @@ interface FollowUp {
   chat?: { from: string; text: string; time: string }[];
 }
 
-const MOCK: FollowUp[] = [
-  {
-    id: "fu1",
-    patientId: "p1",
-    patientName: "Hana Tadesse",
-    patientEmail: "hana@example.com",
-    reason: "Antibiotic response check after fever episode",
-    instructions:
-      "Check if temperature normalized. Assess antibiotic efficacy.",
-    scheduledAt: new Date(Date.now() + 2 * 3600000).toISOString(),
-    priority: "high",
-    status: "pending",
-    notes: "Started amoxicillin 500mg TID. Fever was 38.5°C at presentation.",
-    diagnosis: "Acute bacterial pharyngitis",
-    prescriptions: ["Amoxicillin 500mg TID × 7 days", "Paracetamol 500mg PRN"],
-    createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
-    consultationId: "c1",
-    chat: [
-      {
-        from: "patient",
-        text: "Doctor, my fever is at 38.5°C",
-        time: "3 days ago",
-      },
-      {
-        from: "doctor",
-        text: "Please start the antibiotic course and rest. Come back in 3 days.",
-        time: "3 days ago",
-      },
-    ],
-  },
-  {
-    id: "fu2",
-    patientId: "p2",
-    patientName: "Amir Bekele",
-    patientEmail: "amir@example.com",
-    reason: "Blood pressure monitoring — hypertension management",
-    instructions: "Check BP readings. Assess medication tolerance.",
-    scheduledAt: new Date(Date.now() + 86400000).toISOString(),
-    priority: "medium",
-    status: "pending",
-    notes: "BP was 148/95 mmHg. Started antihypertensive therapy.",
-    diagnosis: "Hypertension Stage 1",
-    prescriptions: ["Amlodipine 5mg OD", "Losartan 50mg OD"],
-    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-    consultationId: "c2",
-    chat: [
-      {
-        from: "patient",
-        text: "Is dizziness normal after starting the medication?",
-        time: "5 days ago",
-      },
-      {
-        from: "doctor",
-        text: "Mild dizziness is common initially. It should resolve in a week.",
-        time: "5 days ago",
-      },
-    ],
-  },
-  {
-    id: "fu3",
-    patientId: "p3",
-    patientName: "Sara Muleta",
-    patientEmail: "sara@example.com",
-    reason: "Allergic dermatitis follow-up",
-    instructions:
-      "Assess improvement of skin lesions. Document rash resolution.",
-    scheduledAt: new Date(Date.now() + 3 * 86400000).toISOString(),
-    priority: "low",
-    status: "pending",
-    notes:
-      "Prescribed topical corticosteroid. Patient advised to avoid known allergens.",
-    diagnosis: "Allergic contact dermatitis",
-    prescriptions: [
-      "Hydrocortisone 1% cream BD × 2 weeks",
-      "Loratadine 10mg OD",
-    ],
-    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-    consultationId: "c3",
-    chat: [],
-  },
-  {
-    id: "fu4",
-    patientId: "p4",
-    patientName: "Dawit Haile",
-    patientEmail: "dawit@example.com",
-    reason: "Post-operative wound check",
-    instructions:
-      "Inspect surgical wound for signs of infection. Remove sutures if healed.",
-    scheduledAt: new Date(Date.now() - 86400000).toISOString(),
-    priority: "high",
-    status: "missed",
-    notes: "Minor laceration repair performed. 4 sutures placed.",
-    diagnosis: "Laceration repair — lower extremity",
-    prescriptions: ["Cloxacillin 500mg QID × 5 days", "Tetanus toxoid given"],
-    createdAt: new Date(Date.now() - 8 * 86400000).toISOString(),
-    consultationId: "c4",
-    chat: [],
-  },
-  {
-    id: "fu5",
-    patientId: "p5",
-    patientName: "Meron Alemu",
-    patientEmail: "meron@example.com",
-    reason: "Diabetes medication adjustment",
-    instructions:
-      "Review blood glucose log. Adjust metformin dosage if needed.",
-    scheduledAt: new Date(Date.now() - 3 * 86400000).toISOString(),
-    priority: "medium",
-    status: "completed",
-    notes:
-      "HbA1c was 8.2%. Initiated metformin. Lifestyle counseling provided.",
-    diagnosis: "Type 2 Diabetes Mellitus",
-    prescriptions: ["Metformin 500mg BD", "Patient advised on dietary changes"],
-    createdAt: new Date(Date.now() - 14 * 86400000).toISOString(),
-    consultationId: "c5",
-    chat: [],
-  },
-];
+const MOCK: FollowUp[] = [];
 
 const PRIORITY_CONFIG = {
   high: { bg: "#fff1f2", text: "#be123c", border: "#fecdd3", label: "High" },
@@ -506,16 +389,16 @@ function DetailModal({
                       style={
                         m.from === "doctor"
                           ? {
-                              background: NAV_BG,
-                              color: "white",
-                              borderBottomRightRadius: 4,
-                            }
+                            background: NAV_BG,
+                            color: "white",
+                            borderBottomRightRadius: 4,
+                          }
                           : {
-                              background: "white",
-                              color: "#1e293b",
-                              border: "1px solid #e2e8f0",
-                              borderBottomLeftRadius: 4,
-                            }
+                            background: "white",
+                            color: "#1e293b",
+                            border: "1px solid #e2e8f0",
+                            borderBottomLeftRadius: 4,
+                          }
                       }
                     >
                       <p>{m.text}</p>
@@ -641,10 +524,10 @@ function RescheduleModal({
                     style={
                       priority === p
                         ? {
-                            background: c.bg,
-                            color: c.text,
-                            borderColor: c.border,
-                          }
+                          background: c.bg,
+                          color: c.text,
+                          borderColor: c.border,
+                        }
                         : { borderColor: "#e2e8f0", color: "#64748b" }
                     }
                   >
@@ -685,8 +568,27 @@ export default function FollowUpsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<FUStatus | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "all">("all");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => {
+    const user = getUser();
+    if (!user) return;
+    const fetchFollowUps = async () => {
+      try {
+        const res = await fetch(`/api/follow-ups?doctorId=${user.id}`);
+        const json = await res.json();
+        if (json.data) {
+          setItems(json.data);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFollowUps();
+  }, []);
 
   // Auto-mark missed
   useEffect(() => {
@@ -706,6 +608,11 @@ export default function FollowUpsPage() {
       ),
     );
     setSel(null);
+    fetch("/api/follow-ups", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ consultationId: id, status: "completed" }),
+    }).catch(console.error);
   }, []);
 
   const handleReschedule = useCallback(
@@ -714,17 +621,28 @@ export default function FollowUpsPage() {
         prev.map((fu) =>
           fu.id === id
             ? {
-                ...fu,
-                scheduledAt: new Date(date).toISOString(),
-                instructions,
-                priority,
-                status: "pending" as FUStatus,
-              }
+              ...fu,
+              scheduledAt: new Date(date).toISOString(),
+              instructions,
+              priority,
+              status: "pending" as FUStatus,
+            }
             : fu,
         ),
       );
       setRescheduleItem(null);
       setSel(null);
+      fetch("/api/follow-ups", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          consultationId: id,
+          scheduledAt: new Date(date).toISOString(),
+          instructions,
+          priority,
+          status: "pending",
+        }),
+      }).catch(console.error);
     },
     [],
   );
@@ -841,10 +759,10 @@ export default function FollowUpsPage() {
                 statusFilter === s
                   ? { background: NAV_BG, color: "white", borderColor: NAV_BG }
                   : {
-                      background: "white",
-                      color: "#475569",
-                      borderColor: "#e2e8f0",
-                    }
+                    background: "white",
+                    color: "#475569",
+                    borderColor: "#e2e8f0",
+                  }
               }
             >
               {s}
@@ -863,20 +781,20 @@ export default function FollowUpsPage() {
                   priorityFilter === p
                     ? c
                       ? {
-                          background: c.bg,
-                          color: c.text,
-                          borderColor: c.border,
-                        }
-                      : {
-                          background: NAV_BG,
-                          color: "white",
-                          borderColor: NAV_BG,
-                        }
-                    : {
-                        background: "white",
-                        color: "#475569",
-                        borderColor: "#e2e8f0",
+                        background: c.bg,
+                        color: c.text,
+                        borderColor: c.border,
                       }
+                      : {
+                        background: NAV_BG,
+                        color: "white",
+                        borderColor: NAV_BG,
+                      }
+                    : {
+                      background: "white",
+                      color: "#475569",
+                      borderColor: "#e2e8f0",
+                    }
                 }
               >
                 {p}
@@ -936,7 +854,7 @@ export default function FollowUpsPage() {
               key={fu.id}
               fu={fu}
               onClick={() => setSel(fu)}
-              onComplete={() => {}}
+              onComplete={() => { }}
               onReschedule={() => setRescheduleItem(fu)}
             />
           ))}

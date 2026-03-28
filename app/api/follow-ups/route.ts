@@ -19,21 +19,33 @@ export async function GET(req: NextRequest) {
 
     try {
         const { fetchFollowUps } = await import('@/lib/server/queries');
-        const data = await fetchFollowUps(doctorId);
+        const { fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
+
+        // If the ID looks like a user_id, map it to doctor_id
+        let finalDoctorId = doctorId;
+        try {
+            const profile = await fetchDoctorProfileByUserId(doctorId);
+            if (profile) finalDoctorId = profile.id;
+        } catch (e) { /* ignore */ }
+
+        const data = await fetchFollowUps(finalDoctorId);
 
         const formatted = data.map((row: any) => ({
             id: row.id,
-            doctorId: row.doctor_id,
             patientId: row.patient_id,
             patientName: row.users?.name ?? 'Unknown',
+            patientEmail: row.users?.email ?? '',
             patientAvatar: row.users?.avatar_url ?? '',
-            status: row.status,
-            notes: row.notes,
-            summary: row.summary,
-            symptoms: row.symptoms,
-            isFollowUp: row.is_follow_up,
-            followUpScheduledAt: row.follow_up_scheduled_at,
-            created_at: row.created_at,
+            status: row.status === 'completed' || row.status === 'missed' || row.status === 'cancelled' ? row.status : 'pending',
+            reason: row.summary || row.chief_complaint || row.symptoms || 'General Follow-up',
+            instructions: row.follow_up_plan || row.notes || '',
+            scheduledAt: row.follow_up_scheduled_at,
+            priority: row.follow_up_priority || 'medium',
+            notes: row.clinical_notes || row.notes,
+            diagnosis: row.diagnosis || row.summary,
+            prescriptions: row.prescription ? [row.prescription] : [],
+            createdAt: row.created_at,
+            consultationId: row.id,
         }));
 
         return NextResponse.json({ data: formatted });
@@ -93,6 +105,42 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ data }, { status: 201 });
     } catch (err: any) {
         console.error('[follow-ups POST]', err.message);
+        return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+}
+
+export async function PATCH(req: NextRequest) {
+    let body: any;
+    try {
+        body = await req.json();
+    } catch {
+        return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const { consultationId, status, scheduledAt, instructions, priority } = body ?? {};
+    if (!consultationId) {
+        return NextResponse.json({ error: 'consultationId is required' }, { status: 400 });
+    }
+
+    try {
+        const { createAdminClient } = await import('@/lib/supabase/client');
+        const admin = createAdminClient();
+
+        const updates: any = {};
+        if (status) updates.status = status;
+        if (scheduledAt) updates.follow_up_scheduled_at = scheduledAt;
+        if (instructions) updates.notes = instructions;
+
+        const { error } = await admin
+            .from('consultations')
+            .update(updates as never)
+            .eq('id', consultationId);
+
+        if (error) throw error;
+
+        return NextResponse.json({ success: true });
+    } catch (err: any) {
+        console.error('[follow-ups PATCH]', err.message);
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }

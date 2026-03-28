@@ -1017,8 +1017,21 @@ export default function HistoryPage() {
       const j = await fetch(`/api/doctor/consultations?doctorId=${u.id}`).then(
         (x) => x.json(),
       );
-      setItems(j.data || []);
-    } catch {}
+      const mapped = (j.data || []).map((row: any) => ({
+        ...row,
+        patientName: row.patientName || 'Unknown',
+        patientEmail: row.patientEmail || '',
+        durationMinutes: row.durationMinutes ?? null,
+        diagnosis: row.diagnosis ?? row.summary ?? null,
+        notes: row.clinicalNotes ?? row.notes ?? null,
+        summary: row.summary ?? null,
+        prescriptions: row.prescription
+          ? [{ drug: row.prescription, dose: '', frequency: '', duration: '' }]
+          : undefined,
+        followUpNote: row.followUpPlan ?? null,
+      }));
+      setItems(mapped);
+    } catch { }
     if (manual) setRefreshing(false);
     setLoading(false);
   }, []);
@@ -1050,7 +1063,7 @@ export default function HistoryPage() {
               return [msg.data, ...prev];
             });
           }
-        } catch {}
+        } catch { }
       };
       ws.onerror = () => {
         ws.close();
@@ -1067,12 +1080,21 @@ export default function HistoryPage() {
 
   const handleUpdate = useCallback((id: string, patch: Partial<C>) => {
     setItems((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    // Optimistically persist
-    fetch(`/api/doctor/consultations/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    }).catch(() => {});
+    // Persist to backend
+    const u = getUser();
+    if (!u) return;
+    fetch('/api/doctor/consultations', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        consultationId: id,
+        status: patch.status || 'completed',
+        notes: patch.notes,
+        summary: patch.diagnosis,
+        followUpPlan: patch.followUpNote,
+        followUpScheduledAt: patch.followUpScheduledAt,
+      }),
+    }).catch(() => { });
   }, []);
 
   const filtered = useMemo(() => {
@@ -1125,7 +1147,7 @@ export default function HistoryPage() {
       return so !== 0
         ? so
         : new Date(b[0].created_at).getTime() -
-            new Date(a[0].created_at).getTime();
+        new Date(a[0].created_at).getTime();
     });
   }, [items, filters]);
 

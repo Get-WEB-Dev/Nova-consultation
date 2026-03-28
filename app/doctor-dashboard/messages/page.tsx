@@ -97,73 +97,8 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
-// Mock doctor conversations (doctor-to-doctor)
-const MOCK_DOCTOR_CONVOS: Convo[] = [
-  {
-    conversationId: "dc1",
-    participantId: "d2",
-    participantName: "Daniel Tesfaye",
-    participantAvatar: null,
-    participantRole: "doctor",
-    participantSpecialty: "General Practice",
-    lastMessage: "Agreed on the referral. I'll prep the patient.",
-    lastMessageTime: new Date(Date.now() - 900000).toISOString(),
-    unreadCount: 1,
-    online: true,
-    status: "available",
-  },
-  {
-    conversationId: "dc2",
-    participantId: "d5",
-    participantName: "Hiwot Alemu",
-    participantAvatar: null,
-    participantRole: "doctor",
-    participantSpecialty: "Neurology",
-    lastMessage: "The MRI results suggest cortical involvement. Let's discuss.",
-    lastMessageTime: new Date(Date.now() - 3600000).toISOString(),
-    unreadCount: 0,
-    online: false,
-    status: "offline",
-  },
-];
-
-const MOCK_DOCTOR_MSGS: Msg[] = [
-  {
-    id: "m1",
-    from: "other",
-    text: "Hi, I have a patient with recurring migraines that aren't responding to triptans. Can I get a second opinion?",
-    time: "2h ago",
-    status: "read",
-  },
-  {
-    id: "m2",
-    from: "me",
-    text: "Of course. What's the frequency and duration of attacks? Any aura?",
-    time: "1h 50m ago",
-    status: "read",
-  },
-  {
-    id: "m3",
-    from: "other",
-    text: "2-3x per month, lasting 12-24 hours. Occasional visual aura. Tried sumatriptan and rizatriptan without relief.",
-    time: "1h 45m ago",
-    status: "read",
-  },
-  {
-    id: "m4",
-    from: "me",
-    text: "Given the frequency, consider preventive therapy. CGRP antagonists like erenumab or fremanezumab are worth trialing. Also confirm no MOH if she's using analgesics frequently.",
-    time: "1h 40m ago",
-    status: "read",
-  },
-  {
-    id: "m5",
-    from: "other",
-    text: "The MRI results suggest cortical involvement. Let's discuss.",
-    time: "10m ago",
-    status: "delivered",
-  },
-];
+const MOCK_DOCTOR_CONVOS: Convo[] = [];
+const MOCK_DOCTOR_MSGS: Msg[] = [];
 
 export default function MessagesPage() {
   const [tab, setTab] = useState<Tab>("patients");
@@ -192,7 +127,7 @@ export default function MessagesPage() {
 
       // Load patient conversations
       try {
-        const res = await fetch(`/api/messages/conversations?userId=${u.id}`);
+        const res = await fetch(`/api/conversations?doctorId=${u.id}`);
         const j = await res.json();
         if (j.data) {
           setConvos(
@@ -209,7 +144,7 @@ export default function MessagesPage() {
             })),
           );
         }
-      } catch {}
+      } catch { }
       setLoadingConvos(false);
 
       // Load reviews
@@ -217,7 +152,7 @@ export default function MessagesPage() {
         const res = await fetch(`/api/doctor/reviews?doctorId=${u.id}`);
         const j = await res.json();
         if (j.data) setReviews(j.data);
-      } catch {}
+      } catch { }
 
       // Subscribe to real-time
       const unsub1 = subscribeToConversations(u.id, (convo: any) => {
@@ -276,7 +211,7 @@ export default function MessagesPage() {
             fileType: m.file_type,
           })),
         );
-      } catch {}
+      } catch { }
       setLoadingMsgs(false);
     },
     [user],
@@ -340,11 +275,11 @@ export default function MessagesPage() {
         prev.map((m) =>
           m.id === tmpId
             ? {
-                ...m,
-                id: j.data?.id || tmpId,
-                isPending: false,
-                status: "delivered",
-              }
+              ...m,
+              id: j.data?.id || tmpId,
+              isPending: false,
+              status: "delivered",
+            }
             : m,
         ),
       );
@@ -438,10 +373,10 @@ export default function MessagesPage() {
                 style={
                   tab === t
                     ? {
-                        background: "white",
-                        color: NAV_BG,
-                        boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
-                      }
+                      background: "white",
+                      color: NAV_BG,
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+                    }
                     : { color: "#64748b" }
                 }
               >
@@ -701,11 +636,10 @@ export default function MessagesPage() {
                           </div>
                         ) : (
                           <div
-                            className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${
-                              isMe
+                            className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${isMe
                                 ? "text-white rounded-br-sm"
                                 : "text-slate-800 bg-white border border-slate-200 rounded-bl-sm"
-                            }`}
+                              }`}
                             style={isMe ? { background: NAV_BG } : {}}
                           >
                             {msg.text}

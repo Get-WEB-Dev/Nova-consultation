@@ -72,7 +72,19 @@ export async function updateConsultationStatus(
     consultationId: string,
     status: string,
     notes?: string,
-    summary?: string
+    summary?: string,
+    extra?: {
+        outcome?: string;
+        follow_up_priority?: string;
+        diagnosis?: string;
+        prescription?: string;
+        clinical_notes?: string;
+        chief_complaint?: string;
+        follow_up_plan?: string;
+        is_follow_up?: boolean;
+        follow_up_scheduled_at?: string;
+        duration_minutes?: number;
+    }
 ) {
     const admin = createAdminClient();
     const update: any = { status };
@@ -80,6 +92,18 @@ export async function updateConsultationStatus(
     if (summary !== undefined) update.summary = summary;
     if (status === 'active') update.started_at = new Date().toISOString();
     if (status === 'completed') update.ended_at = new Date().toISOString();
+    if (extra) {
+        if (extra.outcome) update.outcome = extra.outcome;
+        if (extra.follow_up_priority) update.follow_up_priority = extra.follow_up_priority;
+        if (extra.diagnosis) update.diagnosis = extra.diagnosis;
+        if (extra.prescription) update.prescription = extra.prescription;
+        if (extra.clinical_notes) update.clinical_notes = extra.clinical_notes;
+        if (extra.chief_complaint) update.chief_complaint = extra.chief_complaint;
+        if (extra.follow_up_plan) update.follow_up_plan = extra.follow_up_plan;
+        if (extra.is_follow_up !== undefined) update.is_follow_up = extra.is_follow_up;
+        if (extra.follow_up_scheduled_at) update.follow_up_scheduled_at = extra.follow_up_scheduled_at;
+        if (extra.duration_minutes !== undefined) update.duration_minutes = extra.duration_minutes;
+    }
 
     const { data, error } = await admin
         .from('consultations')
@@ -109,4 +133,42 @@ export async function updateDoctorProfile(doctorId: string, updates: Partial<Dat
         .update(updates as never)
         .eq('id', doctorId);
     if (error) throw error;
+}
+
+// ── Save structured notes ─────────────────────────────────────
+export async function saveStructuredNotes(
+    consultationId: string,
+    notes: {
+        chiefComplaint?: string;
+        diagnosis?: string;
+        prescription?: string;
+        clinicalNotes?: string;
+        followUpPlan?: string;
+    }
+) {
+    const admin = createAdminClient();
+    const update: any = {};
+    if (notes.chiefComplaint !== undefined) update.chief_complaint = notes.chiefComplaint;
+    if (notes.diagnosis !== undefined) update.diagnosis = notes.diagnosis;
+    if (notes.prescription !== undefined) update.prescription = notes.prescription;
+    if (notes.clinicalNotes !== undefined) update.clinical_notes = notes.clinicalNotes;
+    if (notes.followUpPlan !== undefined) update.follow_up_plan = notes.followUpPlan;
+    // Also store a combined text in the legacy `notes` column for backward compat
+    const parts = [
+        notes.chiefComplaint && `Chief Complaint: ${notes.chiefComplaint}`,
+        notes.diagnosis && `Diagnosis: ${notes.diagnosis}`,
+        notes.prescription && `Prescription: ${notes.prescription}`,
+        notes.clinicalNotes && `Clinical Notes: ${notes.clinicalNotes}`,
+        notes.followUpPlan && `Follow-up Plan: ${notes.followUpPlan}`,
+    ].filter(Boolean);
+    if (parts.length) update.notes = parts.join('\n');
+
+    const { data, error } = await admin
+        .from('consultations')
+        .update(update as never)
+        .eq('id', consultationId)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
 }

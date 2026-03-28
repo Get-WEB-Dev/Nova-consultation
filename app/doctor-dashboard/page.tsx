@@ -269,41 +269,9 @@ export default function DoctorHomePage() {
   const [avgTime, setAvgTime] = useState(15);
   const [sessionFee, setSessionFee] = useState(0);
 
-  // Mock follow-ups & pending tasks (replace with real API)
-  const [followUps] = useState<FollowUpItem[]>([
-    {
-      id: "1",
-      patientName: "Meron Alemu",
-      reason: "Post-prescription check",
-      scheduledAt: new Date().toISOString(),
-    },
-    {
-      id: "2",
-      patientName: "Yonas Girma",
-      reason: "Blood pressure follow-up",
-      scheduledAt: new Date().toISOString(),
-    },
-    {
-      id: "3",
-      patientName: "Sara Bekele",
-      reason: "Lab results review",
-      scheduledAt: new Date().toISOString(),
-    },
-  ]);
-  const [pendingTasks] = useState<PendingTask[]>([
-    {
-      id: "1",
-      type: "note",
-      patientName: "Dawit Haile",
-      details: "Consultation notes pending",
-    },
-    {
-      id: "2",
-      type: "prescription",
-      patientName: "Tigist Worku",
-      details: "Prescription not yet issued",
-    },
-  ]);
+  // Remote follow-ups & pending tasks
+  const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
+  const [pendingTasks, setPendingTasks] = useState<PendingTask[]>([]);
 
   useEffect(() => {
     const u = getUser();
@@ -319,8 +287,14 @@ export default function DoctorHomePage() {
         fetch(`/api/doctor/consultations?doctorId=${u.id}`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
+        fetch(`/api/follow-ups?doctorId=${u.id}`)
+          .then((r) => r.json())
+          .catch(() => ({ data: [] })),
+        fetch(`/api/doctor/pending-tasks?doctorId=${u.id}`)
+          .then((r) => r.json())
+          .catch(() => ({ data: [] })),
       ])
-        .then(([p, q, c]) => {
+        .then(([p, q, c, f, t]) => {
           if (p.data) {
             setProfile(p.data);
             setIsOnline(
@@ -367,9 +341,23 @@ export default function DoctorHomePage() {
             )[0];
             setLastConsult({
               patientName: last.patientName || "Patient",
-              issue: last.notes || "General consultation",
+              issue: last.diagnosis || last.summary || last.notes || "General consultation",
               durationMinutes: last.durationMinutes || 0,
             });
+          }
+
+          if (f.data) {
+            setFollowUps(
+              f.data.map((x: any) => ({
+                id: x.id,
+                patientName: x.patientName || x.users?.name || "Patient",
+                reason: x.reason || x.diagnosis || x.summary || "Follow-up",
+                scheduledAt: x.scheduledAt || x.follow_up_scheduled_at,
+              }))
+            );
+          }
+          if (t.data) {
+            setPendingTasks(t.data);
           }
         })
         .finally(() => setLoading(false));
@@ -392,7 +380,7 @@ export default function DoctorHomePage() {
           status: val ? "available" : "offline",
         }),
       });
-    } catch {}
+    } catch { }
     setToggling(false);
   };
 

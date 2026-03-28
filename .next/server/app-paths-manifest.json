@@ -1,15 +1,8 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
   "/api/notifications/route": "app/api/notifications/route.js",
-  "/api/doctor/profile/route": "app/api/doctor/profile/route.js",
-  "/api/queue/route": "app/api/queue/route.js",
   "/api/doctor/consultations/route": "app/api/doctor/consultations/route.js",
-  "/api/doctors/route": "app/api/doctors/route.js",
-  "/api/posts/route": "app/api/posts/route.js",
-  "/doctor-dashboard/page": "app/doctor-dashboard/page.js",
-  "/doctor-dashboard/schedule/page": "app/doctor-dashboard/schedule/page.js",
-  "/doctor-dashboard/settings/page": "app/doctor-dashboard/settings/page.js",
-  "/doctor-dashboard/doctors/page": "app/doctor-dashboard/doctors/page.js",
+  "/api/follow-ups/route": "app/api/follow-ups/route.js",
+  "/doctor-dashboard/history/page": "app/doctor-dashboard/history/page.js",
   "/doctor-dashboard/messages/page": "app/doctor-dashboard/messages/page.js",
-  "/doctor-dashboard/feed/page": "app/doctor-dashboard/feed/page.js"
+  "/doctor-dashboard/followups/page": "app/doctor-dashboard/followups/page.js"
 }

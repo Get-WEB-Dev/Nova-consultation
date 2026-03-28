@@ -425,136 +425,7 @@ export default function DoctorsPage() {
   const PER_PAGE = 12;
 
   // Mock data enriched
-  const MOCK_DOCTORS: Doctor[] = [
-    {
-      id: "d1",
-      name: "Aisha Kamara",
-      specialty: "Cardiology",
-      experience_years: 12,
-      rating: 4.9,
-      review_count: 248,
-      patients_served: 1840,
-      avatar_url: null,
-      status: "available",
-      hospital: "Addis Ababa Medical Center",
-      languages: ["English", "Amharic"],
-      bio: "Board-certified cardiologist specializing in preventive cardiology and heart failure management.",
-      fee: 500,
-      consultation_type: "Video & In-person",
-    },
-    {
-      id: "d2",
-      name: "Daniel Tesfaye",
-      specialty: "General Practice",
-      experience_years: 8,
-      rating: 4.7,
-      review_count: 412,
-      patients_served: 3200,
-      avatar_url: null,
-      status: "in_consultation",
-      hospital: "St. Paul's Hospital",
-      languages: ["English", "Amharic", "Oromo"],
-      bio: "Comprehensive primary care with a focus on preventive medicine and chronic disease management.",
-      fee: 300,
-      consultation_type: "Video consultation",
-    },
-    {
-      id: "d3",
-      name: "Miriam Gebre",
-      specialty: "Pediatrics",
-      experience_years: 15,
-      rating: 4.8,
-      review_count: 590,
-      patients_served: 4100,
-      avatar_url: null,
-      status: "available",
-      hospital: "Children's Hospital AAU",
-      languages: ["English", "Amharic"],
-      bio: "Dedicated pediatrician with expertise in developmental medicine and childhood nutrition.",
-      fee: 400,
-      consultation_type: "Video & In-person",
-    },
-    {
-      id: "d4",
-      name: "Solomon Bekele",
-      specialty: "Dermatology",
-      experience_years: 10,
-      rating: 4.6,
-      review_count: 187,
-      patients_served: 1200,
-      avatar_url: null,
-      status: "offline",
-      hospital: null,
-      languages: ["English", "Amharic"],
-      bio: "Skin specialist focused on medical and cosmetic dermatology.",
-      fee: 450,
-      consultation_type: "Video consultation",
-    },
-    {
-      id: "d5",
-      name: "Hiwot Alemu",
-      specialty: "Neurology",
-      experience_years: 18,
-      rating: 4.9,
-      review_count: 302,
-      patients_served: 2100,
-      avatar_url: null,
-      status: "available",
-      hospital: "Tikur Anbessa Hospital",
-      languages: ["English", "Amharic", "French"],
-      bio: "Senior neurologist specializing in epilepsy, stroke care, and headache disorders.",
-      fee: 600,
-      consultation_type: "Video consultation",
-    },
-    {
-      id: "d6",
-      name: "Yonas Hailu",
-      specialty: "Psychiatry",
-      experience_years: 9,
-      rating: 4.7,
-      review_count: 156,
-      patients_served: 890,
-      avatar_url: null,
-      status: "offline",
-      hospital: "Amanuel Mental Specialty Hospital",
-      languages: ["English", "Amharic"],
-      bio: "Mental health specialist with trauma-informed care expertise.",
-      fee: 550,
-      consultation_type: "Video consultation",
-    },
-    {
-      id: "d7",
-      name: "Tigist Worku",
-      specialty: "Orthopedics",
-      experience_years: 14,
-      rating: 4.5,
-      review_count: 220,
-      patients_served: 1560,
-      avatar_url: null,
-      status: "in_consultation",
-      hospital: "Black Lion Hospital",
-      languages: ["English", "Amharic"],
-      bio: "Orthopedic surgeon specializing in sports injuries and joint replacement.",
-      fee: 700,
-      consultation_type: "In-person preferred",
-    },
-    {
-      id: "d8",
-      name: "Biruk Tadesse",
-      specialty: "Endocrinology",
-      experience_years: 11,
-      rating: 4.8,
-      review_count: 143,
-      patients_served: 970,
-      avatar_url: null,
-      status: "available",
-      hospital: "St. Gabriel Hospital",
-      languages: ["English", "Amharic"],
-      bio: "Endocrinologist specializing in diabetes management, thyroid disorders, and hormonal conditions.",
-      fee: 480,
-      consultation_type: "Video & In-person",
-    },
-  ];
+  const MOCK_DOCTORS: Doctor[] = [];
 
   useEffect(() => {
     const load = async () => {
@@ -572,10 +443,7 @@ export default function DoctorsPage() {
             }
           }
         }
-      } catch {}
-      // fallback to mock
-      await new Promise((r) => setTimeout(r, 600));
-      setDoctors(MOCK_DOCTORS);
+      } catch { }
       setLoading(false);
     };
     load();
@@ -630,10 +498,10 @@ export default function DoctorsPage() {
                 statusFilter === s
                   ? { background: NAV_BG, color: "white", borderColor: NAV_BG }
                   : {
-                      background: "white",
-                      color: "#475569",
-                      borderColor: "#e2e8f0",
-                    }
+                    background: "white",
+                    color: "#475569",
+                    borderColor: "#e2e8f0",
+                  }
               }
             >
               {s}
@@ -685,10 +553,10 @@ export default function DoctorsPage() {
               specialty === s
                 ? { background: ACCENT, color: "white", borderColor: ACCENT }
                 : {
-                    background: "white",
-                    color: "#64748b",
-                    borderColor: "#e2e8f0",
-                  }
+                  background: "white",
+                  color: "#64748b",
+                  borderColor: "#e2e8f0",
+                }
             }
           >
             {s}

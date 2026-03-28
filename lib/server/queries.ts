@@ -731,7 +731,7 @@ export async function fetchFollowUps(doctorId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("consultations")
-    .select("*, users!patient_id(name, avatar_url)")
+    .select("*, users!patient_id(name, avatar_url, email)")
     .eq("doctor_id", doctorId)
     .eq("is_follow_up", true)
     .order("follow_up_scheduled_at", { ascending: true });

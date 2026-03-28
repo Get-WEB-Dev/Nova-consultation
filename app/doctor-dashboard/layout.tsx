@@ -163,7 +163,7 @@ export default function DoctorDashboardLayout({
             status: j.data.status,
             hospital: j.data.hospital,
           });
-      } catch {}
+      } catch { }
     })();
   }, [router]);
 
@@ -183,7 +183,7 @@ export default function DoctorDashboardLayout({
             actionUrl: n.action_url,
           })),
         );
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -241,7 +241,7 @@ export default function DoctorDashboardLayout({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notifId: id }),
       });
-    } catch {}
+    } catch { }
   };
   const markAllRead = async () => {
     if (!user) return;
@@ -252,7 +252,7 @@ export default function DoctorDashboardLayout({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, markAll: true }),
       });
-    } catch {}
+    } catch { }
   };
 
   if (pathname === "/doctor-dashboard/consult") return <>{children}</>;
@@ -548,7 +548,7 @@ export default function DoctorDashboardLayout({
   return (
     <div className="min-h-screen" style={{ background: "#eef2f7" }}>
       {/* ══ MOBILE ══════════════════════════════════════════════════════════ */}
-      <div className="lg:hidden">
+      <div className="md:hidden">
         {/* Mobile top bar */}
         <header
           style={{ background: NAV_BG, boxShadow: "0 2px 8px rgba(0,0,0,0.2)" }}
@@ -660,18 +660,18 @@ export default function DoctorDashboardLayout({
         )}
       </div>
 
-      {/* ══ DESKTOP ═════════════════════════════════════════════════════════ */}
-      <div className="hidden lg:flex min-h-screen">
+      {/* ══ DESKTOP & TABLET ════════════════════════════════════════════════ */}
+      <div className="hidden md:flex min-h-screen">
         {/* Desktop sidebar — fixed, LinkedIn style */}
         <aside
-          className="fixed top-0 left-0 h-full w-64 xl:w-72 border-r border-slate-200 bg-white z-40 overflow-hidden"
+          className="fixed top-0 left-0 h-full w-56 lg:w-64 xl:w-72 border-r border-slate-200 bg-white z-40 overflow-hidden"
           style={{ boxShadow: "2px 0 12px rgba(0,0,0,0.05)" }}
         >
           <SidebarContent />
         </aside>
 
         {/* Desktop main */}
-        <div className="flex-1 min-h-screen ml-64 xl:ml-72">
+        <div className="flex-1 min-h-screen ml-56 lg:ml-64 xl:ml-72">
           {/* Desktop top bar */}
           <header
             className="sticky top-0 z-30 border-b border-slate-200 bg-white flex items-center justify-between h-14 px-6"
