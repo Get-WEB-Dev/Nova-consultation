@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{}"
+self.__REACT_LOADABLE_MANIFEST="{\"app/components/ZoomVideoCall.jsx -> @zoom/videosdk\":{\"id\":\"app/components/ZoomVideoCall.jsx -> @zoom/videosdk\",\"files\":[\"static/chunks/_app-pages-browser_node_modules_zoom_videosdk_dist_index_esm_js.js\"]}}"
