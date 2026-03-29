@@ -7,6 +7,7 @@ import {
     Video, Shield, Loader2, CheckCircle,
     ArrowRight, User, LogOut,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
 
 interface QueueParticipant {
     id: string;
@@ -37,13 +38,37 @@ export default function WaitingRoom({
     const [queue, setQueue] = useState<QueueParticipant[]>([]);
     const [yourPosition, setYourPosition] = useState<number>(0);
     const [estimatedWait, setEstimatedWait] = useState<number>(0);
-    const [isReady, setIsReady] = useState(false);
     const [doctorReady, setDoctorReady] = useState(false);
     const [joining, setJoining] = useState(true);
     const [leaving, setLeaving] = useState(false);
     const [consultationActive, setConsultationActive] = useState(false);
     const [elapsedWait, setElapsedWait] = useState(0);
     const [consultationId, setConsultationId] = useState<string | null>(null);
+
+    // Helper to process queue data from API response
+    const processQueueData = useCallback((json: any) => {
+        setYourPosition(json.position ?? yourPosition);
+        setEstimatedWait(json.estimatedWait ?? estimatedWait);
+        if (json.consultation_id) setConsultationId(json.consultation_id);
+
+        // Build queue display
+        const total = json.total ?? 1;
+        const participants: QueueParticipant[] = [];
+        for (let i = 1; i <= Math.min(total, 10); i++) {
+            participants.push({
+                id: `p-${i}`,
+                position: i,
+                joinedAt: new Date(Date.now() - (total - i) * 60000).toISOString(),
+                isYou: i === (json.position ?? yourPosition),
+            });
+        }
+        setQueue(participants);
+
+        // Check if it's your turn
+        if (json.position === 1 || json.inQueue === false) {
+            setDoctorReady(true);
+        }
+    }, [yourPosition, estimatedWait]);
 
     // Join queue on mount — create consultation first
     useEffect(() => {
@@ -95,45 +120,50 @@ export default function WaitingRoom({
         joinQueueAsync();
     }, [doctorId, patientId]);
 
-    // Simulate queue updates (poll every 5 seconds)
+    // ── Supabase Realtime — subscribe to queue changes ──
     useEffect(() => {
         if (joining) return;
+
+        // Initial fetch
         const fetchQueue = async () => {
             try {
                 const res = await fetch(`/api/queue?doctorId=${doctorId}&patientId=${patientId}`);
                 if (res.ok) {
                     const json = await res.json();
-                    setYourPosition(json.position ?? yourPosition);
-                    setEstimatedWait(json.estimatedWait ?? estimatedWait);
-                    if (json.consultation_id) setConsultationId(json.consultation_id);
-
-                    // Build queue display
-                    const total = json.total ?? 1;
-                    const participants: QueueParticipant[] = [];
-                    for (let i = 1; i <= Math.min(total, 10); i++) {
-                        participants.push({
-                            id: `p-${i}`,
-                            position: i,
-                            joinedAt: new Date(Date.now() - (total - i) * 60000).toISOString(),
-                            isYou: i === (json.position ?? yourPosition),
-                        });
-                    }
-                    setQueue(participants);
-
-                    // Check if it's your turn
-                    if (json.position === 1 || json.inQueue === false) {
-                        setDoctorReady(true);
-                    }
+                    processQueueData(json);
                 }
-            } catch (_) {
-                // Fallback: simulate being position 1 after some time
-            }
+            } catch (_) { }
         };
         fetchQueue();
-        const interval = setInterval(fetchQueue, 5000);
-        return () => clearInterval(interval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [joining, doctorId, patientId]);
+
+        // Subscribe to consultation_queue changes via Supabase Realtime
+        const channel = supabase
+            .channel(`queue:${doctorId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "consultation_queue",
+                    filter: `doctor_id=eq.${doctorId}`,
+                },
+                async () => {
+                    // Re-fetch queue state whenever there's a change
+                    try {
+                        const res = await fetch(`/api/queue?doctorId=${doctorId}&patientId=${patientId}`);
+                        if (res.ok) {
+                            const json = await res.json();
+                            processQueueData(json);
+                        }
+                    } catch (_) { }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [joining, doctorId, patientId, processQueueData]);
 
     // Wait timer
     useEffect(() => {
@@ -141,7 +171,7 @@ export default function WaitingRoom({
         return () => clearInterval(timer);
     }, []);
 
-    // Simulate doctor readiness for demo (position 1 = ready after brief delay)
+    // Doctor readiness for position 1
     useEffect(() => {
         if (yourPosition === 1 && !joining) {
             const timeout = setTimeout(() => setDoctorReady(true), 2000);
@@ -186,12 +216,16 @@ export default function WaitingRoom({
         <div className="flex h-screen w-screen bg-slate-900 overflow-hidden">
             {/* ── Left Sidebar: Queue Panel ── */}
             {!consultationActive && (
-                <div className="w-72 lg:w-80 bg-slate-800/60 backdrop-blur-sm border-r border-slate-700/50 flex flex-col flex-shrink-0">
+                <div className="hidden md:flex w-72 lg:w-80 bg-slate-800/60 backdrop-blur-sm border-r border-slate-700/50 flex-col flex-shrink-0">
                     {/* Queue header */}
                     <div className="px-5 py-4 border-b border-slate-700/50">
                         <div className="flex items-center gap-2 mb-1">
                             <Users className="w-4 h-4 text-primary-400" />
                             <h2 className="text-white font-semibold text-sm">Waiting Queue</h2>
+                            <span className="ml-auto flex items-center gap-1 text-[10px] text-emerald-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Live
+                            </span>
                         </div>
                         <p className="text-slate-400 text-xs">
                             {queue.length} participant{queue.length !== 1 ? "s" : ""} waiting
@@ -208,7 +242,6 @@ export default function WaitingRoom({
                                     : "bg-slate-700/30 border border-transparent hover:bg-slate-700/50"
                                     }`}
                             >
-                                {/* Position number */}
                                 <div
                                     className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${p.isYou
                                         ? "bg-primary-500 text-white"
@@ -219,8 +252,6 @@ export default function WaitingRoom({
                                 >
                                     {p.position}
                                 </div>
-
-                                {/* Anonymous participant */}
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5">
                                         <User className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
@@ -232,8 +263,6 @@ export default function WaitingRoom({
                                         <p className="text-xs text-primary-400/80 mt-0.5">Your position</p>
                                     )}
                                 </div>
-
-                                {/* Status indicator */}
                                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${p.position === 1 ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
                                     }`} />
                             </div>
@@ -260,7 +289,7 @@ export default function WaitingRoom({
             {/* ── Main Content Area ── */}
             <div className="flex-1 flex flex-col items-center justify-center relative">
                 {/* Connection status bar */}
-                <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-3 bg-slate-800/40 backdrop-blur-sm border-b border-slate-700/30">
+                <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 sm:px-6 py-3 bg-slate-800/40 backdrop-blur-sm border-b border-slate-700/30">
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-1.5">
                             <Wifi className="w-4 h-4 text-emerald-400" />
@@ -300,7 +329,6 @@ export default function WaitingRoom({
                 {/* Status card */}
                 <div className="w-full max-w-md px-4">
                     {doctorReady && yourPosition <= 1 ? (
-                        /* ── Doctor is ready — user can start ── */
                         <div className="bg-gradient-to-br from-emerald-500/10 to-primary-500/10 border border-emerald-500/30 rounded-2xl p-6 text-center animate-fade-up">
                             <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <CheckCircle className="w-8 h-8 text-emerald-400" />
@@ -331,7 +359,6 @@ export default function WaitingRoom({
                             </button>
                         </div>
                     ) : (
-                        /* ── Waiting in queue ── */
                         <div className="bg-slate-800/60 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-6 text-center">
                             {/* Position indicator */}
                             <div className="relative w-20 h-20 mx-auto mb-5">

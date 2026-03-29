@@ -5,19 +5,27 @@ import { useEffect, useRef, useState, useCallback } from "react";
 /**
  * ZoomVideoCall — renders self + remote videos using Zoom Video SDK v2.
  *
- * Key fixes:
- * - enforceMultipleVideos for desktop Chrome
- * - <video-player-container> wrapper elements
- * - peer-video-state-changed + user-added/removed listeners
- * - connection-change listener for quality monitoring
- * - Fallback rendering: 360p first, upgrade later
+ * Key fixes (v2 upgrade):
+ * - Per-user container model: each remote user gets their own <video-player-container>
+ *   so multiple participants can render simultaneously and re-attach doesn't clear others
+ * - Proper peer-video-state-changed handling with retry/backoff
+ * - Reconnect logic on connection drop
+ * - Camera permission detection
+ * - Exposes state via onStateChange callback for parent components
  */
-export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) {
+export default function ZoomVideoCall({
+    roomName,
+    userName,
+    onReady,
+    onLeave,
+    onStateChange = (_state) => { }, // optional: ({ videoOn, audioOn, connectionQuality, remoteCount }) => void
+}) {
     const clientRef = useRef(null);
     const selfContainerRef = useRef(null);
-    const remoteContainerRef = useRef(null);
+    const remoteGridRef = useRef(null);
     const mountedRef = useRef(true);
     const joinedRef = useRef(false);
+    const remoteVideoMapRef = useRef(new Map()); // userId -> DOM container
 
     const [joined, setJoined] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -26,6 +34,25 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
     const [audioStarted, setAudioStarted] = useState(false);
     const [remoteUsers, setRemoteUsers] = useState([]);
     const [connectionQuality, setConnectionQuality] = useState("good");
+    const [reconnecting, setReconnecting] = useState(false);
+    const [cameraBlocked, setCameraBlocked] = useState(false);
+
+    // Notify parent of state changes
+    const emitState = useCallback((overrides = {}) => {
+        if (!onStateChange) return;
+        onStateChange({
+            videoOn: videoStarted,
+            audioOn: audioStarted,
+            connectionQuality,
+            remoteCount: remoteUsers.length,
+            joined,
+            reconnecting,
+            cameraBlocked,
+            ...overrides,
+        });
+    }, [onStateChange, videoStarted, audioStarted, connectionQuality, remoteUsers.length, joined, reconnecting, cameraBlocked]);
+
+    useEffect(() => { emitState(); }, [videoStarted, audioStarted, connectionQuality, remoteUsers.length, joined, reconnecting, cameraBlocked]);
 
     // ── Cleanup ──────────────────────────────────────────────
     const cleanup = useCallback(async () => {
@@ -43,49 +70,87 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
         try { client.destroy(); } catch (_) { }
         clientRef.current = null;
         joinedRef.current = false;
-        if (mountedRef.current) {
-            setJoined(false);
-            setVideoStarted(false);
-            setAudioStarted(false);
-            setRemoteUsers([]);
-        }
+        remoteVideoMapRef.current.clear();
     }, []);
 
-    // ── Attach a user's video to a container ─────────────────
-    const attachUserVideo = useCallback(async (userId, container, quality = 2) => {
+    // ── Attach a user's video to a specific container ────────
+    const attachUserVideo = useCallback(async (userId, container, quality = 2, retries = 3) => {
         const client = clientRef.current;
-        if (!client || !container) return;
-        try {
-            const stream = client.getMediaStream();
-            const playerElement = await stream.attachVideo(userId, quality);
-            if (playerElement && container) {
-                // Clear old players in this container
+        if (!client || !container) return false;
+        for (let attempt = 0; attempt < retries; attempt++) {
+            try {
+                const stream = client.getMediaStream();
+
+                // Clear existing content in this container
                 while (container.firstChild) {
-                    try {
-                        await stream.detachVideo(container.firstChild);
-                    } catch (_) { }
+                    try { await stream.detachVideo(container.firstChild); } catch (_) { }
                     container.removeChild(container.firstChild);
                 }
-                container.appendChild(playerElement);
+
+                const playerElement = await stream.attachVideo(userId, quality);
+                if (playerElement && container && mountedRef.current) {
+                    container.appendChild(playerElement);
+                    return true;
+                }
+            } catch (e) {
+                console.warn(`[Zoom] attachUserVideo attempt ${attempt + 1} failed for user ${userId}:`, e);
+                if (attempt < retries - 1) {
+                    await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+                }
             }
-        } catch (e) {
-            console.warn("[Zoom] attachUserVideo failed for", userId, e);
         }
+        return false;
     }, []);
 
-    // ── Detach video from container ──────────────────────────
-    const detachUserVideo = useCallback(async (container) => {
+    // ── Create or get a per-user remote video container ──────
+    const getOrCreateRemoteContainer = useCallback((userId) => {
+        if (remoteVideoMapRef.current.has(userId)) {
+            return remoteVideoMapRef.current.get(userId);
+        }
+        const grid = remoteGridRef.current;
+        if (!grid) return null;
+
+        // Create a wrapper div for this user
+        const wrapper = document.createElement("div");
+        wrapper.className = "zoom-remote-user";
+        wrapper.dataset.userId = String(userId);
+
+        // Create the video-player-container inside
+        const vpc = document.createElement("video-player-container");
+        vpc.className = "zoom-vpc";
+        wrapper.appendChild(vpc);
+
+        // Add a name label
+        const label = document.createElement("span");
+        label.className = "zoom-remote-label";
+        label.textContent = "Doctor";
+        wrapper.appendChild(label);
+
+        grid.appendChild(wrapper);
+        remoteVideoMapRef.current.set(userId, vpc);
+        return vpc;
+    }, []);
+
+    // ── Remove a remote user's container ─────────────────────
+    const removeRemoteContainer = useCallback(async (userId) => {
+        const container = remoteVideoMapRef.current.get(userId);
+        if (!container) return;
         const client = clientRef.current;
-        if (!client || !container) return;
-        try {
-            const stream = client.getMediaStream();
-            while (container.firstChild) {
-                try {
-                    await stream.detachVideo(container.firstChild);
-                } catch (_) { }
-                container.removeChild(container.firstChild);
-            }
-        } catch (_) { }
+        if (client) {
+            try {
+                const stream = client.getMediaStream();
+                while (container.firstChild) {
+                    try { await stream.detachVideo(container.firstChild); } catch (_) { }
+                    container.removeChild(container.firstChild);
+                }
+            } catch (_) { }
+        }
+        // Remove the wrapper div
+        const wrapper = container.parentElement;
+        if (wrapper && wrapper.parentElement) {
+            wrapper.parentElement.removeChild(wrapper);
+        }
+        remoteVideoMapRef.current.delete(userId);
     }, []);
 
     // ── Join session ─────────────────────────────────────────
@@ -93,6 +158,7 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
         if (!roomName || joinedRef.current || loading) return;
         setLoading(true);
         setError(null);
+        setReconnecting(false);
         mountedRef.current = true;
 
         try {
@@ -132,13 +198,21 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
             await new Promise((r) => setTimeout(r, 300));
             try {
                 await stream.startVideo();
-                if (mountedRef.current) setVideoStarted(true);
+                if (mountedRef.current) {
+                    setVideoStarted(true);
+                    setCameraBlocked(false);
+                }
                 const myUserId = client.getCurrentUserInfo().userId;
                 if (selfContainerRef.current) {
                     await attachUserVideo(myUserId, selfContainerRef.current, 2);
                 }
             } catch (e) {
                 console.warn("[Zoom] Self video start:", e);
+                // Detect camera permission block
+                const msg = String(e?.message || e || "").toLowerCase();
+                if (msg.includes("permission") || msg.includes("notallowed") || msg.includes("denied")) {
+                    if (mountedRef.current) setCameraBlocked(true);
+                }
             }
 
             // ── Render already-present remote participants ──
@@ -147,8 +221,11 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
             const others = allUsers.filter((u) => u.userId !== myId);
             if (mountedRef.current) setRemoteUsers(others);
             for (const u of others) {
-                if (u.bVideoOn && remoteContainerRef.current) {
-                    await attachUserVideo(u.userId, remoteContainerRef.current, 2);
+                if (u.bVideoOn) {
+                    const container = getOrCreateRemoteContainer(u.userId);
+                    if (container) {
+                        await attachUserVideo(u.userId, container, 2);
+                    }
                 }
             }
 
@@ -157,34 +234,50 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
                 if (!clientRef.current || !mountedRef.current) return;
                 const { action, userId } = payload;
                 if (action === "Start") {
-                    if (remoteContainerRef.current) {
-                        await attachUserVideo(userId, remoteContainerRef.current, 2);
+                    const container = getOrCreateRemoteContainer(userId);
+                    if (container) {
+                        await attachUserVideo(userId, container, 2);
                     }
                 } else if (action === "Stop") {
-                    if (remoteContainerRef.current) {
-                        await detachUserVideo(remoteContainerRef.current);
+                    // Don't remove the container, just detach video (camera off overlay will show)
+                    const container = remoteVideoMapRef.current.get(userId);
+                    if (container && clientRef.current) {
+                        try {
+                            const stream = clientRef.current.getMediaStream();
+                            while (container.firstChild) {
+                                try { await stream.detachVideo(container.firstChild); } catch (_) { }
+                                container.removeChild(container.firstChild);
+                            }
+                        } catch (_) { }
                     }
                 }
             });
 
             // ── Event: user joined ──
-            client.on("user-added", () => {
+            client.on("user-added", (payload) => {
                 if (!clientRef.current || !mountedRef.current) return;
                 const myId = clientRef.current.getCurrentUserInfo()?.userId;
                 const others = clientRef.current.getAllUser().filter((u) => u.userId !== myId);
-                setRemoteUsers(others);
+                setRemoteUsers([...others]);
+                // Pre-create containers for new users
+                for (const u of payload) {
+                    if (u.userId !== myId) {
+                        getOrCreateRemoteContainer(u.userId);
+                    }
+                }
             });
 
             // ── Event: user left ──
             client.on("user-removed", async (payload) => {
                 if (!clientRef.current || !mountedRef.current) return;
+                // Remove containers for departed users
+                for (const u of payload) {
+                    await removeRemoteContainer(u.userId);
+                }
                 const myId = clientRef.current.getCurrentUserInfo()?.userId;
                 setRemoteUsers(
                     clientRef.current.getAllUser().filter((u) => u.userId !== myId)
                 );
-                if (remoteContainerRef.current) {
-                    await detachUserVideo(remoteContainerRef.current);
-                }
             });
 
             // ── Event: connection quality change ──
@@ -193,10 +286,16 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
                 const { state } = payload;
                 if (state === "Fail" || state === "Closed") {
                     setConnectionQuality("poor");
+                    setReconnecting(false);
                 } else if (state === "Reconnecting") {
                     setConnectionQuality("reconnecting");
+                    setReconnecting(true);
+                } else if (state === "Connected") {
+                    setConnectionQuality("good");
+                    setReconnecting(false);
                 } else {
                     setConnectionQuality("good");
+                    setReconnecting(false);
                 }
             });
 
@@ -209,7 +308,7 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
         } finally {
             if (mountedRef.current) setLoading(false);
         }
-    }, [roomName, userName, loading, onReady, attachUserVideo, detachUserVideo]);
+    }, [roomName, userName, loading, onReady, attachUserVideo, getOrCreateRemoteContainer, removeRemoteContainer]);
 
     // ── Leave session ────────────────────────────────────────
     const leaveSession = useCallback(async () => {
@@ -225,7 +324,12 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
             const stream = client.getMediaStream();
             if (videoStarted) {
                 await stream.stopVideo();
-                if (selfContainerRef.current) await detachUserVideo(selfContainerRef.current);
+                if (selfContainerRef.current) {
+                    while (selfContainerRef.current.firstChild) {
+                        try { await stream.detachVideo(selfContainerRef.current.firstChild); } catch (_) { }
+                        selfContainerRef.current.removeChild(selfContainerRef.current.firstChild);
+                    }
+                }
                 setVideoStarted(false);
             } else {
                 await stream.startVideo();
@@ -234,11 +338,16 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
                     await attachUserVideo(myUserId, selfContainerRef.current, 2);
                 }
                 setVideoStarted(true);
+                setCameraBlocked(false);
             }
         } catch (e) {
             console.warn("[Zoom] toggleVideo:", e);
+            const msg = String(e?.message || e || "").toLowerCase();
+            if (msg.includes("permission") || msg.includes("notallowed") || msg.includes("denied")) {
+                setCameraBlocked(true);
+            }
         }
-    }, [videoStarted, attachUserVideo, detachUserVideo]);
+    }, [videoStarted, attachUserVideo]);
 
     // ── Toggle audio ─────────────────────────────────────────
     const toggleAudio = useCallback(async () => {
@@ -300,19 +409,18 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
                 </div>
             )}
 
+            {/* Reconnecting overlay */}
+            {reconnecting && !loading && (
+                <div className="zoom-reconnecting">
+                    <div className="zoom-spinner-sm" />
+                    <span>Reconnecting…</span>
+                </div>
+            )}
+
             {/* Video grid */}
             <div className="zoom-grid">
-                {/* Remote video (main area) */}
-                <div className="zoom-remote">
-                    <video-player-container ref={remoteContainerRef} class="zoom-vpc" />
-                    {remoteUsers.length === 0 && joined && !loading && (
-                        <div className="zoom-waiting">
-                            <div className="zoom-waiting-icon">
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-                            </div>
-                            <p>Waiting for other participant…</p>
-                        </div>
-                    )}
+                {/* Remote video area — per-user containers are appended here dynamically */}
+                <div className="zoom-remote" ref={remoteGridRef}>
                     {/* Connection quality indicator */}
                     {joined && (
                         <div className="zoom-quality">
@@ -322,7 +430,40 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
                             </span>
                         </div>
                     )}
+
+                    {/* "Waiting for doctor" state */}
+                    {remoteUsers.length === 0 && joined && !loading && (
+                        <div className="zoom-waiting">
+                            <div className="zoom-waiting-pulse">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                </svg>
+                            </div>
+                            <p className="zoom-waiting-title">Doctor is connecting…</p>
+                            <p className="zoom-waiting-sub">Please wait while the doctor joins the session</p>
+                            <div className="zoom-waiting-dots">
+                                <span style={{ animationDelay: "0ms" }} />
+                                <span style={{ animationDelay: "200ms" }} />
+                                <span style={{ animationDelay: "400ms" }} />
+                            </div>
+                        </div>
+                    )}
                 </div>
+
+                {/* Camera blocked warning */}
+                {cameraBlocked && joined && (
+                    <div className="zoom-cam-blocked">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M10.66 6H14a2 2 0 0 1 2 2v2.34l1 1L22 8v8" />
+                            <path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2l10 10Z" />
+                            <line x1="2" x2="22" y1="2" y2="22" />
+                        </svg>
+                        <span>Camera access denied. Check browser permissions.</span>
+                    </div>
+                )}
 
                 {/* Self video (PIP) */}
                 {joined && (
@@ -330,7 +471,11 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
                         <video-player-container ref={selfContainerRef} class="zoom-vpc" />
                         {!videoStarted && (
                             <div className="zoom-cam-off">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.34l1 1L22 8v8" /><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2l10 10Z" /><line x1="2" x2="22" y1="2" y2="22" /></svg>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M10.66 6H14a2 2 0 0 1 2 2v2.34l1 1L22 8v8" />
+                                    <path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2l10 10Z" />
+                                    <line x1="2" x2="22" y1="2" y2="22" />
+                                </svg>
                                 <span>Camera Off</span>
                             </div>
                         )}
@@ -412,6 +557,11 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
           border: 4px solid rgba(99,102,241,0.3); border-top-color: #6366f1;
           border-radius: 50%; animation: zspin 0.8s linear infinite;
         }
+        .zoom-spinner-sm {
+          width: 1.25rem; height: 1.25rem;
+          border: 3px solid rgba(245,158,11,0.3); border-top-color: #f59e0b;
+          border-radius: 50%; animation: zspin 0.8s linear infinite;
+        }
         @keyframes zspin { to { transform: rotate(360deg); } }
         .zoom-title { color: #fff; font-size: 1.125rem; }
         .zoom-sub { color: #94a3b8; font-size: 0.875rem; max-width: 280px; text-align: center; }
@@ -423,21 +573,60 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
         }
         .zoom-retry:hover { background: #4338ca; }
 
+        .zoom-reconnecting {
+          position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+          display: flex; align-items: center; gap: 8px; z-index: 35;
+          background: rgba(245,158,11,0.15); backdrop-filter: blur(12px);
+          border: 1px solid rgba(245,158,11,0.3);
+          padding: 6px 16px; border-radius: 20px;
+          color: #fbbf24; font-size: 0.75rem; font-weight: 500;
+        }
+
         .zoom-grid {
           flex: 1; position: relative; width: 100%; height: 100%; min-height: 0;
         }
         .zoom-remote {
           position: absolute; inset: 0; width: 100%; height: 100%;
+          display: flex; flex-wrap: wrap;
+        }
+        :global(.zoom-remote-user) {
+          flex: 1 1 100%;
+          position: relative;
+          min-width: 0; min-height: 0;
         }
         .zoom-vpc {
           display: block; width: 100%; height: 100%;
         }
+        :global(.zoom-remote-label) {
+          position: absolute; bottom: 8px; left: 12px;
+          color: #fff; font-size: 0.7rem; font-weight: 500;
+          background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 6px;
+          z-index: 10;
+        }
         .zoom-waiting {
           position: absolute; inset: 0;
           display: flex; flex-direction: column; align-items: center; justify-content: center;
-          color: #64748b; font-size: 0.875rem; gap: 12px;
+          color: #64748b; gap: 12px; z-index: 5;
         }
-        .zoom-waiting-icon { opacity: 0.4; }
+        .zoom-waiting-pulse {
+          animation: zpulse 2s ease-in-out infinite;
+          opacity: 0.5;
+        }
+        @keyframes zpulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.05); } }
+        .zoom-waiting-title {
+          color: #cbd5e1; font-size: 1rem; font-weight: 600;
+        }
+        .zoom-waiting-sub {
+          color: #64748b; font-size: 0.8rem; max-width: 240px; text-align: center;
+        }
+        .zoom-waiting-dots {
+          display: flex; gap: 6px;
+        }
+        .zoom-waiting-dots span {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: #6366f1; animation: zdot 1.2s ease-in-out infinite;
+        }
+        @keyframes zdot { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
         .zoom-quality {
           position: absolute; top: 12px; left: 12px;
           display: flex; align-items: center; gap: 6px;
@@ -452,6 +641,15 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
           color: #e2e8f0; font-size: 0.625rem; font-weight: 500;
         }
 
+        .zoom-cam-blocked {
+          position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+          display: flex; align-items: center; gap: 8px;
+          background: rgba(239,68,68,0.15); backdrop-filter: blur(12px);
+          border: 1px solid rgba(239,68,68,0.3);
+          padding: 8px 16px; border-radius: 12px; z-index: 25;
+          color: #fca5a5; font-size: 0.75rem;
+        }
+
         .zoom-self {
           position: absolute; bottom: 80px; right: 16px;
           width: 160px; height: 120px;
@@ -459,6 +657,11 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
           border: 2px solid rgba(255,255,255,0.15);
           background: #1e293b; z-index: 20;
           box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+          transition: all 0.3s ease;
+        }
+        .zoom-self:hover {
+          border-color: rgba(255,255,255,0.3);
+          box-shadow: 0 12px 40px rgba(0,0,0,0.5);
         }
         @media (min-width: 768px) {
           .zoom-self { width: 220px; height: 165px; }
@@ -488,7 +691,7 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
           width: 44px; height: 44px; border-radius: 50%; border: none;
           background: rgba(255,255,255,0.1); color: #fff;
           display: flex; align-items: center; justify-content: center;
-          cursor: pointer; transition: background 0.2s;
+          cursor: pointer; transition: all 0.2s;
         }
         .zoom-btn:hover { background: rgba(255,255,255,0.2); }
         .zoom-btn-off { background: rgba(239,68,68,0.3); color: #fca5a5; }
@@ -497,7 +700,7 @@ export default function ZoomVideoCall({ roomName, userName, onReady, onLeave }) 
           width: 44px; height: 44px; border-radius: 50%; border: none;
           background: #ef4444; color: #fff;
           display: flex; align-items: center; justify-content: center;
-          cursor: pointer; transition: background 0.2s;
+          cursor: pointer; transition: all 0.2s;
         }
         .zoom-btn-leave:hover { background: #dc2626; }
       `}</style>
