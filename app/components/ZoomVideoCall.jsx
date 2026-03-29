@@ -54,6 +54,7 @@ export default function ZoomVideoCall({
 
     useEffect(() => { emitState(); }, [videoStarted, audioStarted, connectionQuality, remoteUsers.length, joined, reconnecting, cameraBlocked]);
 
+
     // ── Cleanup ──────────────────────────────────────────────
     const cleanup = useCallback(async () => {
         mountedRef.current = false;
@@ -77,6 +78,7 @@ export default function ZoomVideoCall({
     const attachUserVideo = useCallback(async (userId, container, quality = 2, retries = 3) => {
         const client = clientRef.current;
         if (!client || !container) return false;
+
         for (let attempt = 0; attempt < retries; attempt++) {
             try {
                 const stream = client.getMediaStream();
@@ -98,9 +100,13 @@ export default function ZoomVideoCall({
                     await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
                 }
             }
+            console.log("[Zoom] Attaching video for:", userId);
         }
         return false;
+
     }, []);
+
+
 
     // ── Create or get a per-user remote video container ──────
     const getOrCreateRemoteContainer = useCallback((userId) => {
@@ -219,6 +225,20 @@ export default function ZoomVideoCall({
             const allUsers = client.getAllUser();
             const myId = client.getCurrentUserInfo().userId;
             const others = allUsers.filter((u) => u.userId !== myId);
+            // 🔥 FORCE SYNC (fix missing remote video)
+            setTimeout(async () => {
+                const users = client.getAllUser();
+                const myId = client.getCurrentUserInfo().userId;
+
+                for (const u of users) {
+                    if (u.userId !== myId) {
+                        const container = getOrCreateRemoteContainer(u.userId);
+                        if (container) {
+                            await attachUserVideo(u.userId, container, 2);
+                        }
+                    }
+                }
+            }, 1000);
             if (mountedRef.current) setRemoteUsers(others);
             for (const u of others) {
                 if (u.bVideoOn) {
@@ -236,9 +256,12 @@ export default function ZoomVideoCall({
                 if (action === "Start") {
                     const container = getOrCreateRemoteContainer(userId);
                     if (container) {
-                        await attachUserVideo(userId, container, 2);
+                        setTimeout(() => {
+                            attachUserVideo(userId, container, 2);
+                        }, 300);
                     }
-                } else if (action === "Stop") {
+                }
+                else if (action === "Stop") {
                     // Don't remove the container, just detach video (camera off overlay will show)
                     const container = remoteVideoMapRef.current.get(userId);
                     if (container && clientRef.current) {
@@ -254,17 +277,25 @@ export default function ZoomVideoCall({
             });
 
             // ── Event: user joined ──
-            client.on("user-added", (payload) => {
+            client.on("user-added", async (payload) => {
                 if (!clientRef.current || !mountedRef.current) return;
+
                 const myId = clientRef.current.getCurrentUserInfo()?.userId;
-                const others = clientRef.current.getAllUser().filter((u) => u.userId !== myId);
-                setRemoteUsers([...others]);
-                // Pre-create containers for new users
+
                 for (const u of payload) {
                     if (u.userId !== myId) {
-                        getOrCreateRemoteContainer(u.userId);
+                        const container = getOrCreateRemoteContainer(u.userId);
+
+                        if (container) {
+                            setTimeout(() => {
+                                attachUserVideo(u.userId, container, 2);
+                            }, 300);
+                        }
                     }
                 }
+
+                const others = clientRef.current.getAllUser().filter((u) => u.userId !== myId);
+                setRemoteUsers([...others]);
             });
 
             // ── Event: user left ──
@@ -379,6 +410,34 @@ export default function ZoomVideoCall({
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomName]);
+
+    // 🔥 CONTINUOUS VIDEO SYNC (CRITICAL FIX)
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const client = clientRef.current;
+            if (!client) return;
+
+            try {
+                const users = client.getAllUser();
+                const myId = client.getCurrentUserInfo()?.userId;
+
+                users.forEach(async (u) => {
+                    if (u.userId !== myId) {
+                        const container = getOrCreateRemoteContainer(u.userId);
+
+                        // If container exists but no video attached → fix it
+                        if (container && container.childElementCount === 0) {
+                            await attachUserVideo(u.userId, container, 2);
+                        }
+                    }
+                });
+            } catch (e) {
+                console.warn("[Zoom] sync loop error:", e);
+            }
+        }, 2000);
+
+        return () => clearInterval(interval);
+    }, [attachUserVideo, getOrCreateRemoteContainer]);
 
     // ── Connection quality dot color ─────────────────────────
     const qualityColor = connectionQuality === "good"
@@ -589,6 +648,18 @@ export default function ZoomVideoCall({
           position: absolute; inset: 0; width: 100%; height: 100%;
           display: flex; flex-wrap: wrap;
         }
+          .zoom-remote-user {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  display: flex;
+}
+
+.zoom-vpc {
+  width: 100%;
+  height: 100%;
+  background: black;
+}
         :global(.zoom-remote-user) {
           flex: 1 1 100%;
           position: relative;
