@@ -261,103 +261,6 @@ function FilterContent({ statusFilter, setStatusFilter, maxPrice, setMaxPrice, m
   );
 }
 
-// ─── Profile Modal ──────────────────────────────────────────────────────────
-function ProfileModal({ doctor, onClose, onMessage }: {
-  doctor: Doctor; onClose: () => void; onMessage: (d: Doctor) => void;
-}) {
-  const experience = doctor.experience || doctor.experience_years || 0;
-  const reviews = doctor.reviews || doctor.review_count || 0;
-  const avatar = doctor.avatar || doctor.avatar_url;
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-x-4 top-[5%] bottom-[5%] z-50 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-w-lg mx-auto"
-        style={{ boxShadow: "0 24px 64px rgba(0,0,0,0.25)" }}>
-        <div className="relative h-32 flex-shrink-0" style={{ background: `linear-gradient(135deg, ${NAV_BG}, ${ACCENT})` }}>
-          <button onClick={onClose} className="absolute top-3 right-3 w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white hover:bg-white/30 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="px-6 -mt-12 pb-4 flex-shrink-0">
-          <div className="w-20 h-20 rounded-2xl overflow-hidden border-4 border-white shadow-xl bg-slate-100 mb-3 relative">
-            {avatar ? (
-              <Image src={avatar} alt={doctor.name} fill className="object-cover" unoptimized />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center" style={{ background: NAV_BG }}>
-                <span className="text-white font-extrabold text-3xl">{doctor.name[0]}</span>
-              </div>
-            )}
-          </div>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="font-extrabold text-slate-900 text-lg">Dr. {doctor.name}</h2>
-              <p className="text-sm font-semibold" style={{ color: ACCENT }}>{doctor.specialty}</p>
-            </div>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className={`w-2.5 h-2.5 rounded-full ${doctor.status === "available" ? "bg-emerald-400" : doctor.status === "offline" ? "bg-slate-300" : "bg-amber-400"}`} />
-              <span className={`text-[12px] font-semibold ${doctor.status === "available" ? "text-emerald-600" : doctor.status === "offline" ? "text-slate-400" : "text-amber-600"}`}>
-                {STATUS[doctor.status]?.label ?? "Offline"}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-5">
-          {doctor.bio && (
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2">About</p>
-              <p className="text-sm text-slate-600 leading-relaxed">{doctor.bio}</p>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { icon: Clock, label: "Experience", value: `${experience} years` },
-              { icon: Star, label: "Rating", value: `${doctor.rating?.toFixed(1) ?? "N/A"} (${reviews} reviews)` },
-              { icon: Users, label: "Patients", value: doctor.patients_served?.toLocaleString() ?? "0" },
-              { icon: Building2, label: "Hospital", value: doctor.hospital ?? "Independent" },
-            ].map(({ icon: Icon, label, value }) => (
-              <div key={label} className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon className="w-3.5 h-3.5 text-slate-400" />
-                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">{label}</p>
-                </div>
-                <p className="text-[13px] font-bold text-slate-800">{value}</p>
-              </div>
-            ))}
-          </div>
-          {doctor.languages && doctor.languages.length > 0 && (
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2">Languages</p>
-              <div className="flex flex-wrap gap-2">
-                {doctor.languages.map((l) => (
-                  <span key={l} className="px-2.5 py-1 rounded-full text-[11px] font-semibold border border-slate-200 bg-white text-slate-600">{l}</span>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="p-4 rounded-xl border border-blue-100" style={{ background: "#eff6ff" }}>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider mb-1" style={{ color: ACCENT }}>Consultation Fee</p>
-            <p className="text-2xl font-extrabold text-slate-900">{doctor.fee ?? 0} <span className="text-sm font-bold text-slate-500">Birr/session</span></p>
-            <p className="text-xs text-slate-500 mt-0.5">{doctor.consultation_type || "Video consultation"}</p>
-          </div>
-        </div>
-        <div className="px-6 py-4 border-t border-slate-100 flex gap-3 bg-white flex-shrink-0">
-          <button onClick={() => { onMessage(doctor); onClose(); }}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-[13px] border transition-all"
-            style={{ borderColor: ACCENT, color: ACCENT }}>
-            <MessageSquare className="w-4 h-4" /> Send Message
-          </button>
-          <button onClick={onClose}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-extrabold text-[13px] text-white transition-all"
-            style={{ background: NAV_BG }}>
-            <Video className="w-4 h-4" /> Collaborate
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function DoctorsDashboardPage() {
   const router = useRouter();
@@ -372,7 +275,6 @@ export default function DoctorsDashboardPage() {
   const [minRating, setMinRating] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortKey>("rating");
-  const [viewDoctor, setViewDoctor] = useState<Doctor | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -549,7 +451,7 @@ export default function DoctorsDashboardPage() {
             <div className="space-y-3">
               {filtered.map((doc) => (
                 <DoctorCard key={doc.id} doc={doc}
-                  onOpen={() => setViewDoctor(doc)}
+                  onOpen={() => router.push(`/doctor-dashboard/doctors/${doc.id}`)}
                   onMessage={() => handleMessage(doc)} />
               ))}
             </div>
@@ -567,10 +469,6 @@ export default function DoctorsDashboardPage() {
         </div>
         <FilterContent {...filterProps} />
       </FilterSheet>
-
-      {viewDoctor && (
-        <ProfileModal doctor={viewDoctor} onClose={() => setViewDoctor(null)} onMessage={handleMessage} />
-      )}
     </div>
   );
 }

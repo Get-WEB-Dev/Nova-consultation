@@ -635,207 +635,280 @@ export default function MessagesPage() {
 
       {/* Chat area */}
       {selected ? (
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Chat header */}
-          <div
-            className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 bg-white flex-shrink-0"
-            style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
-          >
-            <button
-              onClick={() => setSelected(null)}
-              className="sm:hidden p-1.5 rounded-xl hover:bg-slate-50 transition-colors"
+        <>
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Chat header */}
+            <div
+              className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-100 bg-white flex-shrink-0"
+              style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}
             >
-              <ChevronLeft className="w-5 h-5 text-slate-500" />
-            </button>
-            <div className="relative flex-shrink-0">
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-extrabold"
-                style={{
-                  background:
-                    selected.participantRole === "doctor" ? "#7c3aed" : NAV_BG,
-                }}
+              <button
+                onClick={() => setSelected(null)}
+                className="sm:hidden p-1.5 rounded-xl hover:bg-slate-50 transition-colors"
               >
-                {selected.participantName[0]}
+                <ChevronLeft className="w-5 h-5 text-slate-500" />
+              </button>
+              <div className="relative flex-shrink-0">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-extrabold"
+                  style={{
+                    background:
+                      selected.participantRole === "doctor" ? "#7c3aed" : NAV_BG,
+                  }}
+                >
+                  {selected.participantName[0]}
+                </div>
+                {selected.online !== undefined && (
+                  <span
+                    className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${selected.online ? "bg-emerald-400" : "bg-slate-300"}`}
+                  />
+                )}
               </div>
-              {selected.online !== undefined && (
-                <span
-                  className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${selected.online ? "bg-emerald-400" : "bg-slate-300"}`}
-                />
-              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-extrabold text-slate-900 text-[14px]">
+                  {selected.participantRole === "doctor" ? "Dr. " : ""}
+                  {selected.participantName}
+                </p>
+                <p
+                  className="text-[11px]"
+                  style={{ color: selected.online ? "#16a34a" : "#94a3b8" }}
+                >
+                  {selected.participantSpecialty ||
+                    (selected.online ? "Online" : "Offline")}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <button className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
+                  <Video className="w-4 h-4 text-slate-500" />
+                </button>
+                <button className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
+                  <Phone className="w-4 h-4 text-slate-500" />
+                </button>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-extrabold text-slate-900 text-[14px]">
-                {selected.participantRole === "doctor" ? "Dr. " : ""}
-                {selected.participantName}
-              </p>
-              <p
-                className="text-[11px]"
-                style={{ color: selected.online ? "#16a34a" : "#94a3b8" }}
-              >
-                {selected.participantSpecialty ||
-                  (selected.online ? "Online" : "Offline")}
-              </p>
-            </div>
-            <div className="flex items-center gap-1">
-              <button className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
-                <Video className="w-4 h-4 text-slate-500" />
-              </button>
-              <button className="p-2 rounded-xl hover:bg-slate-100 transition-colors">
-                <Phone className="w-4 h-4 text-slate-500" />
-              </button>
-            </div>
-          </div>
 
-          {/* Messages */}
-          <div
-            className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
-            style={{ background: "#f8fafc" }}
-          >
-            {loadingMsgs ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
-              </div>
-            ) : msgs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16">
-                <MessageSquare className="w-9 h-9 text-slate-200 mb-2" />
-                <p className="text-[13px] font-semibold text-slate-400">
-                  No messages yet
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Send a message to start the conversation
-                </p>
-              </div>
-            ) : (
-              <>
-                {msgs.map((msg, i) => {
-                  const isMe = msg.from === "me";
-                  const showAvatar =
-                    !isMe && (i === 0 || msgs[i - 1].from !== "other");
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex gap-2 ${isMe ? "justify-end" : "justify-start"}`}
-                    >
-                      {!isMe && (
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-extrabold flex-shrink-0 mt-auto ${showAvatar ? "opacity-100" : "opacity-0"}`}
-                          style={{ background: NAV_BG }}
-                        >
-                          {selected.participantName[0]}
-                        </div>
-                      )}
+            {/* Messages */}
+            <div
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+              style={{ background: "#f8fafc" }}
+            >
+              {loadingMsgs ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+                </div>
+              ) : msgs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <MessageSquare className="w-9 h-9 text-slate-200 mb-2" />
+                  <p className="text-[13px] font-semibold text-slate-400">
+                    No messages yet
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Send a message to start the conversation
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {msgs.map((msg, i) => {
+                    const isMe = msg.from === "me";
+                    const showAvatar =
+                      !isMe && (i === 0 || msgs[i - 1].from !== "other");
+                    return (
                       <div
-                        className={`max-w-[70%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-0.5`}
+                        key={msg.id}
+                        className={`flex gap-2 ${isMe ? "justify-end" : "justify-start"}`}
                       >
-                        {msg.fileUrl && msg.fileType === "image" ? (
+                        {!isMe && (
                           <div
-                            className="rounded-2xl overflow-hidden border border-slate-200"
-                            style={{ maxWidth: 240 }}
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-extrabold flex-shrink-0 mt-auto ${showAvatar ? "opacity-100" : "opacity-0"}`}
+                            style={{ background: NAV_BG }}
                           >
-                            <img
-                              src={msg.fileUrl}
-                              alt="image"
-                              className="w-full"
-                            />
-                          </div>
-                        ) : msg.fileUrl ? (
-                          <div
-                            className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl border ${isMe ? "border-blue-200 bg-blue-50" : "bg-white border-slate-200"}`}
-                          >
-                            <File className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                            <span className="text-[12px] font-semibold text-slate-700 truncate max-w-[150px]">
-                              {msg.fileName}
-                            </span>
-                          </div>
-                        ) : (
-                          <div
-                            className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${isMe
-                              ? "text-white rounded-br-sm"
-                              : "text-slate-800 bg-white border border-slate-200 rounded-bl-sm"
-                              }`}
-                            style={isMe ? { background: NAV_BG } : {}}
-                          >
-                            {msg.text}
+                            {selected.participantName[0]}
                           </div>
                         )}
                         <div
-                          className={`flex items-center gap-1.5 px-1 ${isMe ? "justify-end" : ""}`}
+                          className={`max-w-[70%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-0.5`}
                         >
-                          <span className="text-[10px] text-slate-400">
-                            {msg.time}
-                          </span>
-                          {isMe &&
-                            (msg.isPending ? (
-                              <Clock className="w-2.5 h-2.5 text-slate-300" />
-                            ) : msg.status === "read" ? (
-                              <CheckCheck className="w-3 h-3 text-blue-400" />
-                            ) : (
-                              <Check className="w-3 h-3 text-slate-300" />
-                            ))}
+                          {msg.fileUrl && msg.fileType === "image" ? (
+                            <div
+                              className="rounded-2xl overflow-hidden border border-slate-200"
+                              style={{ maxWidth: 240 }}
+                            >
+                              <img
+                                src={msg.fileUrl}
+                                alt="image"
+                                className="w-full"
+                              />
+                            </div>
+                          ) : msg.fileUrl ? (
+                            <div
+                              className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl border ${isMe ? "border-blue-200 bg-blue-50" : "bg-white border-slate-200"}`}
+                            >
+                              <File className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                              <span className="text-[12px] font-semibold text-slate-700 truncate max-w-[150px]">
+                                {msg.fileName}
+                              </span>
+                            </div>
+                          ) : (
+                            <div
+                              className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${isMe
+                                ? "text-white rounded-br-sm"
+                                : "text-slate-800 bg-white border border-slate-200 rounded-bl-sm"
+                                }`}
+                              style={isMe ? { background: NAV_BG } : {}}
+                            >
+                              {msg.text}
+                            </div>
+                          )}
+                          <div
+                            className={`flex items-center gap-1.5 px-1 ${isMe ? "justify-end" : ""}`}
+                          >
+                            <span className="text-[10px] text-slate-400">
+                              {msg.time}
+                            </span>
+                            {isMe &&
+                              (msg.isPending ? (
+                                <Clock className="w-2.5 h-2.5 text-slate-300" />
+                              ) : msg.status === "read" ? (
+                                <CheckCheck className="w-3 h-3 text-blue-400" />
+                              ) : (
+                                <Check className="w-3 h-3 text-slate-300" />
+                              ))}
+                          </div>
                         </div>
                       </div>
+                    );
+                  })}
+                  {typing && (
+                    <div className="flex gap-2 items-end">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-extrabold"
+                        style={{ background: NAV_BG }}
+                      >
+                        {selected.participantName[0]}
+                      </div>
+                      <div className="px-4 py-3 rounded-2xl rounded-bl-sm bg-white border border-slate-200 flex gap-1">
+                        {[0, 1, 2].map((i) => (
+                          <span
+                            key={i}
+                            className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"
+                            style={{ animationDelay: `${i * 0.15}s` }}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  );
-                })}
-                {typing && (
-                  <div className="flex gap-2 items-end">
-                    <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-extrabold"
-                      style={{ background: NAV_BG }}
-                    >
-                      {selected.participantName[0]}
-                    </div>
-                    <div className="px-4 py-3 rounded-2xl rounded-bl-sm bg-white border border-slate-200 flex gap-1">
-                      {[0, 1, 2].map((i) => (
-                        <span
-                          key={i}
-                          className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"
-                          style={{ animationDelay: `${i * 0.15}s` }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div ref={bottomRef} />
-              </>
-            )}
-          </div>
+                  )}
+                  <div ref={bottomRef} />
+                </>
+              )}
+            </div>
 
-          {/* Input */}
-          <div className="px-4 py-3 border-t border-slate-100 bg-white flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileRef}
-                type="file"
-                className="hidden"
-                onChange={handleFile}
-              />
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="p-2 rounded-xl hover:bg-slate-100 transition-colors flex-shrink-0"
-              >
-                <Paperclip className="w-4 h-4 text-slate-400" />
-              </button>
-              <input
-                ref={inputRef}
-                type="text"
-                placeholder="Type a message…"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-[13px] outline-none focus:border-blue-400 transition-colors"
-              />
-              <button
-                onClick={sendMsg}
-                disabled={!input.trim()}
-                className="p-2.5 rounded-xl text-white disabled:opacity-40 transition-all active:scale-95 flex-shrink-0"
-                style={{ background: input.trim() ? ACCENT : "#cbd5e1" }}
-              >
-                <Send className="w-4 h-4" />
-              </button>
+            {/* Input */}
+            <div className="px-4 py-3 border-t border-slate-100 bg-white flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleFile}
+                />
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="p-2 rounded-xl hover:bg-slate-100 transition-colors flex-shrink-0"
+                >
+                  <Paperclip className="w-4 h-4 text-slate-400" />
+                </button>
+                <input
+                  ref={inputRef}
+                  type="text"
+                  placeholder="Type a message…"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-[13px] outline-none focus:border-blue-400 transition-colors"
+                />
+                <button
+                  onClick={sendMsg}
+                  disabled={!input.trim()}
+                  className="p-2.5 rounded-xl text-white disabled:opacity-40 transition-all active:scale-95 flex-shrink-0"
+                  style={{ background: input.trim() ? ACCENT : "#cbd5e1" }}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+
+          {/* Profile Panel */}
+          <div className="hidden lg:flex flex-col w-72 xl:w-80 bg-slate-50 flex-shrink-0 overflow-y-auto border-l border-slate-200">
+            <div className="p-6 flex flex-col items-center border-b border-slate-200 bg-white shadow-sm">
+              <div
+                className="w-24 h-24 rounded-full flex items-center justify-center text-white font-extrabold text-3xl mb-4 shadow"
+                style={{ background: selected.participantRole === "doctor" ? "#7c3aed" : NAV_BG }}
+              >
+                {selected.participantName[0]}
+              </div>
+              <h3 className="text-lg font-extrabold text-slate-900 text-center">
+                {selected.participantRole === "doctor" ? "Dr. " : ""}
+                {selected.participantName}
+              </h3>
+              <p className="text-sm font-medium mt-1 text-slate-500 text-center">
+                {selected.participantSpecialty || (selected.participantRole === 'patient' ? 'Patient' : 'Medical Professional')}
+              </p>
+
+              <div className="flex items-center gap-3 mt-5">
+                <button className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                  <Phone className="w-4 h-4 text-slate-600" />
+                </button>
+                <button className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                  <Video className="w-4 h-4 text-slate-600" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-6">
+              <div>
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">About Contact</h4>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 text-sm">
+                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200 shadow-sm">
+                      <UserCheck className="w-4 h-4 text-slate-500" />
+                    </div>
+                    <span className="text-slate-700 font-semibold capitalize">{selected.participantRole}</span>
+                  </div>
+                  {selected.participantRole === "doctor" ? (
+                    <div className="flex items-center gap-3 text-sm">
+                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200 shadow-sm">
+                        <Stethoscope className="w-4 h-4 text-slate-500" />
+                      </div>
+                      <span className="text-slate-700 font-semibold">{selected.participantSpecialty || "General"}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 text-sm">
+                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200 shadow-sm">
+                        <Star className="w-4 h-4 text-slate-500" />
+                      </div>
+                      <span className="text-slate-700 font-semibold">Active Treatment</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 text-sm">
+                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200 shadow-sm">
+                      <Clock className="w-4 h-4 text-slate-500" />
+                    </div>
+                    <span className="text-slate-700 font-semibold">Active {ago(selected.lastMessageTime)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Shared Media</h4>
+                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center gap-2 py-8">
+                  <File className="w-8 h-8 text-slate-200" />
+                  <p className="text-[11px] text-slate-500 font-semibold">No recent files</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       ) : (
         <div className="hidden sm:flex flex-1 items-center justify-center bg-slate-50">
           <div className="text-center">

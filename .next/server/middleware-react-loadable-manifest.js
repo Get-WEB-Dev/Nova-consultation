@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{\"components/layout/Navbar.tsx -> @/lib/realtime/subscriptions\":{\"id\":\"components/layout/Navbar.tsx -> @/lib/realtime/subscriptions\",\"files\":[\"static/chunks/_app-pages-browser_lib_realtime_subscriptions_ts.js\"]}}"
+self.__REACT_LOADABLE_MANIFEST="{}"

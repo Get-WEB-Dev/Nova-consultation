@@ -134,6 +134,7 @@ export default function DoctorDashboardLayout({
   const [meta, setMeta] = useState<DoctorMeta>({});
   const [ready, setReady] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifs, setNotifs] = useState<NotifItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -374,99 +375,66 @@ export default function DoctorDashboardLayout({
   );
 
   // ── Shared sidebar content ──────────────────────────────────────────────────
-  const SidebarContent = ({ onClose }: { onClose?: () => void }) => (
-    <div className="flex flex-col h-full">
-      {/* ── LinkedIn-style profile card ── */}
-      <div className="flex-shrink-0">
-        {/* Cover image */}
+  const SidebarContent = ({ onClose, collapsed = false }: { onClose?: () => void, collapsed?: boolean }) => (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* ── Minimal Profile Card ── */}
+      <div className="flex-shrink-0 relative pt-5 pb-4 px-4 flex flex-col items-center">
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
         <div
-          className="relative h-24 sm:h-28"
-          style={{
-            background: `linear-gradient(135deg, ${NAV_BG} 0%, ${ACCENT} 60%, ${SKY} 100%)`,
-          }}
+          className={`relative rounded-2xl overflow-hidden shadow-sm flex-shrink-0 transition-all ${collapsed ? "w-10 h-10 border-2" : "w-16 h-16 border-4"} border-white`}
+          style={{ background: "linear-gradient(160deg, #cfe0ff 0%, #a8c8f8 100%)" }}
         >
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="absolute top-3 right-3 w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
+          {meta.avatar ? (
+            <Image src={meta.avatar} alt="Profile" fill className="object-cover object-top" unoptimized />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center" style={{ background: NAV_BG }}>
+              <span className={`text-white font-extrabold ${collapsed ? 'text-lg' : 'text-2xl'}`}>{user?.name?.[0]}</span>
+            </div>
           )}
+          <span
+            className={`absolute bottom-0 right-0 rounded-full border-2 border-white ${isOnline ? "bg-emerald-400" : "bg-slate-300"} ${collapsed ? "w-2.5 h-2.5" : "w-3 h-3"}`}
+          />
         </div>
 
-        {/* Avatar — large, overlapping cover */}
-        <div className="px-5 pb-4 -mt-10">
-          <div
-            className="relative w-20 h-20 rounded-2xl overflow-hidden border-4 border-white shadow-xl mb-3 flex-shrink-0"
-            style={{
-              background: "linear-gradient(160deg, #cfe0ff 0%, #a8c8f8 100%)",
-            }}
-          >
-            {meta.avatar ? (
-              <Image
-                src={meta.avatar}
-                alt="Profile"
-                fill
-                className="object-cover object-top"
-                unoptimized
-              />
-            ) : (
-              <div
-                className="w-full h-full flex items-center justify-center"
-                style={{ background: NAV_BG }}
+        {!collapsed && (
+          <div className="text-center mt-3 w-full">
+            <p className="font-extrabold text-slate-900 text-[15px] leading-tight">
+              Dr. {user?.name}
+            </p>
+            {meta.specialty && (
+              <p
+                className="text-[12px] font-semibold mt-0.5"
+                style={{ color: ACCENT }}
               >
-                <span className="text-white font-extrabold text-2xl">
-                  {user?.name?.[0]}
-                </span>
-              </div>
+                {meta.specialty}
+              </p>
             )}
-            {/* Status dot */}
-            <span
-              className={`absolute bottom-1.5 right-1.5 w-3.5 h-3.5 rounded-full border-2 border-white ${isOnline ? "bg-emerald-400" : "bg-slate-300"}`}
-            />
+            {meta.hospital && (
+              <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
+                <Stethoscope className="w-3 h-3 flex-shrink-0" /> {meta.hospital}
+              </p>
+            )}
+            {meta.bio && (
+              <p className="text-[11px] text-slate-500 mt-2 leading-relaxed line-clamp-2">
+                {meta.bio}
+              </p>
+            )}
           </div>
-
-          {/* Name & specialty */}
-          <p className="font-extrabold text-slate-900 text-[15px] leading-tight">
-            Dr. {user?.name}
-          </p>
-          {meta.specialty && (
-            <p
-              className="text-[12px] font-semibold mt-0.5"
-              style={{ color: ACCENT }}
-            >
-              {meta.specialty}
-            </p>
-          )}
-          {meta.hospital && (
-            <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
-              <Stethoscope className="w-3 h-3 flex-shrink-0" /> {meta.hospital}
-            </p>
-          )}
-          {meta.bio && (
-            <p className="text-[11px] text-slate-500 mt-2 leading-relaxed line-clamp-3">
-              {meta.bio}
-            </p>
-          )}
-
-          {/* Status badge */}
-          <div
-            className={`mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border ${isOnline ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500 border-slate-200"}`}
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`}
-            />
-            {isOnline ? "Online & Accepting" : "Currently Offline"}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Divider */}
       <div className="h-px bg-slate-100 mx-4 flex-shrink-0" />
 
       {/* Nav links */}
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5 overflow-x-hidden">
         {NAV.map(({ href, label, icon: Icon, exact }) => {
           const active = isActive(href, exact);
           return (
@@ -474,7 +442,7 @@ export default function DoctorDashboardLayout({
               key={href}
               href={href}
               onClick={onClose}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all"
+              className={`flex items-center ${collapsed ? "justify-center px-0" : "gap-3 px-3"} py-2.5 rounded-xl text-[13px] font-semibold transition-all`}
               style={
                 active
                   ? { background: NAV_BG, color: "white" }
@@ -486,22 +454,23 @@ export default function DoctorDashboardLayout({
               onMouseLeave={(e) => {
                 if (!active) e.currentTarget.style.background = "";
               }}
+              title={collapsed ? label : undefined}
             >
               <Icon
                 className="w-4 h-4 flex-shrink-0"
                 style={active ? { color: "white" } : { color: ACCENT }}
               />
-              {label}
+              {!collapsed && label}
             </Link>
           );
         })}
 
         {/* Manage section */}
         <div className="pt-3 mt-1 border-t border-slate-100">
-          <p className="text-[10px] font-extrabold uppercase tracking-widest px-3 mb-1.5 text-slate-400">
-            Manage
+          <p className={`text-[10px] font-extrabold uppercase tracking-widest ${collapsed ? "text-center" : "px-3"} mb-1.5 text-slate-400`}>
+            {collapsed ? "..." : "Manage"}
           </p>
-          {MGMT.map(({ href, label, icon: Icon }) => {
+          {!collapsed && MGMT.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
             return (
               <Link
@@ -509,17 +478,9 @@ export default function DoctorDashboardLayout({
                 href={href}
                 onClick={onClose}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all"
-                style={
-                  active
-                    ? { background: "#eff6ff", color: ACCENT }
-                    : { color: "#64748b" }
-                }
-                onMouseEnter={(e) => {
-                  if (!active) e.currentTarget.style.background = "#f0f4f8";
-                }}
-                onMouseLeave={(e) => {
-                  if (!active) e.currentTarget.style.background = "";
-                }}
+                style={active ? { background: "#eff6ff", color: ACCENT } : { color: "#64748b" }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#f0f4f8"; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = ""; }}
               >
                 <Icon className="w-4 h-4 flex-shrink-0 text-slate-400" />
                 {label}
@@ -530,16 +491,17 @@ export default function DoctorDashboardLayout({
       </nav>
 
       {/* Sign out */}
-      <div className="px-3 pb-5 flex-shrink-0 border-t border-slate-100 pt-3">
+      <div className={`px-3 pb-5 flex-shrink-0 border-t border-slate-100 pt-3 ${collapsed ? "flex justify-center" : ""}`}>
         <button
           onClick={() => {
             if (onClose) onClose();
             signOut();
             router.push("/doctor-login");
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-all"
+          className={`flex items-center justify-center ${collapsed ? "w-10 h-10 p-0" : "w-full gap-3 px-3 py-2.5"} rounded-xl text-[13px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-all`}
+          title={collapsed ? "Sign Out" : undefined}
         >
-          <LogOut className="w-4 h-4" /> Sign Out
+          <LogOut className="w-4 h-4" /> {!collapsed && "Sign Out"}
         </button>
       </div>
     </div>
@@ -662,22 +624,29 @@ export default function DoctorDashboardLayout({
 
       {/* ══ DESKTOP & TABLET ════════════════════════════════════════════════ */}
       <div className="hidden md:flex min-h-screen">
-        {/* Desktop sidebar — fixed, LinkedIn style */}
+        {/* Desktop sidebar */}
         <aside
-          className="fixed top-0 left-0 h-full w-56 lg:w-64 xl:w-72 border-r border-slate-200 bg-white z-40 overflow-hidden"
+          className={`fixed top-0 left-0 h-full ${isCollapsed ? "w-20" : "w-56 lg:w-64"} border-r border-slate-200 bg-white z-40 transition-all duration-300 overflow-hidden flex flex-col`}
           style={{ boxShadow: "2px 0 12px rgba(0,0,0,0.05)" }}
         >
-          <SidebarContent />
+          <SidebarContent collapsed={isCollapsed} />
         </aside>
 
         {/* Desktop main */}
-        <div className="flex-1 min-h-screen ml-56 lg:ml-64 xl:ml-72">
+        <div className={`flex-1 min-h-screen ${isCollapsed ? "ml-20" : "ml-56 lg:ml-64"} transition-all duration-300 flex flex-col`}>
           {/* Desktop top bar */}
           <header
-            className="sticky top-0 z-30 border-b border-slate-200 bg-white flex items-center justify-between h-14 px-6"
+            className="sticky top-0 z-30 border-b border-slate-200 bg-white flex items-center justify-between h-14 px-6 flex-shrink-0"
             style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
           >
             <div className="flex items-center gap-2.5">
+              <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="mr-2 p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors"
+                title="Toggle Sidebar"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
               <div
                 className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: NAV_BG }}
@@ -730,7 +699,7 @@ export default function DoctorDashboardLayout({
             </div>
           </header>
 
-          <main className="px-5 xl:px-8 py-6 max-w-4xl">{children}</main>
+          <main className="flex-1 px-5 xl:px-8 py-6 w-full mx-auto">{children}</main>
         </div>
       </div>
     </div>

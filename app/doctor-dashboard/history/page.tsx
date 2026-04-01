@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { getUser } from "@/lib/supabase/auth";
 import {
   Search,
@@ -404,377 +405,82 @@ function ActionMenu({
 
 // ─── Consultation Card ────────────────────────────────────────────────────────
 
-function CCard({
-  c,
-  isLast,
-  onUpdate,
-}: {
-  c: C;
-  isLast: boolean;
-  onUpdate: (id: string, patch: Partial<C>) => void;
-}) {
-  const [open, setOpen] = useState(false);
+function HistoryCard({ c }: { c: C }) {
   const status = STATUS_CONFIG[c.status] || STATUS_CONFIG.missed;
+  const router = useRouter();
 
   return (
-    <div className="flex gap-3">
-      {/* Timeline connector */}
-      <div className="flex flex-col items-center pt-4 flex-shrink-0">
-        <div
-          className={`w-3 h-3 rounded-full border-2 border-white dark:border-slate-900 ring-2 flex-shrink-0 ${status.dot} ring-current`}
-          style={{
-            color:
-              c.status === "active"
-                ? "#10b981"
-                : c.status === "waiting"
-                  ? "#f59e0b"
-                  : c.status === "completed"
-                    ? "#0ea5e9"
-                    : c.status === "missed"
-                      ? "#f43f5e"
-                      : "#8b5cf6",
-          }}
-        />
-        {!isLast && (
-          <div className="w-px flex-1 mt-1 bg-slate-100 dark:bg-slate-800 min-h-4" />
-        )}
-      </div>
-
-      {/* Card */}
-      <div
-        className={`flex-1 mb-3 bg-white dark:bg-slate-900 rounded-2xl border shadow-sm overflow-hidden transition-all ${c.reviewed ? "border-slate-100 dark:border-slate-800" : "border-sky-100 dark:border-sky-900/50"}`}
-      >
-        {/* Severity bar */}
-        {c.severity && (
-          <div className={`h-0.5 w-full ${SEVERITY_CONFIG[c.severity].bar}`} />
-        )}
-
-        {/* Header */}
-        <button onClick={() => setOpen(!open)} className="w-full text-left">
-          <div className="flex items-start gap-3 p-3.5">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <StatusBadge status={c.status} />
-                {c.severity && <SeverityBadge severity={c.severity} />}
-                {c.isFollowUp && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-violet-800">
-                    <GitFork className="w-2.5 h-2.5" />
-                    Follow-up
-                  </span>
-                )}
-                {c.reviewed && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400">
-                    <CheckSquare className="w-3 h-3" />
-                    Reviewed
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  {fmtDate(c.created_at)}
-                </span>
-                {c.durationMinutes && (
-                  <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {c.durationMinutes} min
-                  </span>
-                )}
-                {c.diagnosis && (
-                  <span className="text-[11px] text-sky-500 flex items-center gap-1 font-medium">
-                    <Stethoscope className="w-3 h-3" />
-                    {c.diagnosis}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <ActionMenu c={c} onUpdate={onUpdate} />
-              <div className="text-slate-300 p-1">
-                {open ? (
-                  <ChevronUp className="w-3.5 h-3.5" />
-                ) : (
-                  <ChevronDown className="w-3.5 h-3.5" />
-                )}
-              </div>
-            </div>
-          </div>
-        </button>
-
-        {/* Expanded */}
-        {open && (
-          <div className="border-t border-slate-50 dark:border-slate-800 divide-y divide-slate-50 dark:divide-slate-800/50">
-            {/* Vitals */}
-            {c.vitals && Object.values(c.vitals).some(Boolean) && (
-              <div className="px-3.5 py-3">
-                <SectionLabel
-                  icon={<Activity className="w-3 h-3" />}
-                  label="Vitals"
-                />
-                <VitalsStrip vitals={c.vitals} />
-              </div>
-            )}
-
-            {/* Diagnosis */}
-            {c.diagnosis && (
-              <div className="px-3.5 py-3">
-                <SectionLabel
-                  icon={<Stethoscope className="w-3 h-3" />}
-                  label="Diagnosis"
-                />
-                <div className="bg-sky-50 dark:bg-sky-950/30 rounded-xl px-3 py-2.5 border border-sky-100 dark:border-sky-900">
-                  <p className="text-sm font-semibold text-sky-800 dark:text-sky-300">
-                    {c.diagnosis}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            {c.notes && (
-              <div className="px-3.5 py-3">
-                <SectionLabel
-                  icon={<ClipboardList className="w-3 h-3" />}
-                  label="Clinical Notes"
-                />
-                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-slate-800/60 rounded-xl px-3 py-2.5">
-                  {c.notes}
-                </p>
-              </div>
-            )}
-
-            {/* Summary */}
-            {c.summary && (
-              <div className="px-3.5 py-3">
-                <SectionLabel
-                  icon={<Info className="w-3 h-3" />}
-                  label="Summary"
-                />
-                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {c.summary}
-                </p>
-              </div>
-            )}
-
-            {/* Prescriptions */}
-            {c.prescriptions && c.prescriptions.length > 0 && (
-              <div className="px-3.5 py-3">
-                <SectionLabel
-                  icon={<Pill className="w-3 h-3" />}
-                  label="Prescriptions"
-                />
-                <div className="space-y-1.5">
-                  {c.prescriptions.map((p, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2 border border-slate-100 dark:border-slate-700"
-                    >
-                      <div>
-                        <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                          {p.drug}
-                        </p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          {p.dose} · {p.frequency}
-                        </p>
-                      </div>
-                      <span className="text-[10px] font-semibold text-slate-400 bg-white dark:bg-slate-700 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-600">
-                        {p.duration}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Attachments */}
-            {c.attachments && c.attachments.length > 0 && (
-              <div className="px-3.5 py-3">
-                <SectionLabel
-                  icon={<Paperclip className="w-3 h-3" />}
-                  label={`Attachments (${c.attachments.length})`}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {c.attachments.map((a, i) => (
-                    <a
-                      key={i}
-                      href={a.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-[11px] font-medium text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/30 hover:bg-sky-100 dark:hover:bg-sky-950/50 border border-sky-100 dark:border-sky-900 rounded-lg px-2.5 py-1.5 transition-colors"
-                    >
-                      <Paperclip className="w-3 h-3" />
-                      {a.name}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Follow-up note */}
-            {c.followUpNote && (
-              <div className="px-3.5 py-3">
-                <SectionLabel
-                  icon={<MessageSquarePlus className="w-3 h-3" />}
-                  label="Follow-up Note"
-                />
-                <p className="text-sm text-slate-600 dark:text-slate-300 bg-violet-50 dark:bg-violet-950/30 rounded-xl px-3 py-2.5 border border-violet-100 dark:border-violet-800">
-                  {c.followUpNote}
-                </p>
-              </div>
-            )}
-
-            {/* Follow-up scheduled */}
-            {c.followUpScheduledAt && (
-              <div className="px-3.5 py-3">
-                <div className="flex items-center gap-2.5 bg-violet-50 dark:bg-violet-950/30 rounded-xl px-3 py-2.5 border border-violet-100 dark:border-violet-800">
-                  <Calendar className="w-4 h-4 text-violet-500 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-bold text-violet-700 dark:text-violet-300">
-                      Follow-up Scheduled
-                    </p>
-                    <p className="text-[11px] text-violet-500 mt-0.5">
-                      {fmtDate(c.followUpScheduledAt)}
-                    </p>
-                  </div>
-                  {isToday(c.followUpScheduledAt) && (
-                    <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500 text-white animate-pulse">
-                      TODAY
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Quick actions */}
-            <div className="px-3.5 py-3 flex gap-2 flex-wrap">
-              <button
-                onClick={() => onUpdate(c.id, { reviewed: !c.reviewed })}
-                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                <CheckSquare className="w-3 h-3" />
-                {c.reviewed ? "Unmark" : "Mark Reviewed"}
-              </button>
-              {c.status === "completed" && (
-                <button
-                  onClick={() => onUpdate(c.id, { status: "active" })}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 transition-colors"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  Re-open
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  const n = prompt("Follow-up note:");
-                  if (n) onUpdate(c.id, { followUpNote: n });
-                }}
-                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors"
-              >
-                <MessageSquarePlus className="w-3 h-3" />
-                Add Note
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SectionLabel({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-1.5 mb-2">
-      <span className="text-slate-400">{icon}</span>
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-        {label}
-      </p>
-    </div>
-  );
-}
-
-// ─── Patient Group ─────────────────────────────────────────────────────────────
-
-function PatientGroup({
-  group,
-  onUpdate,
-}: {
-  group: C[];
-  onUpdate: (id: string, patch: Partial<C>) => void;
-}) {
-  const [collapsed, setCollapsed] = useState(false);
-  const patient = group[0];
-  const latest = group.reduce((a, b) =>
-    new Date(a.created_at) > new Date(b.created_at) ? a : b,
-  );
-  const hasActive = group.some(
-    (c) => c.status === "active" || c.status === "waiting",
-  );
-
-  return (
-    <div className="bg-slate-50/70 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-      {/* Patient header */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="w-full text-left"
-      >
-        <div className="flex items-center gap-3 px-4 py-3">
-          <div
-            className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${hasActive ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white" : "bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 text-slate-500 dark:text-slate-300"}`}
-          >
-            {patient.patientName[0].toUpperCase()}
+    <div
+      onClick={() => router.push(`/doctor-dashboard/history/${c.id}`)}
+      className={`mb-3 bg-white dark:bg-slate-900 rounded-2xl border shadow-sm overflow-hidden transition-all hover:shadow-md cursor-pointer ${c.reviewed ? "border-slate-100 dark:border-slate-800" : "border-sky-100 dark:border-sky-900/50"}`}
+    >
+      {c.severity && (
+        <div className={`h-1 w-full ${SEVERITY_CONFIG[c.severity].bar}`} />
+      )}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4">
+        {/* Patient Initial & Basic Info */}
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center flex-shrink-0 text-sm font-bold text-slate-600 dark:text-slate-300">
+            {c.patientName[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
-                {patient.patientName}
-              </p>
-              {hasActive && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white truncate">{c.patientName}</h3>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                <Clock className="w-3 h-3" /> {new Date(c.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+              {c.durationMinutes && (
+                <span className="text-[11px] text-slate-400">· {c.durationMinutes} min</span>
               )}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              {group.length} session{group.length > 1 ? "s" : ""} · Last:{" "}
-              {timeAgo(latest.created_at)}
-              {patient.patientEmail && ` · ${patient.patientEmail}`}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="flex gap-1">
-              {Array.from(new Set(group.map((c) => c.status)))
-                .slice(0, 3)
-                .map((s) => (
-                  <span
-                    key={s}
-                    className={`w-2 h-2 rounded-full ${STATUS_CONFIG[s]?.dot || "bg-slate-400"}`}
-                  />
-                ))}
-            </div>
-            <ChevronDown
-              className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
-            />
           </div>
         </div>
-      </button>
 
-      {/* Timeline */}
-      {!collapsed && (
-        <div className="px-4 pb-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-          {group.map((c, i) => (
-            <CCard
-              key={c.id}
-              c={c}
-              isLast={i === group.length - 1}
-              onUpdate={onUpdate}
-            />
-          ))}
+        {/* Diagnosis & Tags */}
+        <div className="w-full sm:w-auto flex flex-col sm:items-end gap-2 mt-2 sm:mt-0 flex-shrink-0">
+          {c.diagnosis && (
+            <span className="text-xs font-semibold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 rounded-lg border border-sky-100 dark:border-sky-900 truncate max-w-[200px]">
+              {c.diagnosis}
+            </span>
+          )}
+          <div className="flex gap-1.5 flex-wrap">
+            <StatusBadge status={c.status} />
+            {c.severity && <SeverityBadge severity={c.severity} />}
+            {c.isFollowUp && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100">
+                <GitFork className="w-2.5 h-2.5" /> Follow-up
+              </span>
+            )}
+            {c.reviewed && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400">
+                <CheckSquare className="w-3 h-3" />
+              </span>
+            )}
+          </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Date Grouping Component ──────────────────────────────────────────────────
+
+function DateGroup({ date, items }: { date: string; items: C[] }) {
+  const dateObj = new Date(date);
+  const formattedDate = isToday(dateObj.toISOString()) ? "Today, " : "";
+  const displayDate = formattedDate + dateObj.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-3 mb-4">
+        <h2 className="text-xs font-extrabold uppercase tracking-widest text-slate-500 pl-1">{displayDate}</h2>
+        <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
+      </div>
+      <div>
+        {items.map(c => (
+          <HistoryCard key={c.id} c={c} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -782,6 +488,7 @@ function PatientGroup({
 // ─── Today's Follow-ups ───────────────────────────────────────────────────────
 
 function TodayFollowUps({ items }: { items: C[] }) {
+  const router = useRouter();
   if (!items.length) return null;
   return (
     <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20 rounded-2xl border border-violet-200 dark:border-violet-800/50 overflow-hidden">
@@ -804,8 +511,9 @@ function TodayFollowUps({ items }: { items: C[] }) {
       <div className="px-3 pb-3 space-y-2">
         {items.map((c) => (
           <div
+            onClick={() => router.push(`/doctor-dashboard/history/${c.id}`)}
             key={c.id}
-            className="flex items-center gap-3 bg-white dark:bg-slate-900/80 rounded-xl border border-violet-100 dark:border-violet-800/30 px-3 py-2.5 shadow-sm"
+            className="flex items-center gap-3 bg-white dark:bg-slate-900/80 rounded-xl border border-violet-100 dark:border-violet-800/30 px-3 py-2.5 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
           >
             <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/30 dark:to-purple-900/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-violet-600 dark:text-violet-400">
               {c.patientName[0]}
@@ -1129,26 +837,16 @@ export default function HistoryPage() {
 
     const groups: Record<string, C[]> = {};
     for (const c of f) {
-      const pid = c.patientId || c.patientEmail || c.patientName;
-      if (!groups[pid]) groups[pid] = [];
-      groups[pid].push(c);
+      const dKey = c.created_at.slice(0, 10);
+      if (!groups[dKey]) groups[dKey] = [];
+      groups[dKey].push(c);
     }
 
-    for (const g of Object.values(groups)) {
-      g.sort(
-        (a, b) =>
-          statusOrder(a.status) - statusOrder(b.status) ||
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-    }
+    const sortedGroups = Object.entries(groups).sort(
+      (a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()
+    );
 
-    return Object.values(groups).sort((a, b) => {
-      const so = statusOrder(a[0].status) - statusOrder(b[0].status);
-      return so !== 0
-        ? so
-        : new Date(b[0].created_at).getTime() -
-        new Date(a[0].created_at).getTime();
-    });
+    return sortedGroups;
   }, [items, filters]);
 
   const todayFollowUps = useMemo(
@@ -1201,7 +899,7 @@ export default function HistoryPage() {
             Patient History
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            {stats.total} consultations across {filtered.length} patients
+            {stats.total} total consultations across {filtered.length} days
           </p>
         </div>
         <button
@@ -1360,20 +1058,20 @@ export default function HistoryPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between px-0.5">
             <p className="text-xs text-slate-400 font-medium">
-              {filtered.length} patient{filtered.length !== 1 ? "s" : ""} ·{" "}
-              {filtered.reduce((a, g) => a + g.length, 0)} session
-              {filtered.reduce((a, g) => a + g.length, 0) !== 1 ? "s" : ""}
+              {filtered.length} date{filtered.length !== 1 ? "s" : ""} ·{" "}
+              {filtered.reduce((a, [d, g]) => a + g.length, 0)} session
+              {filtered.reduce((a, [d, g]) => a + g.length, 0) !== 1 ? "s" : ""}
             </p>
             <div className="flex items-center gap-1 text-[11px] text-slate-400">
               <ListFilter className="w-3 h-3" />
-              Sorted by priority
+              Sorted by date
             </div>
           </div>
-          {filtered.map((group) => (
-            <PatientGroup
-              key={group[0].patientId || group[0].patientName}
-              group={group}
-              onUpdate={handleUpdate}
+          {filtered.map(([date, group]) => (
+            <DateGroup
+              key={date}
+              date={date}
+              items={group}
             />
           ))}
         </div>

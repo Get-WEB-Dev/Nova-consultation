@@ -33,6 +33,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { getUser } from "@/lib/supabase/auth";
+import { useRouter } from "next/navigation";
 
 const NAV_BG = "#003580";
 const ACCENT = "#0071c2";
@@ -234,220 +235,6 @@ function FollowUpCard({
   );
 }
 
-function DetailModal({
-  fu,
-  onClose,
-  onComplete,
-  onReschedule,
-}: {
-  fu: FollowUp;
-  onClose: () => void;
-  onComplete: () => void;
-  onReschedule: () => void;
-}) {
-  return (
-    <>
-      <div
-        className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className="fixed inset-x-3 top-12 bottom-12 z-50 bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-w-lg mx-auto">
-        {/* Header */}
-        <div
-          className="flex items-center gap-3 px-5 py-4 flex-shrink-0"
-          style={{ background: NAV_BG }}
-        >
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-extrabold flex-shrink-0"
-            style={{ background: ACCENT }}
-          >
-            {fu.patientName[0]}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-extrabold text-white text-[15px] leading-tight">
-              {fu.patientName}
-            </p>
-            <p
-              className="text-[11px]"
-              style={{ color: "rgba(255,255,255,0.6)" }}
-            >
-              {fu.patientEmail}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div
-          className="flex-1 overflow-y-auto p-5 space-y-4"
-          style={{ background: "#f8fafc" }}
-        >
-          {/* Schedule block */}
-          <div
-            className="flex items-center gap-3 p-4 rounded-xl border border-blue-100"
-            style={{ background: "#eff6ff" }}
-          >
-            <Calendar
-              className="w-5 h-5 flex-shrink-0"
-              style={{ color: ACCENT }}
-            />
-            <div className="flex-1">
-              <p className="font-bold text-[12px]" style={{ color: ACCENT }}>
-                Scheduled Follow-up
-              </p>
-              <p className="text-[13px] text-slate-700 mt-0.5">
-                {new Date(fu.scheduledAt).toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <PriorityBadge priority={fu.priority} />
-              <StatusBadge status={fu.status} />
-            </div>
-          </div>
-
-          {/* Reason */}
-          <Section label="Reason for Follow-up">
-            <div className="flex items-start gap-2 p-3.5 rounded-xl border border-rose-100 bg-rose-50">
-              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-              <p className="text-[13px] text-rose-700">{fu.reason}</p>
-            </div>
-          </Section>
-
-          {/* Instructions */}
-          {fu.instructions && (
-            <Section label="Doctor Instructions">
-              <div className="p-3.5 rounded-xl bg-white border border-slate-200">
-                <p className="text-[13px] text-slate-600 leading-relaxed">
-                  {fu.instructions}
-                </p>
-              </div>
-            </Section>
-          )}
-
-          {/* Diagnosis */}
-          {fu.diagnosis && (
-            <Section label="Diagnosis">
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-white border border-slate-200">
-                <Stethoscope className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                <p className="text-[13px] font-semibold text-slate-800">
-                  {fu.diagnosis}
-                </p>
-              </div>
-            </Section>
-          )}
-
-          {/* Prescriptions */}
-          {fu.prescriptions?.length > 0 && (
-            <Section label={`Prescriptions (${fu.prescriptions.length})`}>
-              <div className="space-y-2">
-                {fu.prescriptions.map((rx, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 p-3 rounded-xl bg-white border border-slate-200"
-                  >
-                    <Pill className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                    <p className="text-[12px] text-slate-700">{rx}</p>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          )}
-
-          {/* Notes */}
-          {fu.notes && (
-            <Section label="Consultation Notes">
-              <div className="flex items-start gap-2 p-3.5 rounded-xl border border-amber-100 bg-amber-50">
-                <FileText className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[13px] text-amber-800 leading-relaxed">
-                  {fu.notes}
-                </p>
-              </div>
-            </Section>
-          )}
-
-          {/* Chat history */}
-          {(fu.chat?.length ?? 0) > 0 && (
-            <Section label="Previous Messages">
-              <div className="space-y-2">
-                {fu.chat!.map((m, i) => (
-                  <div
-                    key={i}
-                    className={`flex ${m.from === "doctor" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className="max-w-[80%] px-3 py-2.5 rounded-2xl text-[13px]"
-                      style={
-                        m.from === "doctor"
-                          ? {
-                            background: NAV_BG,
-                            color: "white",
-                            borderBottomRightRadius: 4,
-                          }
-                          : {
-                            background: "white",
-                            color: "#1e293b",
-                            border: "1px solid #e2e8f0",
-                            borderBottomLeftRadius: 4,
-                          }
-                      }
-                    >
-                      <p>{m.text}</p>
-                      <p className="text-[10px] mt-0.5 opacity-60">{m.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-slate-100 flex gap-2 flex-shrink-0 bg-white flex-wrap">
-          {fu.status === "pending" && (
-            <>
-              <Link
-                href={`/doctor-dashboard/consult?followUpId=${fu.id}&patientId=${fu.patientId}`}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-extrabold text-white transition-all active:scale-95"
-                style={{ background: NAV_BG }}
-              >
-                <Video className="w-4 h-4" /> Start Follow-up
-              </Link>
-              <button
-                onClick={onComplete}
-                className="px-4 py-2.5 rounded-xl text-[13px] font-bold border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors active:scale-95"
-              >
-                <Check className="w-4 h-4" />
-              </button>
-              <button
-                onClick={onReschedule}
-                className="px-4 py-2.5 rounded-xl text-[13px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors active:scale-95"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </>
-          )}
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl text-[13px] font-semibold text-slate-600 border border-slate-200 bg-white hover:bg-slate-50 transition-colors active:scale-95"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
 function Section({
   label,
   children,
@@ -465,103 +252,8 @@ function Section({
   );
 }
 
-function RescheduleModal({
-  fu,
-  onSave,
-  onClose,
-}: {
-  fu: FollowUp;
-  onSave: (date: string, instructions: string, priority: Priority) => void;
-  onClose: () => void;
-}) {
-  const [date, setDate] = useState(fu.scheduledAt.slice(0, 16));
-  const [instructions, setInstructions] = useState(fu.instructions);
-  const [priority, setPriority] = useState<Priority>(fu.priority);
-
-  return (
-    <>
-      <div
-        className="fixed inset-0 bg-black/40 z-[60] backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-[60] bg-white rounded-2xl shadow-2xl p-6 max-w-sm mx-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-extrabold text-slate-900 text-[15px]">
-            Reschedule Follow-up
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-100"
-          >
-            <X className="w-4 h-4 text-slate-500" />
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">
-              New Date & Time
-            </label>
-            <input
-              type="datetime-local"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-[13px] outline-none focus:border-blue-400 transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">
-              Priority
-            </label>
-            <div className="flex gap-2">
-              {(["low", "medium", "high"] as Priority[]).map((p) => {
-                const c = PRIORITY_CONFIG[p];
-                return (
-                  <button
-                    key={p}
-                    onClick={() => setPriority(p)}
-                    className="flex-1 py-2 rounded-xl text-[11px] font-bold border capitalize transition-all"
-                    style={
-                      priority === p
-                        ? {
-                          background: c.bg,
-                          color: c.text,
-                          borderColor: c.border,
-                        }
-                        : { borderColor: "#e2e8f0", color: "#64748b" }
-                    }
-                  >
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div>
-            <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">
-              Instructions
-            </label>
-            <textarea
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-[13px] outline-none focus:border-blue-400 transition-colors resize-none"
-            />
-          </div>
-          <button
-            onClick={() => onSave(date, instructions, priority)}
-            className="w-full py-3 rounded-xl font-extrabold text-[13px] text-white transition-all active:scale-95"
-            style={{ background: NAV_BG }}
-          >
-            Save Changes
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
 export default function FollowUpsPage() {
+  const router = useRouter();
   const [items, setItems] = useState<FollowUp[]>(MOCK);
   const [sel, setSel] = useState<FollowUp | null>(null);
   const [rescheduleItem, setRescheduleItem] = useState<FollowUp | null>(null);
@@ -607,7 +299,6 @@ export default function FollowUpsPage() {
         fu.id === id ? { ...fu, status: "completed" as FUStatus } : fu,
       ),
     );
-    setSel(null);
     fetch("/api/follow-ups", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -631,7 +322,6 @@ export default function FollowUpsPage() {
         ),
       );
       setRescheduleItem(null);
-      setSel(null);
       fetch("/api/follow-ups", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -818,7 +508,6 @@ export default function FollowUpsPage() {
           ))}
         </GroupSection>
       )}
-
       {/* Pending */}
       <GroupSection title="Upcoming" count={grouped.pending.length}>
         {grouped.pending.length === 0 ? (
@@ -830,55 +519,39 @@ export default function FollowUpsPage() {
             </p>
           </div>
         ) : (
-          grouped.pending.map((fu) => (
-            <FollowUpCard
-              key={fu.id}
-              fu={fu}
-              onClick={() => setSel(fu)}
-              onComplete={() => handleComplete(fu.id)}
-              onReschedule={() => setRescheduleItem(fu)}
-            />
-          ))
+          Object.entries(grouped).map(([g, blockItems]) => {
+            if (!blockItems.length) return null;
+            return (
+              <div key={g} className="space-y-3">
+                <h2 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 pl-1 capitalize">
+                  {g} Follow-ups ({blockItems.length})
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
+                  {blockItems.map((fu) => (
+                    <FollowUpCard
+                      key={fu.id}
+                      fu={fu}
+                      onClick={() => router.push(`/doctor-dashboard/followups/${fu.id}`)}
+                      onComplete={() => handleComplete(fu.id)}
+                      onReschedule={() => setRescheduleItem(fu)}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })
         )}
       </GroupSection>
 
-      {/* Completed */}
-      {grouped.completed.length > 0 && (
-        <GroupSection
-          title="Completed"
-          count={grouped.completed.length}
-          collapsed
-        >
-          {grouped.completed.map((fu) => (
-            <FollowUpCard
-              key={fu.id}
-              fu={fu}
-              onClick={() => setSel(fu)}
-              onComplete={() => { }}
-              onReschedule={() => setRescheduleItem(fu)}
-            />
-          ))}
-        </GroupSection>
-      )}
-
       {/* Modals */}
-      {sel && (
-        <DetailModal
-          fu={sel}
-          onClose={() => setSel(null)}
-          onComplete={() => handleComplete(sel.id)}
-          onReschedule={() => {
-            setRescheduleItem(sel);
-            setSel(null);
-          }}
-        />
-      )}
       {rescheduleItem && (
-        <RescheduleModal
-          fu={rescheduleItem}
-          onSave={(d, i, p) => handleReschedule(rescheduleItem.id, d, i, p)}
-          onClose={() => setRescheduleItem(null)}
-        />
+        <div className="fixed inset-0 bg-black/40 z-[60] backdrop-blur-sm" onClick={() => setRescheduleItem(null)}>
+          {/* Note: In a real app we would build a dedicated reschedule modal here or on the details page. */}
+          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-[60] bg-white rounded-2xl shadow-2xl p-6 max-w-sm mx-auto" onClick={e => e.stopPropagation()}>
+            <p className="text-center font-bold text-slate-800">Visit the detail page to reschedule.</p>
+            <button className="w-full mt-4 py-2 bg-slate-100 rounded-xl" onClick={() => setRescheduleItem(null)}>Close</button>
+          </div>
+        </div>
       )}
     </div>
   );
