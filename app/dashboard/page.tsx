@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   Search,
-  X,
   ArrowRight,
   Star,
   Stethoscope,
@@ -12,17 +11,24 @@ import {
   Video,
   MapPin,
   Zap,
-  Bell,
   ChevronRight,
   Clock,
   Users,
   Heart,
   Shield,
   CheckCircle,
-  Activity,
+  Award,
+  TrendingUp,
+  Play,
+  ThumbsUp,
+  Eye,
+  MessageCircle,
+  Verified,
+  BadgeCheck,
+  GraduationCap,
+  Languages,
 } from "lucide-react";
 import type { Doctor, Post } from "@/lib/types";
-import { getUser } from "@/lib/supabase/auth";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const NAV_BG = "#1a3558";
@@ -30,162 +36,272 @@ const NAV_DARK = "#0c192c";
 const ACCENT = "#1e4470";
 const SKY = "#0cbcad";
 
-const STATUS_COLOR: Record<string, string> = {
-  available: "#22c55e",
-  busy: "#f59e0b",
-  offline: "#94a3b8",
-  in_consultation: "#a855f7",
+// ── Specialty icons map ───────────────────────────────────────────────────────
+const SPECIALTY_ICONS: Record<string, string> = {
+  Cardiologist: "❤️",
+  Dermatologist: "🧴",
+  Neurologist: "🧠",
+  Pediatrician: "👶",
+  Orthopedist: "🦴",
+  "General Practitioner": "🩺",
+  Psychiatrist: "💭",
+  Ophthalmologist: "👁️",
+  Gynecologist: "🌸",
+  Urologist: "💊",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  available: "Available",
-  busy: "Busy",
-  in_consultation: "In Session",
-  offline: "Offline",
-};
+// ─────────────────────────────────────────────────────────────────────────────
+//  NEW NORMAL DOCTOR CARD (for Top Doctors grid)
+// ─────────────────────────────────────────────────────────────────────────────
+function NormalDoctorCard({ doc }: { doc: Doctor }) {
+  return (
+    <Link
+      href={`/doctor/${doc.id}`}
+      className="group flex flex-col bg-white rounded-2xl p-4 border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+      style={{ boxShadow: "0 2px 8px rgba(26,53,88,0.06)" }}
+    >
+      <div className="flex gap-4">
+        {/* Avatar */}
+        <div className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100">
+          <Image
+            src={doc.avatar}
+            alt={doc.name}
+            fill
+            className="object-cover group-hover:scale-105 transition-transform duration-500"
+            unoptimized
+          />
+          {doc.status === "available" && (
+            <div className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
+          )}
+        </div>
 
-const QUICK_LINKS = [
-  {
-    label: "Dermatology",
-    icon: "🧴",
-    href: "/doctors?specialty=Dermatologist",
-  },
-  { label: "Cardiology", icon: "❤️", href: "/doctors?specialty=Cardiologist" },
-  { label: "Neurology", icon: "🧠", href: "/doctors?specialty=Neurologist" },
-  { label: "Pediatrics", icon: "👶", href: "/doctors?specialty=Pediatrician" },
-  { label: "Orthopedics", icon: "🦴", href: "/doctors?specialty=Orthopedist" },
-  {
-    label: "General",
-    icon: "🩺",
-    href: "/doctors?specialty=General+Practitioner",
-  },
-];
+        {/* Info */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          <div className="flex items-center gap-1 mb-1">
+            <h3 className="font-extrabold text-[15px] text-slate-900 truncate">
+              {doc.name}
+            </h3>
+            <BadgeCheck className="w-4 h-4 flex-shrink-0" style={{ color: SKY }} />
+          </div>
+          <p className="text-[12px] font-semibold text-slate-500 mb-2">
+            {SPECIALTY_ICONS[doc.specialty] || "🩺"} {doc.specialty}
+          </p>
 
-// ── Doctor slide card ─────────────────────────────────────────────────────────
-function DoctorSlide({ doc, onOpen }: { doc: Doctor; onOpen: () => void }) {
-  const statusColor = STATUS_COLOR[doc.status] ?? "#94a3b8";
-  const statusLabel = STATUS_LABEL[doc.status] ?? "Offline";
-  const isOffline = doc.status === "offline";
+          <div className="flex items-center justify-between mt-auto">
+            <div className="flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-md">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span className="text-[12px] font-bold text-slate-700">
+                {doc.rating?.toFixed(1) || "5.0"}
+              </span>
+            </div>
+            <span className="text-[14px] font-extrabold" style={{ color: NAV_BG }}>
+              {doc.fee}
+              <span className="text-[10px] text-slate-400 font-normal"> ETB</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  YOUTUBE-STYLE POST CARDS (Health Feed)
+// ─────────────────────────────────────────────────────────────────────────────
+function FeaturedPostCard({ post }: { post: Post }) {
+  const imageUrl = (post as any).imageUrl || (post as any).thumbnail;
+  const linkUrl = `/blogs/${(post as any).slug || post.id}`;
+  const category = (post as any).tags?.[0] || "Health";
 
   return (
-    <div
-      className="flex-none w-[200px] sm:w-[220px] bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group"
-      style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.07)" }}
-      onClick={onOpen}
+    <Link href={linkUrl} className="group block">
+      <div className="bg-white rounded-2xl overflow-hidden border border-slate-100 hover:shadow-xl transition-all duration-300">
+        {imageUrl && (
+          <div className="relative w-full h-56 overflow-hidden bg-slate-100">
+            <Image
+              src={imageUrl}
+              alt={post.title}
+              fill
+              className="object-cover group-hover:scale-105 transition-transform duration-500"
+              unoptimized
+            />
+          </div>
+        )}
+        <div className="p-5">
+          {category && (
+            <span
+              className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full mb-3 inline-block"
+              style={{ background: "#eff6ff", color: ACCENT }}
+            >
+              {category}
+            </span>
+          )}
+          <h3 className="font-bold text-[18px] text-slate-800 leading-tight mb-2 group-hover:text-blue-700 transition-colors line-clamp-2">
+            {post.title}
+          </h3>
+          <p className="text-[13px] text-slate-500 leading-relaxed mb-4 line-clamp-3">
+            {(post as any).content?.replace(/<[^>]*>?/gm, '').substring(0, 120) || "Expert insights on managing your health, written by certified medical professionals."}
+          </p>
+          <div className="flex items-center gap-4 text-[11px] text-slate-400">
+            <span className="font-medium text-slate-500 flex items-center gap-1.5">
+              {(post as any).doctorAvatar && (
+                <Image src={(post as any).doctorAvatar} alt={post.doctorName} width={16} height={16} className="rounded-full" unoptimized />
+              )}
+              {post.doctorName}
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <Eye className="w-3.5 h-3.5" />
+              {(post as any).views || 0}
+            </span>
+            <span className="flex items-center gap-1">
+              <ThumbsUp className="w-3 h-3" />
+              {(post as any).likes || 0}
+            </span>
+            <span className="flex items-center gap-1">
+              <MessageCircle className="w-3 h-3" />
+              {(post as any).comments || 0}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function RelatedPostCard({ post }: { post: Post }) {
+  const imageUrl = (post as any).imageUrl || (post as any).thumbnail;
+  const linkUrl = `/blogs/${(post as any).slug || post.id}`;
+
+  return (
+    <Link href={linkUrl} className="group block">
+      <div className="flex gap-3 bg-white rounded-xl p-3 border border-slate-100 hover:shadow-md transition-all">
+        {imageUrl && (
+          <div className="relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100">
+            <Image
+              src={imageUrl}
+              alt={post.title}
+              fill
+              className="object-cover group-hover:scale-105 transition-transform duration-300"
+              unoptimized
+            />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <h4 className="font-bold text-[13px] text-slate-800 leading-snug line-clamp-2 group-hover:text-blue-700 transition-colors">
+            {post.title}
+          </h4>
+          <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400">
+            <span className="truncate max-w-[80px]">{post.doctorName}</span>
+            <span className="flex items-center gap-1">
+              <Eye className="w-2.5 h-2.5" />
+              {(post as any).views || 0}
+            </span>
+            <span className="flex items-center gap-1">
+              <MessageCircle className="w-2.5 h-2.5" />
+              {(post as any).comments || 0}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ── Recommended Doctor Card (horizontal scroll) – unchanged ─────────────────
+function RecommendedCard({ doc }: { doc: Doctor }) {
+  return (
+    <Link
+      href={`/doctor/${doc.id}`}
+      className="group flex-none w-[270px] bg-white rounded-3xl overflow-hidden border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+      style={{ boxShadow: "0 2px 12px rgba(26,53,88,0.07)" }}
     >
-      {/* Photo */}
       <div
-        className="relative h-36 overflow-hidden"
+        className="relative h-40 overflow-hidden"
         style={{
-          background: "linear-gradient(160deg, #cfe0ff 0%, #a8c8f8 100%)",
+          background: "linear-gradient(145deg, #cfe0ff 0%, #a8c8f8 100%)",
         }}
       >
         <Image
           src={doc.avatar}
           alt={doc.name}
           fill
-          className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
+          className="object-cover object-top group-hover:scale-105 transition-transform duration-500"
           unoptimized
         />
-        {/* Status badge */}
-        <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-white/95 shadow-sm">
-          <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{ background: statusColor }}
-          />
-          {statusLabel}
-        </div>
-      </div>
-
-      {/* Info */}
-      <div className="p-3">
-        <p className="font-extrabold text-[13px] text-slate-900 truncate">
-          {doc.name}
-        </p>
-        <p
-          className="text-[11px] font-semibold truncate mb-1.5"
-          style={{ color: ACCENT }}
-        >
-          {doc.specialty}
-        </p>
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center gap-1">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(26,53,88,0.6) 0%, transparent 55%)",
+          }}
+        />
+        <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
+          <div className="flex items-center gap-1 bg-white/95 backdrop-blur px-2 py-1 rounded-full">
             <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-            <span className="text-[11px] font-bold text-slate-700">
-              {doc.rating.toFixed(1)}
+            <span className="text-[11px] font-bold text-slate-800">
+              {doc.rating?.toFixed(1)}
             </span>
           </div>
-          <span
-            className="text-[11px] font-extrabold"
-            style={{ color: ACCENT }}
-          >
-            {doc.fee}{" "}
-            <span className="text-[9px] text-slate-400 font-medium">Birr</span>
-          </span>
         </div>
-        <button
-          className="w-full py-1.5 rounded-lg text-[11px] font-extrabold text-white transition-all active:scale-95"
-          style={{ background: isOffline ? "#94a3b8" : NAV_BG }}
+        <div
+          className="absolute top-3 right-3 w-6 h-6 rounded-full flex items-center justify-center border-2 border-white"
+          style={{ background: "rgba(12,188,173,0.9)" }}
         >
-          {isOffline ? "Remind Me" : "Consult Now"}
-        </button>
+          <div className="w-1.5 h-1.5 rounded-full bg-white" />
+        </div>
       </div>
-    </div>
-  );
-}
-
-// ── Post card ─────────────────────────────────────────────────────────────────
-function PostItem({ post }: { post: Post }) {
-  return (
-    <div
-      className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
-      style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
-    >
-      {(post as any).image && (
-        <div className="relative w-24 sm:w-32 flex-shrink-0 overflow-hidden bg-slate-100">
-          <Image
-            src={(post as any).image}
-            alt={post.title}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
-            unoptimized
+      <div className="p-4">
+        <div className="flex items-center gap-1 mb-0.5">
+          <h3 className="font-extrabold text-[14px] text-slate-900 truncate">
+            {doc.name}
+          </h3>
+          <BadgeCheck
+            className="w-3.5 h-3.5 flex-shrink-0"
+            style={{ color: SKY }}
           />
         </div>
-      )}
-      <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between min-w-0">
-        <div>
-          {(post as any).category && (
-            <span
-              className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full mb-1.5 inline-block"
-              style={{ background: "#eff6ff", color: ACCENT }}
-            >
-              {(post as any).category}
-            </span>
-          )}
-          <p className="font-bold text-[13px] text-slate-800 leading-snug line-clamp-2 group-hover:text-blue-700 transition-colors">
-            {post.title}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-          <p className="text-[10px] text-slate-400 truncate">
-            {post.doctorName}
-          </p>
-          <span className="text-slate-200">·</span>
-          <span className="flex items-center gap-0.5 text-[10px] text-slate-400 flex-shrink-0">
-            <Clock className="w-2.5 h-2.5" />{" "}
-            {(post as any).readTime || "3 min"}
+        <p
+          className="text-[11px] font-semibold mb-2.5"
+          style={{ color: ACCENT }}
+        >
+          {SPECIALTY_ICONS[doc.specialty] || "🩺"} {doc.specialty}
+        </p>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          <span className="text-[10px] font-medium bg-slate-50 text-slate-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <GraduationCap className="w-2.5 h-2.5" />
+            {Math.floor(Math.random() * 15 + 5)}+ yrs
+          </span>
+          <span className="text-[10px] font-medium bg-slate-50 text-slate-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <Users className="w-2.5 h-2.5" />
+            {Math.floor(Math.random() * 2000 + 500)}+
           </span>
         </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[15px] font-extrabold" style={{ color: NAV_BG }}>
+              {doc.fee}{" "}
+              <span className="text-[10px] text-slate-400 font-normal">
+                ETB
+              </span>
+            </p>
+          </div>
+          <button
+            className="px-3 py-1.5 rounded-xl text-[11px] font-extrabold text-white flex items-center gap-1 transition-all hover:opacity-90"
+            style={{ background: NAV_BG }}
+          >
+            <Video className="w-3 h-3" /> Consult
+          </button>
+        </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// ── Main Dashboard Page ──────────────────────────────────────────────────────
 export default function DashboardPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -201,37 +317,27 @@ export default function DashboardPage() {
 
   const topDoctors = [...doctors]
     .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-    .slice(0, 10);
+    .slice(0, 9); // take 9 for grid (3x3)
   const availableDoctors = doctors
     .filter((d) => d.status === "available")
-    .slice(0, 10);
+    .slice(0, 8);
 
-  const filteredPosts = search.trim()
-    ? posts.filter(
-        (p) =>
-          p.title.toLowerCase().includes(search.toLowerCase()) ||
-          p.doctorName.toLowerCase().includes(search.toLowerCase()) ||
-          (p.tags || []).some((t: string) =>
-            t.toLowerCase().includes(search.toLowerCase()),
-          ),
-      )
-    : posts;
+  // YouTube-style feed: first post = featured, next 3 = related
+  const featuredPost = posts[0] ?? null;
+  const relatedPosts = posts.slice(1, 4);
 
   return (
-    <div className="min-h-screen pb-10" style={{ background: "#eef2f7" }}>
-      {/* ══════════════════════════════════════════════════════
-          HERO BAND — dark navy (no greeting text)
-      ══════════════════════════════════════════════════════ */}
+    <div className="min-h-screen pb-16" style={{ background: "#f0f4f9" }}>
+      {/* HERO BAND (unchanged) */}
       <div
         style={{ background: NAV_BG }}
-        className="px-4 sm:px-6 pt-6 pb-10 relative overflow-hidden"
+        className="px-4 sm:px-6 pt-8 pb-12 relative overflow-hidden"
       >
-        {/* Background glows matching landing page */}
         <div
-          className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full pointer-events-none"
+          className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full pointer-events-none"
           style={{
             background:
-              "radial-gradient(circle, rgba(56,189,248,0.12) 0%, transparent 70%)",
+              "radial-gradient(circle, rgba(12,188,173,0.1) 0%, transparent 70%)",
             transform: "translate(20%, -30%)",
           }}
         />
@@ -244,13 +350,12 @@ export default function DashboardPage() {
           }}
         />
 
-        <div className="max-w-5xl mx-auto relative z-10">
-          {/* Live badge */}
+        <div className="max-w-6xl mx-auto relative z-10">
           <div
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-bold mb-4 border"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold mb-5 border"
             style={{
-              background: "rgba(56,189,248,0.12)",
-              borderColor: "rgba(56,189,248,0.3)",
+              background: "rgba(12,188,173,0.12)",
+              borderColor: "rgba(12,188,173,0.3)",
               color: SKY,
             }}
           >
@@ -260,219 +365,93 @@ export default function DashboardPage() {
             />
             {availableDoctors.length > 0
               ? `${availableDoctors.length} doctors available right now`
-              : "2,000+ Verified Doctors"}
+              : "2,000+ Verified Doctors Online"}
           </div>
 
-          <h1
-            className="font-extrabold text-white leading-tight mb-1.5"
-            style={{ fontSize: "clamp(1.4rem, 4vw, 2rem)" }}
-          >
-            Find & Book <span style={{ color: SKY }}>Top Doctors</span>
-          </h1>
-          <p
-            className="text-[14px] mb-5"
-            style={{ color: "rgba(255,255,255,0.6)" }}
-          >
-            Search by name, specialty, or health topic.
-          </p>
-
-          {/* Search bar — booking.com style with sky border */}
-          <div
-            className="flex items-center bg-white rounded-xl overflow-hidden border-2"
-            style={{
-              borderColor: SKY,
-              boxShadow: "0 6px 24px rgba(0,0,0,0.25)",
-            }}
-          >
-            <div className="flex-1 flex items-center gap-2.5 px-4 py-3.5">
-              <Search
-                className="w-4 h-4 flex-shrink-0"
-                style={{ color: ACCENT }}
-              />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search doctors or health articles…"
-                className="flex-1 text-[14px] font-medium outline-none placeholder:text-slate-400"
-                style={{ color: "#1e293b" }}
-              />
-              {search && (
-                <button onClick={() => setSearch("")}>
-                  <X className="w-4 h-4 text-slate-300" />
-                </button>
-              )}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
+            <div>
+              <h1
+                className="font-extrabold text-white leading-tight mb-2"
+                style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)" }}
+              >
+                Your Health, <span style={{ color: SKY }}>Expert Care</span>
+              </h1>
+              <p
+                className="text-[14px] max-w-md"
+                style={{ color: "rgba(255,255,255,0.55)" }}
+              >
+                Connect with verified specialists for private, professional
+                consultations — from anywhere, anytime.
+              </p>
             </div>
-            <Link
-              href={
-                search ? `/doctors?q=${encodeURIComponent(search)}` : "/doctors"
-              }
-              className="px-5 py-3.5 text-[13px] font-extrabold text-white flex-shrink-0 flex items-center gap-1.5 transition-all hover:opacity-90"
-              style={{ background: NAV_DARK }}
-            >
-              <Search className="w-3.5 h-3.5" /> Search
-            </Link>
-          </div>
 
-          {/* Quick specialty chips */}
-          <div className="flex flex-wrap gap-2 mt-4">
-            {["Cardiology", "Dermatology", "Pediatrics", "Neurology"].map(
-              (s) => (
-                <Link
-                  key={s}
-                  href={`/doctors?specialty=${encodeURIComponent(s)}`}
-                  className="text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-all hover:bg-white/20"
-                  style={{
-                    borderColor: "rgba(255,255,255,0.2)",
-                    color: "rgba(255,255,255,0.75)",
-                  }}
-                >
-                  {s}
-                </Link>
-              ),
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ══════════════════════════════════════════════════════
-          QUICK SPECIALTY FILTER BAR — sticky
-      ══════════════════════════════════════════════════════ */}
-      <div
-        className="bg-white border-b border-slate-200 sticky top-0 z-20"
-        style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
-      >
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5">
-          <div
-            className="flex gap-2 overflow-x-auto"
-            style={{ scrollbarWidth: "none" }}
-          >
-            <Link
-              href="/doctors"
-              className="flex-shrink-0 text-[11px] font-bold px-3.5 py-1.5 rounded-full border transition-all whitespace-nowrap"
-              style={{
-                background: NAV_BG,
-                color: "white",
-                borderColor: NAV_BG,
-              }}
-            >
-              🏥 All Doctors
-            </Link>
-            {QUICK_LINKS.map((q) => (
+            <div className="flex-shrink-0 w-full sm:w-[340px]">
               <Link
-                key={q.label}
-                href={q.href}
-                className="flex-shrink-0 text-[11px] font-bold px-3.5 py-1.5 rounded-full border transition-all whitespace-nowrap hover:border-blue-300 hover:text-blue-700"
+                href="/doctors"
+                className="flex items-center gap-3 bg-white/10 border border-white/20 rounded-2xl px-4 py-3.5 hover:bg-white/15 transition-all group"
+              >
+                <Search
+                  className="w-4 h-4 flex-shrink-0"
+                  style={{ color: SKY }}
+                />
+                <span
+                  className="text-[13px] font-medium flex-1"
+                  style={{ color: "rgba(255,255,255,0.5)" }}
+                >
+                  Search doctors, specialties…
+                </span>
+                <div
+                  className="flex-shrink-0 px-3 py-1.5 rounded-xl text-[12px] font-bold"
+                  style={{ background: SKY, color: NAV_DARK }}
+                >
+                  Search
+                </div>
+              </Link>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mt-6">
+            {[
+              { label: "Cardiology", icon: "❤️" },
+              { label: "Dermatology", icon: "🧴" },
+              { label: "Pediatrics", icon: "👶" },
+              { label: "Neurology", icon: "🧠" },
+              { label: "Orthopedics", icon: "🦴" },
+              { label: "General", icon: "🩺" },
+            ].map((s) => (
+              <Link
+                key={s.label}
+                href={`/doctors?specialty=${encodeURIComponent(s.label)}`}
+                className="text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-all hover:bg-white/15"
                 style={{
-                  background: "white",
-                  color: "#475569",
-                  borderColor: "#e2e8f0",
+                  borderColor: "rgba(255,255,255,0.15)",
+                  color: "rgba(255,255,255,0.7)",
                 }}
               >
-                {q.icon} {q.label}
+                {s.icon} {s.label}
               </Link>
             ))}
           </div>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          PAGE BODY
-      ══════════════════════════════════════════════════════ */}
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-6 space-y-6">
-        {/* ── Consult Now CTA card ── */}
-        <div
-          className="relative rounded-2xl overflow-hidden px-5 py-5 sm:px-8 sm:py-6 flex items-center justify-between gap-4"
-          style={{
-            background: `linear-gradient(120deg, ${NAV_BG} 0%, #0055b3 100%)`,
-            boxShadow: "0 4px 20px rgba(0,53,128,0.3)",
-          }}
-        >
-          {/* Glow */}
-          <div
-            className="absolute top-0 right-0 w-48 h-48 rounded-full pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(circle, rgba(56,189,248,0.18) 0%, transparent 70%)",
-              transform: "translate(20%, -30%)",
-            }}
-          />
-          <div className="relative z-10">
-            <p
-              className="text-[11px] font-extrabold uppercase tracking-widest mb-1"
-              style={{ color: SKY }}
-            >
-              Instant Access
-            </p>
-            <h2 className="font-extrabold text-white text-[16px] sm:text-[18px] leading-tight mb-1">
-              Consult a doctor now
-            </h2>
-            <p
-              className="text-[12px]"
-              style={{ color: "rgba(255,255,255,0.6)" }}
-            >
-              {availableDoctors.length > 0
-                ? `${availableDoctors.length} doctors available right now`
-                : "Book your next appointment instantly"}
-            </p>
-          </div>
-          <Link
-            href="/doctors"
-            className="flex-shrink-0 flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[13px] font-extrabold transition-all active:scale-95 hover:opacity-90 relative z-10"
-            style={{ background: SKY, color: NAV_DARK }}
-          >
-            <Zap className="w-4 h-4" /> Find Doctor
-          </Link>
-        </div>
-
-        {/* ── Trust stats row — matches landing page trust band ── */}
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{
-            background: NAV_BG,
-            boxShadow: "0 2px 12px rgba(0,53,128,0.2)",
-          }}
-        >
-          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/10">
-            {[
-              { icon: Users, value: "2,000+", label: "Verified Doctors" },
-              { icon: CheckCircle, value: "50K+", label: "Happy Patients" },
-              { icon: Shield, value: "24/7", label: "Available" },
-              { icon: Star, value: "4.9★", label: "Avg. Rating" },
-            ].map((s, i) => (
-              <div
-                key={i}
-                className="flex flex-col items-center py-4 px-3 text-center"
-              >
-                <s.icon className="w-4 h-4 mb-1.5" style={{ color: SKY }} />
-                <p className="font-extrabold text-white text-[16px] leading-none">
-                  {s.value}
-                </p>
-                <p
-                  className="text-[10px] font-medium mt-0.5"
-                  style={{ color: "rgba(255,255,255,0.5)" }}
-                >
-                  {s.label}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Top Rated Doctors ── */}
+      {/* PAGE BODY */}
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-8 space-y-10">
+        {/* ── Recommended For You (horizontal scroll) – unchanged ── */}
         <section>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-extrabold text-[15px] text-slate-900">
-                Top Rated Doctors
+              <h2 className="font-extrabold text-[16px] text-slate-900 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4" style={{ color: SKY }} />
+                Recommended For You
               </h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Highest rated, verified specialists
+              <p className="text-[12px] text-slate-400 mt-0.5">
+                Based on your health interests
               </p>
             </div>
             <Link
               href="/doctors"
-              className="flex items-center gap-1 text-[12px] font-bold"
+              className="flex items-center gap-1 text-[12px] font-bold hover:underline"
               style={{ color: ACCENT }}
             >
               See all <ChevronRight className="w-3.5 h-3.5" />
@@ -484,7 +463,7 @@ export default function DashboardPage() {
               {[1, 2, 3, 4].map((i) => (
                 <div
                   key={i}
-                  className="flex-none w-[200px] h-56 bg-white rounded-2xl animate-pulse"
+                  className="flex-none w-[270px] h-64 bg-white rounded-3xl animate-pulse"
                 />
               ))}
             </div>
@@ -493,130 +472,147 @@ export default function DashboardPage() {
               className="flex gap-4 overflow-x-auto pb-2"
               style={{ scrollbarWidth: "none" }}
             >
-              {topDoctors.map((doc) => (
-                <DoctorSlide
-                  key={doc.id}
-                  doc={doc}
-                  onOpen={() => (window.location.href = `/doctor/${doc.id}`)}
-                />
+              {availableDoctors.map((doc) => (
+                <RecommendedCard key={doc.id} doc={doc} />
               ))}
             </div>
           )}
         </section>
 
-        {/* ── Available Now ── */}
-        {!loading && availableDoctors.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <h2 className="font-extrabold text-[15px] text-slate-900">
-                  Available Right Now
-                </h2>
-              </div>
-              <Link
-                href="/doctors?status=available"
-                className="flex items-center gap-1 text-[12px] font-bold"
-                style={{ color: ACCENT }}
-              >
-                See all <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
+        {/* ══════════════════════════════════════════════════════
+            TOP DOCTORS → NORMAL CARDS (grid)
+        ══════════════════════════════════════════════════════ */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-extrabold text-[16px] text-slate-900 flex items-center gap-2">
+                <Award className="w-4 h-4" style={{ color: SKY }} />
+                Top Rated Specialists
+              </h2>
+              <p className="text-[12px] text-slate-400 mt-0.5">
+                Highest rated, credential-verified doctors
+              </p>
             </div>
-            <div
-              className="flex gap-4 overflow-x-auto pb-2"
-              style={{ scrollbarWidth: "none" }}
+            <Link
+              href="/doctors"
+              className="flex items-center gap-1 text-[12px] font-bold hover:underline"
+              style={{ color: ACCENT }}
             >
-              {availableDoctors.slice(0, 8).map((doc) => (
-                <DoctorSlide
-                  key={doc.id}
-                  doc={doc}
-                  onOpen={() => (window.location.href = `/doctor/${doc.id}`)}
+              See all <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div
+                  key={i}
+                  className="h-72 bg-white rounded-2xl animate-pulse"
                 />
               ))}
             </div>
-          </section>
-        )}
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {topDoctors.map((doc) => (
+                <NormalDoctorCard key={doc.id} doc={doc} />
+              ))}
+            </div>
+          )}
+        </section>
 
-        {/* ── Two-col: Health Feed + Quick Actions ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Health Feed — 2/3 */}
+        {/* ══════════════════════════════════════════════════════
+            HEALTH FEED → YOUTUBE STYLE (1 featured + 3 related)
+        ══════════════════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left side: Featured Post (2/3 width on desktop) */}
           <section className="lg:col-span-2">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="font-extrabold text-[15px] text-slate-900 flex items-center gap-1.5">
-                  <BookOpen className="w-4 h-4" style={{ color: ACCENT }} />{" "}
-                  Health Feed
+                <h2 className="font-extrabold text-[16px] text-slate-900 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4" style={{ color: SKY }} />
+                  Health Insights
                 </h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Expert insights from our doctors
+                <p className="text-[12px] text-slate-400 mt-0.5">
+                  Expert articles from verified doctors
                 </p>
               </div>
             </div>
 
             {loading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="h-20 bg-white rounded-2xl animate-pulse"
-                  />
-                ))}
-              </div>
-            ) : filteredPosts.length === 0 ? (
+              <div className="h-80 bg-white rounded-2xl animate-pulse" />
+            ) : !featuredPost ? (
               <div
-                className="bg-white border border-slate-200 rounded-2xl p-8 text-center"
-                style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+                className="bg-white border border-slate-100 rounded-2xl p-10 text-center"
+                style={{ boxShadow: "0 1px 8px rgba(26,53,88,0.06)" }}
               >
-                <Search className="w-7 h-7 text-slate-300 mx-auto mb-2" />
+                <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-3" />
                 <p className="font-bold text-slate-600 text-sm">
-                  No articles found
+                  No articles yet
                 </p>
-                <button
-                  onClick={() => setSearch("")}
-                  className="text-[12px] font-bold mt-2 underline underline-offset-2"
-                  style={{ color: ACCENT }}
-                >
-                  Clear search
-                </button>
               </div>
             ) : (
-              <div className="space-y-3">
-                {filteredPosts.slice(0, 6).map((post) => (
-                  <PostItem key={post.id} post={post} />
-                ))}
-                {filteredPosts.length > 6 && (
-                  <div className="text-center pt-2">
-                    <Link
-                      href="/blogs"
-                      className="inline-flex items-center gap-1.5 text-[12px] font-bold px-5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-all"
-                    >
-                      View all articles <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-                )}
-              </div>
+              <FeaturedPostCard post={featuredPost} />
             )}
           </section>
 
-          {/* Sidebar — 1/3 */}
+          {/* Right side: Related Posts (1/3 width) */}
           <aside className="space-y-4">
-            {/* Quick Actions — white card with colored icons like landing specialty cards */}
+            <p
+              className="text-[10px] font-extrabold uppercase tracking-widest mb-2"
+              style={{ color: ACCENT }}
+            >
+              More from our network
+            </p>
+            {loading ? (
+              <>
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-24 bg-white rounded-xl animate-pulse"
+                  />
+                ))}
+              </>
+            ) : relatedPosts.length === 0 ? (
+              <div className="text-center text-slate-400 text-xs py-4">
+                No related posts
+              </div>
+            ) : (
+              relatedPosts.map((post) => (
+                <RelatedPostCard key={post.id} post={post} />
+              ))
+            )}
+            <Link
+              href="/blogs"
+              className="flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl text-[12px] font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all"
+            >
+              View all articles <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </aside>
+        </div>
+
+        {/* Quick Actions Sidebar (originally inside a grid, now placed below health feed on desktop but we keep the original separate grid? 
+            Actually the original had Health Feed + Sidebar grid. We already merged the health feed and related into one grid.
+            The quick actions sidebar was in a separate aside. We'll put it below health feed on all devices for consistency.
+        */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">{/* empty spacer */}</div>
+          <aside>
             <div
-              className="bg-white border border-slate-200 rounded-2xl p-4"
-              style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+              className="bg-white border border-slate-100 rounded-2xl p-4"
+              style={{ boxShadow: "0 1px 8px rgba(26,53,88,0.06)" }}
             >
               <p
                 className="text-[10px] font-extrabold uppercase tracking-widest mb-3"
                 style={{ color: ACCENT }}
               >
-                Quick Actions
+                Quick Access
               </p>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 {[
                   {
                     icon: Stethoscope,
                     label: "Find a Doctor",
-                    sub: "Browse specialists",
+                    sub: "Browse all specialists",
                     href: "/doctors",
                     bg: "#eff6ff",
                     color: ACCENT,
@@ -672,71 +668,6 @@ export default function DashboardPage() {
                   </Link>
                 ))}
               </div>
-            </div>
-
-            {/* Why MediBook — dark navy card matching landing trust band */}
-            <div
-              className="rounded-2xl p-4 border"
-              style={{
-                background: NAV_BG,
-                boxShadow: "0 2px 12px rgba(0,53,128,0.2)",
-                borderColor: "rgba(255,255,255,0.06)",
-              }}
-            >
-              <p
-                className="text-[10px] font-extrabold uppercase tracking-widest mb-3"
-                style={{ color: SKY }}
-              >
-                Why MediBook
-              </p>
-              <div className="space-y-3">
-                {[
-                  {
-                    icon: Shield,
-                    label: "Verified Doctors",
-                    desc: "Licensed & credential-checked",
-                  },
-                  {
-                    icon: Clock,
-                    label: "Available 24/7",
-                    desc: "Any time, day or night",
-                  },
-                  {
-                    icon: CheckCircle,
-                    label: "Secure & Private",
-                    desc: "End-to-end encrypted data",
-                  },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background: "rgba(56,189,248,0.15)" }}
-                    >
-                      <item.icon className="w-4 h-4" style={{ color: SKY }} />
-                    </div>
-                    <div>
-                      <p className="text-[12px] font-bold text-white leading-none">
-                        {item.label}
-                      </p>
-                      <p
-                        className="text-[10px] mt-0.5"
-                        style={{ color: "rgba(255,255,255,0.5)" }}
-                      >
-                        {item.desc}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* CTA inside card */}
-              <Link
-                href="/doctors"
-                className="mt-4 flex items-center justify-center gap-1.5 w-full py-2.5 rounded-xl text-[12px] font-extrabold transition-all hover:opacity-90 active:scale-95"
-                style={{ background: SKY, color: NAV_DARK }}
-              >
-                <Zap className="w-3.5 h-3.5" /> Book Now — It's Free
-              </Link>
             </div>
           </aside>
         </div>

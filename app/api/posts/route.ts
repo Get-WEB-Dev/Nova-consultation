@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       videoUrl: p.video_url ?? null,
       views: p.views ?? 0,
       likes: p.likes ?? 0,
-      comments: [],
+      comments: p.comment_count ?? 0,
       tags: p.tags ?? [],
       slug: p.slug,
       liked: userLikes.has(p.id),

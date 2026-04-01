@@ -871,7 +871,7 @@ export default function DoctorsPage() {
                       router.push('/login');
                       return;
                     }
-                    router.push(`/doctor/${doc.id}?tab=chat`);
+                    router.push(`/dashboard/messages?doctorId=${doc.id}&doctorName=${encodeURIComponent(doc.name)}`);
                   }}
                 />
               ))}

@@ -493,7 +493,6 @@ function PostCard({
         </button>
       </div>
 
-      {/* Actions */}
       <div className="flex items-center border-t border-slate-100 px-2 py-1">
         <button
           onClick={handleLike}
@@ -514,6 +513,15 @@ function PostCard({
         >
           <Bookmark className={`w-4 h-4 ${saved ? "fill-amber-400" : ""}`} />
           {saved ? "Saved" : "Save"}
+        </button>
+        <button
+          onClick={() => {
+            if (navigator.share) navigator.share({ title: post.title, text: post.content.slice(0, 100), url: window.location.href });
+            else navigator.clipboard.writeText(window.location.href);
+          }}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-semibold text-slate-500 hover:bg-slate-50 transition-all"
+        >
+          <Share2 className="w-4 h-4" /> Share
         </button>
       </div>
 

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Search,
   Send,
@@ -101,6 +102,7 @@ const MOCK_DOCTOR_CONVOS: Convo[] = [];
 const MOCK_DOCTOR_MSGS: Msg[] = [];
 
 export default function MessagesPage() {
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>("patients");
   const [convos, setConvos] = useState<Convo[]>([]);
   const [doctorConvos] = useState<Convo[]>(MOCK_DOCTOR_CONVOS);
@@ -113,6 +115,7 @@ export default function MessagesPage() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [typing, setTyping] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [autoOpenHandled, setAutoOpenHandled] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const typingTimeout = useRef<NodeJS.Timeout>();
@@ -182,6 +185,68 @@ export default function MessagesPage() {
       };
     })();
   }, []);
+
+  // Auto-open chat when navigating from doctors page with contactId param
+  useEffect(() => {
+    if (autoOpenHandled || !user || loadingConvos) return;
+    const contactId = searchParams.get("contactId") || searchParams.get("doctorId");
+    const contactName = searchParams.get("contactName") || searchParams.get("doctorName");
+    if (!contactId) return;
+
+    setAutoOpenHandled(true);
+
+    // Check if we already have a conversation with this contact
+    const existing = convos.find((c) => c.participantId === contactId);
+    if (existing) {
+      loadMsgs(existing);
+      return;
+    }
+
+    // Create a new conversation entry and auto-select it
+    const newConvo: Convo = {
+      conversationId: "",
+      participantId: contactId,
+      participantName: contactName ? decodeURIComponent(contactName) : "Doctor",
+      participantAvatar: null,
+      participantRole: "doctor",
+      lastMessage: "",
+      lastMessageTime: new Date().toISOString(),
+      unreadCount: 0,
+    };
+
+    // Try to create/find conversation via API
+    (async () => {
+      try {
+        const res = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ doctorId: user.id, patientId: contactId }),
+        });
+        if (res.ok) {
+          const j = await res.json();
+          if (j.data?.id || j.data?.conversationId) {
+            newConvo.conversationId = j.data.id || j.data.conversationId;
+          }
+        }
+      } catch { }
+
+      if (!newConvo.conversationId) {
+        newConvo.conversationId = `new-${contactId}-${Date.now()}`;
+      }
+
+      setConvos((prev) => {
+        const exists = prev.find((c) => c.participantId === contactId);
+        if (exists) {
+          loadMsgs(exists);
+          return prev;
+        }
+        return [newConvo, ...prev];
+      });
+
+      loadMsgs(newConvo);
+      setTab("doctors");
+    })();
+  }, [user, loadingConvos, convos, searchParams, autoOpenHandled]);
 
   const loadMsgs = useCallback(
     async (convo: Convo) => {

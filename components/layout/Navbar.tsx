@@ -22,6 +22,7 @@ import {
   Search,
   Menu,
   X,
+  BookOpen,
 } from "lucide-react";
 
 // ── Palette (matches ModernNavbar / landing page) ─────────────────────────────
@@ -49,11 +50,12 @@ const NAV_LINKS = [
   },
   { href: "/doctors", label: "Doctors", labelAm: "ዶክተሮች", icon: Stethoscope },
   {
-    href: "/appointments",
+    href: "/consultations",
     label: "Consultations",
     labelAm: "ምክክሮች",
     icon: Calendar,
   },
+  { href: "blog", label: "Blogs", labelAm: "ብሎጎች", icon: BookOpen },
   { href: "/history", label: "History", labelAm: "ታሪክ", icon: History },
 ];
 
@@ -102,7 +104,7 @@ export default function Navbar() {
             actionUrl: n.action_url,
           })),
         );
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -179,7 +181,7 @@ export default function Navbar() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notifId: id }),
       });
-    } catch {}
+    } catch { }
   };
 
   const handleSignOut = () => {
