@@ -19,9 +19,6 @@ import {
   CalendarCheck,
   ShieldCheck,
   ChevronRight,
-  Search,
-  Menu,
-  X,
   BookOpen,
 } from "lucide-react";
 
