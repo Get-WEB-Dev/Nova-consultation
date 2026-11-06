@@ -19,28 +19,28 @@ const FOOTER_LINKS = {
   "For Patients": [
     { label: "Find a Doctor", href: "/doctors" },
     { label: "Book Appointment", href: "/doctors" },
-    { label: "Health Plans", href: "/plans" },
+    { label: "Health Plans", href: "/doctors" },
     { label: "Video Consultation", href: "/doctors" },
-    { label: "Medical Records", href: "/records" },
+    { label: "Medical Records", href: "/profile" },
   ],
   "For Doctors": [
-    { label: "Join MediBook", href: "/doctor/signup" },
+    { label: "Join Nova Health", href: "/doctor-login" },
     { label: "Doctor Login", href: "/doctor-login" },
-    { label: "Doctor Resources", href: "/doctor/resources" },
-    { label: "Partner Clinics", href: "/clinics" },
+    { label: "Doctor Resources", href: "/doctor-dashboard/feed" },
+    { label: "Partner Clinics", href: "/doctors" },
   ],
   Company: [
     { label: "About Us", href: "/about" },
-    { label: "Blog", href: "/blogs" },
-    { label: "Careers", href: "/careers" },
+    { label: "Blog", href: "/blog" },
+    { label: "Careers", href: "/about" },
     { label: "Contact", href: "/contact" },
-    { label: "Press", href: "/press" },
+    { label: "Press", href: "/about" },
   ],
   Support: [
-    { label: "Help Center", href: "/help" },
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Service", href: "/terms" },
-    { label: "Cookie Policy", href: "/cookies" },
+    { label: "Help Center", href: "/contact" },
+    { label: "Privacy Policy", href: "/about" },
+    { label: "Terms of Service", href: "/about" },
+    { label: "Cookie Policy", href: "/about" },
   ],
 };
 
@@ -116,7 +116,7 @@ export default function ModernFooter() {
                 <Stethoscope className="w-4 h-4 text-white" />
               </div>
               <span className="font-extrabold text-white text-[17px] tracking-tight">
-                MediBook
+                Nova Health
               </span>
             </Link>
 
@@ -133,7 +133,7 @@ export default function ModernFooter() {
             <div className="space-y-2.5">
               {[
                 { icon: Phone, text: "+251 (800) 123-4567" },
-                { icon: Mail, text: "support@medibook.health" },
+                { icon: Mail, text: "support@novahealth.com" },
                 { icon: MapPin, text: "Addis Ababa, Ethiopia" },
               ].map((item, i) => (
                 <div key={i} className="flex items-center gap-2.5">
@@ -231,7 +231,7 @@ export default function ModernFooter() {
             className="text-[11px]"
             style={{ color: "rgba(255,255,255,0.35)" }}
           >
-            © {new Date().getFullYear()} MediBook Health Technologies. All
+            © {new Date().getFullYear()} Nova Health Health Technologies. All
             rights reserved.
           </p>
           <div className="flex items-center gap-4">

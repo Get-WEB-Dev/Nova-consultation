@@ -12,15 +12,15 @@ const ACCENT = "#1e4470";
 const SKY = "#0cbcad";
 
 const NAV_LINKS = [
-  { label: "Consultation", href: "/doctors" },
+  { label: "Consultation", href: "/consultations" },
   { label: "Doctors", href: "/doctors" },
-  { label: "Health Plans", href: "/plans" },
-  { label: "Blogs", href: "/blogs" },
+  { label: "Health Plans", href: "/doctors" },
+  { label: "Blogs", href: "/blog" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
 
-export default function MediBookNavbar() {
+export default function ModernNavbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
@@ -60,7 +60,7 @@ export default function MediBookNavbar() {
             <Stethoscope className="w-4 h-4 text-white" />
           </div>
           <span className="font-extrabold text-white text-[17px] tracking-tight">
-            MediBook
+            Nova Health
           </span>
         </Link>
 

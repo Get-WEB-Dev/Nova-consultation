@@ -52,7 +52,7 @@ const NAV_LINKS = [
     labelAm: "ምክክሮች",
     icon: Calendar,
   },
-  { href: "blog", label: "Blogs", labelAm: "ብሎጎች", icon: BookOpen },
+  { href: "/blog", label: "Blogs", labelAm: "ብሎጎች", icon: BookOpen },
   { href: "/history", label: "History", labelAm: "ታሪክ", icon: History },
 ];
 
@@ -219,14 +219,14 @@ export default function Navbar() {
             >
               <Image
                 src="/favicon.png"
-                alt="MediBook"
+                alt="Nova Health"
                 width={36}
                 height={36}
                 className="w-full h-full object-cover"
               />
             </div>
             <span className="font-extrabold text-white text-[17px] tracking-tight">
-              MediBook
+              Nova Health
             </span>
           </Link>
 
@@ -255,7 +255,7 @@ export default function Navbar() {
                 >
                   <Icon className="w-4 h-4" />
                   {lang === "am" ? labelAm : label}
-                  {href === "/appointments" && unread > 0 && (
+                  {href === "/consultations" && unread > 0 && (
                     <span className="w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                       {unread > 9 ? "9+" : unread}
                     </span>
@@ -485,14 +485,14 @@ export default function Navbar() {
             >
               <Image
                 src="/favicon.png"
-                alt="MediBook"
+                alt="Nova Health"
                 width={32}
                 height={32}
                 className="w-full h-full object-cover"
               />
             </div>
             <span className="font-extrabold text-white text-base tracking-tight">
-              MediBook
+              Nova Health
             </span>
           </Link>
 
@@ -557,7 +557,7 @@ export default function Navbar() {
                   >
                     <Icon className="w-5 h-5" />
                   </div>
-                  {href === "/appointments" && unread > 0 && (
+                  {href === "/consultations" && unread > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-bold rounded-full flex items-center justify-center ring-1 ring-white">
                       {unread > 9 ? "!" : unread}
                     </span>

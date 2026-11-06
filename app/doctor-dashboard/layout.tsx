@@ -546,7 +546,7 @@ export default function DoctorDashboardLayout({
             </button>
 
             <span className="font-extrabold text-white text-base">
-              MediBook
+              Nova Health
             </span>
 
             <div className="relative">
@@ -658,7 +658,7 @@ export default function DoctorDashboardLayout({
                   className="font-extrabold text-[13px] leading-none"
                   style={{ color: NAV_BG }}
                 >
-                  MediBook
+                  Nova Health
                 </p>
                 <p
                   className="text-[9px] font-bold uppercase tracking-widest"

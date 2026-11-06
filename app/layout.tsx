@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "../styles/globals.css";
-import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
   title: "Nova Health – Your Health, Connected",
@@ -26,7 +25,6 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-slate-50 bg-nova-mesh flex flex-col">
         <div className="flex-1">{children}</div>
-        <Footer />
       </body>
     </html>
   );

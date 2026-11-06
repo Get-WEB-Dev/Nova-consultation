@@ -201,6 +201,14 @@ CREATE TABLE consultations (
   video_room_name        TEXT          UNIQUE,
   video_session_token    TEXT,
   patient_rating         INT           CHECK (patient_rating BETWEEN 1 AND 5),
+  -- Structured clinical notes
+  diagnosis              TEXT,
+  prescription           TEXT,
+  clinical_notes         TEXT,
+  chief_complaint        TEXT,
+  follow_up_plan         TEXT,
+  outcome                TEXT,          -- completed, follow_up, referred, emergency
+  follow_up_priority     TEXT,          -- low, medium, high
   created_at             TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at             TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
@@ -209,6 +217,7 @@ CREATE INDEX idx_consult_patient ON consultations(patient_id);
 CREATE INDEX idx_consult_status  ON consultations(status);
 CREATE INDEX idx_consult_followup ON consultations(is_follow_up, follow_up_scheduled_at) WHERE is_follow_up = true;
 CREATE INDEX idx_consult_active  ON consultations(doctor_id, status) WHERE status IN ('active', 'waiting');
+CREATE INDEX idx_consult_pending_notes ON consultations(doctor_id) WHERE status = 'completed' AND diagnosis IS NULL;
 
 -- ── consultation_queue ───────────────────────────────────────
 CREATE TABLE consultation_queue (
@@ -572,7 +581,7 @@ CREATE POLICY "conv_users_update" ON conversations FOR UPDATE
 
 -- ── messages ─────────────────────────────────────────────────
 CREATE POLICY "msg_read" ON messages FOR SELECT
-  USING (patient_id = auth.uid() OR doctor_id IN (SELECT id FROM doctor_profiles WHERE user_id = auth.uid()));
+  USING (patient_id = auth.uid() OR sender_id = auth.uid() OR doctor_id IN (SELECT id FROM doctor_profiles WHERE user_id = auth.uid()));
 CREATE POLICY "msg_send" ON messages FOR INSERT
   WITH CHECK (sender_id = auth.uid() AND (patient_id = auth.uid() OR doctor_id IN (SELECT id FROM doctor_profiles WHERE user_id = auth.uid())));
 

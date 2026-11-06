@@ -1,4 +1,4 @@
-// File: /home/surafel/healthapp/app/layout.tsx
+// File: C:\Users\DELL 7020\Nova-consultation\app\layout.tsx
 import * as entry from '../../../app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

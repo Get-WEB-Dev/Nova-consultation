@@ -381,11 +381,11 @@ export default function LandingPage() {
             >
               Are you a doctor?{" "}
               <Link
-                href="/doctor/signup"
+                href="/doctor-login"
                 className="font-bold underline underline-offset-2 transition-colors"
                 style={{ color: SKY }}
               >
-                Join MediBook →
+                Join Nova Health →
               </Link>
             </p>
           </div>
@@ -561,7 +561,7 @@ export default function LandingPage() {
       </section>
 
       {/* ══════════════════════════════════════════════════════
-          TRUST / WHY MEDIBOOK — dark navy band
+          TRUST / WHY NOVA HEALTH — dark navy band
       ══════════════════════════════════════════════════════ */}
       <section className="py-14 sm:py-20" style={{ background: NAV_BG }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -570,7 +570,7 @@ export default function LandingPage() {
               className="text-[11px] font-extrabold uppercase tracking-widest mb-2"
               style={{ color: SKY }}
             >
-              Why MediBook
+              Why Nova Health
             </p>
             <h2 className="text-[24px] sm:text-[32px] font-extrabold text-white leading-tight">
               Healthcare you can trust
@@ -808,7 +808,7 @@ export default function LandingPage() {
               </p>
             </div>
             <Link
-              href="/blogs"
+              href="/blog"
               className="hidden sm:flex items-center gap-1.5 text-[13px] font-bold flex-shrink-0"
               style={{ color: ACCENT }}
             >
@@ -922,12 +922,12 @@ export default function LandingPage() {
             className="text-[15px] mb-10 max-w-xl mx-auto"
             style={{ color: "rgba(255,255,255,0.6)" }}
           >
-            Join thousands of patients who trust MediBook for their healthcare.
+            Join thousands of patients who trust Nova Health for their healthcare.
             Book your first consultation in under 2 minutes.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
-              href="/signup"
+              href="/login"
               className="flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-extrabold text-white text-[15px] transition-all hover:opacity-90 active:scale-95"
               style={{
                 background: SKY,

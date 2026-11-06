@@ -8,7 +8,7 @@ import {
     ThumbsUp, Eye, Play, Loader2,
 } from "lucide-react";
 import ModernFooter from "@/components/ui/ModernFooter";
-import ModernNavbar from "@/components/ui/ModernNavbar";
+
 
 const NAV_BG = "#1a3558";
 const NAV_DARK = "#0c192c";
@@ -360,7 +360,6 @@ export default function BlogsPage() {
 
     return (
         <div className="min-h-screen flex flex-col" style={{ background: "#eef2f7" }}>
-            <ModernNavbar />
             {/* ── HERO BANNER ──── */}
             <div style={{ background: NAV_BG }} className="pt-14">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
