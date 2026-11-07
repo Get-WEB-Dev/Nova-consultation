@@ -8,7 +8,7 @@ import {
     Mail, Lock, ArrowRight, Shield, Eye, EyeOff,
     Loader2, AlertCircle,
 } from "lucide-react";
-import { signIn, loadUser } from "@/lib/supabase/auth";
+import { signIn, signOut } from "@/lib/supabase/auth";
 
 function AdminLoginForm() {
     const router = useRouter();
@@ -24,17 +24,15 @@ function AdminLoginForm() {
         setLoading(true);
 
         try {
-            const user = await signIn(email, password);
-            // Verify the user has admin role
-            if (user.role !== "admin") {
-                // Also check via API in case metadata is stale
-                const res = await fetch(`/api/admin/verify?userId=${user.id}`);
-                const json = await res.json();
-                if (!json.isAdmin) {
-                    setError("This account does not have admin privileges. Please use the patient or doctor login.");
-                    setLoading(false);
-                    return;
-                }
+            await signIn(email, password);
+            // The server decides who is an admin (never trust the browser)
+            const res = await fetch("/api/admin/verify");
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || !json.isAdmin) {
+                await signOut(); // don't leave a non-admin logged in
+                setError("This account does not have admin privileges. Please use the patient or doctor login.");
+                setLoading(false);
+                return;
             }
             router.push("/admin-dashboard");
         } catch (err: any) {

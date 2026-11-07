@@ -137,9 +137,7 @@ export async function toggleDoctorVerified(doctorId: string, isVerified: boolean
     const admin = createAdminClient();
     const updatePayload: Record<string, boolean> = { is_verified: isVerified };
     // Auto-publish when verifying, auto-unpublish when un-verifying
-    if (isVerified) {
-        updatePayload.is_published = true;
-    }
+    updatePayload.is_published = isVerified;
     const { error } = await admin
         .from('doctor_profiles')
         .update(updatePayload as never)
@@ -180,4 +178,88 @@ export async function fetchAdminProfile(userId: string) {
         .maybeSingle();
     if (error) throw error;
     return data;
+}
+
+
+// ── Overview for the admin home page ──────────────────────────
+export async function fetchAdminOverview() {
+    const admin: any = createAdminClient();
+
+    // Start of the day 6 days ago (UTC) → gives us a 7-day window
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - 6);
+    since.setUTCHours(0, 0, 0, 0);
+
+    // Helper: count rows, optionally with a filter
+    const count = (table: string, filter?: (q: any) => any) => {
+        let q = admin.from(table).select('*', { count: 'exact', head: true });
+        if (filter) q = filter(q);
+        return q;
+    };
+
+    const [
+        users, patients, doctors, pendingDocs, consults, activeConsults,
+        completedConsults, posts, waiting,
+        recentUsers, recentConsults, pendingList, usersWeek, consultsWeek,
+    ] = await Promise.all([
+        count('users'),
+        count('patients'),
+        count('doctor_profiles'),
+        count('doctor_profiles', (q) => q.eq('is_verified', false)),
+        count('consultations'),
+        count('consultations', (q) => q.eq('status', 'active')),
+        count('consultations', (q) => q.eq('status', 'completed')),
+        count('blog_posts'),
+        count('consultation_queue', (q) => q.eq('status', 'waiting')),
+        admin.from('users').select('id, name, email, role, created_at')
+            .order('created_at', { ascending: false }).limit(5),
+        admin.from('consultations')
+            .select('id, status, created_at, users!patient_id(name), doctor_profiles!doctor_id(users!user_id(name))')
+            .order('created_at', { ascending: false }).limit(6),
+        admin.from('doctor_profiles')
+            .select('id, specialty, hospital, created_at, users!user_id(name, email)')
+            .eq('is_verified', false).order('created_at', { ascending: false }).limit(5),
+        admin.from('users').select('created_at').gte('created_at', since.toISOString()),
+        admin.from('consultations').select('created_at').gte('created_at', since.toISOString()),
+    ]);
+
+    // Turn raw rows into "how many per day" for the last 7 days
+    const days = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(since);
+        d.setUTCDate(since.getUTCDate() + i);
+        return d.toISOString().slice(0, 10);
+    });
+    const perDay = (rows: any[] | null) =>
+        days.map((day) => (rows ?? []).filter((r) => String(r.created_at).slice(0, 10) === day).length);
+
+    return {
+        stats: {
+            totalUsers: users.count ?? 0,
+            totalPatients: patients.count ?? 0,
+            totalDoctors: doctors.count ?? 0,
+            pendingDoctors: pendingDocs.count ?? 0,
+            totalConsultations: consults.count ?? 0,
+            activeConsultations: activeConsults.count ?? 0,
+            completedConsultations: completedConsults.count ?? 0,
+            totalPosts: posts.count ?? 0,
+            waitingInQueue: waiting.count ?? 0,
+        },
+        series: { days, users: perDay(usersWeek.data), consultations: perDay(consultsWeek.data) },
+        recentUsers: recentUsers.data ?? [],
+        recentConsultations: (recentConsults.data ?? []).map((c: any) => ({
+            id: c.id,
+            status: c.status,
+            createdAt: c.created_at,
+            patientName: c.users?.name ?? 'Unknown',
+            doctorName: c.doctor_profiles?.users?.name ?? 'Unknown',
+        })),
+        pendingDoctors: (pendingList.data ?? []).map((d: any) => ({
+            id: d.id,
+            name: d.users?.name ?? 'Unknown',
+            email: d.users?.email ?? '',
+            specialty: d.specialty,
+            hospital: d.hospital,
+            createdAt: d.created_at,
+        })),
+    };
 }

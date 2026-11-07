@@ -31,10 +31,30 @@
       "static/chunks/main-app.js",
       "static/chunks/app/admin-dashboard/layout.js"
     ],
-    "/_not-found/page": [
+    "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/_not-found/page.js"
+      "static/chunks/app/dashboard/page.js"
+    ],
+    "/dashboard/layout": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/layout.js"
+    ],
+    "/admin-dashboard/users/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin-dashboard/users/page.js"
+    ],
+    "/admin-dashboard/doctors/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin-dashboard/doctors/page.js"
+    ],
+    "/admin-dashboard/posts/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/admin-dashboard/posts/page.js"
     ]
   }
 }

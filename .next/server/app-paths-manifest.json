@@ -1,7 +1,12 @@
 {
-  "/page": "app/page.js",
-  "/login/page": "app/login/page.js",
-  "/_not-found/page": "app/_not-found/page.js",
   "/admin-login/page": "app/admin-login/page.js",
-  "/admin-dashboard/page": "app/admin-dashboard/page.js"
+  "/api/admin/verify/route": "app/api/admin/verify/route.js",
+  "/api/admin/stats/route": "app/api/admin/stats/route.js",
+  "/api/admin/users/route": "app/api/admin/users/route.js",
+  "/api/admin/doctors/route": "app/api/admin/doctors/route.js",
+  "/admin-dashboard/page": "app/admin-dashboard/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/admin-dashboard/users/page": "app/admin-dashboard/users/page.js",
+  "/admin-dashboard/doctors/page": "app/admin-dashboard/doctors/page.js",
+  "/admin-dashboard/posts/page": "app/admin-dashboard/posts/page.js"
 }

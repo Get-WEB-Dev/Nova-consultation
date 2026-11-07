@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "../styles/globals.css";
-import AuthFetchInstaller from "@/components/AuthFetchInstaller";
+import AuthFetchInstaller from "../components/AuthFetchInstaller";
 
 export const metadata: Metadata = {
   title: "Nova Health – Your Health, Connected",

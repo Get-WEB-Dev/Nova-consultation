@@ -9,6 +9,7 @@ import {
     Shield, Menu, X,
 } from "lucide-react";
 import { loadUser, signOut, type AuthUser } from "@/lib/supabase/auth";
+import { ToastProvider } from "@/components/admin/AdminUI";
 
 const adminNav = [
     { href: "/admin-dashboard", label: "Overview", icon: LayoutDashboard },
@@ -135,7 +136,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
                 {/* Main content */}
                 <main className="flex-1 max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-8">
-                    {children}
+                    <ToastProvider>{children}</ToastProvider>
                 </main>
             </div>
         </div>

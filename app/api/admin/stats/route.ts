@@ -8,9 +8,9 @@ export async function GET(req: Request) {
     const auth = await requireUser(req, ['admin']);
     if (auth.error) return auth.error;
     try {
-        const { fetchAdminStats } = await import('@/lib/server/admin-queries');
-        const stats = await fetchAdminStats();
-        return NextResponse.json({ data: stats });
+        const { fetchAdminOverview } = await import('@/lib/server/admin-queries');
+        const overview = await fetchAdminOverview();
+        return NextResponse.json({ data: overview });
     } catch (err: any) {
         console.error('[admin/stats GET]', err.message);
         return NextResponse.json({ data: null, error: err.message }, { status: 500 });

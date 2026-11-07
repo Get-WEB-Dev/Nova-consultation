@@ -55,6 +55,12 @@ export async function DELETE(req: Request) {
         return NextResponse.json({ success: true });
     } catch (err: any) {
         console.error('[admin/users DELETE]', err.message);
+        if (/foreign key|violates/i.test(err.message)) {
+            return NextResponse.json(
+                { error: 'This user has consultations on record and cannot be deleted. Change their role instead.' },
+                { status: 409 }
+            );
+        }
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }
