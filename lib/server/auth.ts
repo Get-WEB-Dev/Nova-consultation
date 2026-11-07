@@ -60,12 +60,13 @@ export async function getAuthUser(req: Request): Promise<AuthedUser | null> {
   const uid: string = data.user.id;
 
   const [userRes, doctorRes, adminRes] = await Promise.all([
-    admin.from('users').select('role').eq('id', uid).maybeSingle(),
+    admin.from('users').select('role, is_suspended').eq('id', uid).maybeSingle(),
     admin.from('doctor_profiles').select('id').eq('user_id', uid).maybeSingle(),
     admin.from('admins').select('is_super_admin').eq('user_id', uid).maybeSingle(),
   ]);
 
   if (!userRes.data) return null; // auth user without a profile row
+  if (userRes.data.is_suspended) return null; // suspended accounts lose all API access
 
   const role = userRes.data.role as DbRole;
   const isAdmin = role === 'admin' || !!adminRes.data;
@@ -225,4 +226,14 @@ export async function doctorHasPatient(doctorProfileId: string | null, patientId
     .eq('patient_id', patientId)
     .limit(1);
   return !!data && data.length > 0;
+}
+
+/** Admin-only AND super-admin-only. Use for dangerous actions. */
+export async function requireSuperAdmin(req: Request): Promise<Guard> {
+  const auth = await requireUser(req, ['admin']);
+  if (auth.error) return auth;
+  if (!auth.user.isSuperAdmin) {
+    return { error: forbidden('Only a super admin can do this') };
+  }
+  return auth;
 }

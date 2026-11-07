@@ -10,10 +10,10 @@ import { createAdminClient } from '@/lib/supabase/client';
 
 // ── Fetch all users ───────────────────────────────────────────
 export async function fetchAllUsers() {
-    const admin = createAdminClient();
+    const admin: any = createAdminClient();
     const { data, error } = await admin
         .from('users')
-        .select('*')
+        .select('id, name, email, phone, role, avatar_url, is_suspended, suspended_reason, created_at')
         .order('created_at', { ascending: false });
     if (error) throw error;
     return data ?? [];
@@ -43,10 +43,10 @@ export async function fetchAllAdmins() {
 
 // ── Fetch all doctor profiles with user info ──────────────────
 export async function fetchAllDoctors() {
-    const admin = createAdminClient();
+    const admin: any = createAdminClient();
     const { data, error } = await admin
         .from('doctor_profiles')
-        .select('*, users(name, email, avatar_url)')
+        .select('*, users(name, email, avatar_url), doctor_credentials(status)')
         .order('created_at', { ascending: false });
     if (error) throw error;
     return data ?? [];
@@ -105,6 +105,12 @@ export async function updateUserRole(userId: string, role: string) {
             { onConflict: 'user_id', ignoreDuplicates: true }
         );
     }
+    // A user who is no longer an admin must also lose their `admins` row,
+    // because getAuthUser() grants admin rights if EITHER the role is
+    // 'admin' OR a row exists in `admins`.
+    if (role !== 'admin') {
+        await admin.from('admins').delete().eq('user_id', userId);
+    }
 }
 
 // ── Delete user ───────────────────────────────────────────────
@@ -122,11 +128,12 @@ export async function deleteUser(userId: string) {
 
 // ── Toggle doctor published status ────────────────────────────
 export async function toggleDoctorPublished(doctorId: string, isPublished: boolean) {
-    const admin = createAdminClient();
-    const { error } = await admin
-        .from('doctor_profiles')
-        .update({ is_published: isPublished } as never)
-        .eq('id', doctorId);
+    const admin: any = createAdminClient();
+    if (isPublished) {
+        const { data } = await admin.from('doctor_profiles').select('is_verified').eq('id', doctorId).maybeSingle();
+        if (!data?.is_verified) throw new Error('Verify the doctor before publishing their profile');
+    }
+    const { error } = await admin.from('doctor_profiles').update({ is_published: isPublished }).eq('id', doctorId);
     if (error) throw error;
 }
 
@@ -392,4 +399,89 @@ export async function checkSystemHealth() {
         zoom: { ok: !!(process.env.ZOOM_SDK_KEY && process.env.ZOOM_SDK_SECRET) },
         serviceRoleKey: { ok: !!process.env.SUPABASE_SERVICE_ROLE_KEY },
     };
+}
+
+export async function isSuperAdminUser(userId: string): Promise<boolean> {
+    const admin: any = createAdminClient();
+    const { data } = await admin
+        .from('admins').select('is_super_admin').eq('user_id', userId).maybeSingle();
+    return !!data?.is_super_admin;
+}
+
+export async function setUserSuspended(userId: string, suspended: boolean, reason?: string) {
+    const admin: any = createAdminClient();
+    const { error } = await admin.from('users').update({
+        is_suspended: suspended,
+        suspended_reason: suspended ? (reason ?? null) : null,
+        suspended_at: suspended ? new Date().toISOString() : null,
+    }).eq('id', userId);
+    if (error) throw error;
+    // Also block logins at the Supabase Auth level ('none' lifts the ban)
+    await admin.auth.admin.updateUserById(userId, {
+        ban_duration: suspended ? '876000h' : 'none',
+    });
+}
+
+// ── Doctor credentials ────────────────────────────────────────
+const CREDENTIAL_BUCKET = 'doctor-credentials';
+
+export async function fetchDoctorCredentials(doctorId: string) {
+    const admin: any = createAdminClient();
+    const { data, error } = await admin
+        .from('doctor_credentials').select('*').eq('doctor_id', doctorId).maybeSingle();
+    if (error) throw error;
+    return data as {
+        license_number: string; license_authority: string | null; document_path: string;
+        status: 'pending' | 'approved' | 'rejected'; rejection_reason: string | null; submitted_at: string;
+    } | null;
+}
+
+// The bucket is private, so documents are only viewable through a link that expires.
+export async function getCredentialDocumentUrl(path: string) {
+    const admin: any = createAdminClient();
+    const { data, error } = await admin.storage.from(CREDENTIAL_BUCKET).createSignedUrl(path, 120);
+    if (error) throw error;
+    return data.signedUrl as string;
+}
+
+async function notifyDoctor(userId: string, title: string, message: string) {
+    const admin: any = createAdminClient();
+    const { error } = await admin.from('notifications').insert({
+        user_id: userId, type: 'system', title, message, action_url: '/doctor-dashboard/profile',
+    });
+    if (error) console.warn('[admin] notification failed:', error.message);
+}
+
+export async function approveDoctor(doctorId: string, adminId: string) {
+    const admin: any = createAdminClient();
+    const { data: doc } = await admin.from('doctor_profiles').select('user_id').eq('id', doctorId).maybeSingle();
+    if (!doc) throw new Error('Doctor not found');
+    const cred = await fetchDoctorCredentials(doctorId);
+    if (!cred) throw new Error('This doctor has not submitted a medical license yet');
+
+    const { error } = await admin.from('doctor_profiles')
+        .update({ is_verified: true, is_published: true }).eq('id', doctorId);
+    if (error) throw error;
+    await admin.from('doctor_credentials').update({
+        status: 'approved', rejection_reason: null,
+        reviewed_at: new Date().toISOString(), reviewed_by: adminId,
+    }).eq('doctor_id', doctorId);
+    await notifyDoctor(doc.user_id, 'Your profile is approved',
+        'Your credentials were verified. Your profile is now visible to patients.');
+}
+
+export async function rejectDoctor(doctorId: string, adminId: string, reason: string) {
+    const admin: any = createAdminClient();
+    const { data: doc } = await admin.from('doctor_profiles').select('user_id').eq('id', doctorId).maybeSingle();
+    if (!doc) throw new Error('Doctor not found');
+
+    const { error } = await admin.from('doctor_profiles')
+        .update({ is_verified: false, is_published: false }).eq('id', doctorId);
+    if (error) throw error;
+    await admin.from('doctor_credentials').update({
+        status: 'rejected', rejection_reason: reason,
+        reviewed_at: new Date().toISOString(), reviewed_by: adminId,
+    }).eq('doctor_id', doctorId);
+    await notifyDoctor(doc.user_id, 'Credentials need attention',
+        `We couldn't approve your profile yet: ${reason}`);
 }

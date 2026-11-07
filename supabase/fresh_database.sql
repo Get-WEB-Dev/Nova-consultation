@@ -684,6 +684,35 @@ create index if not exists admin_audit_log_created_idx on admin_audit_log (creat
 
 alter table admin_audit_log enable row level security;
 
+
+-- ── A. Close the privilege-escalation holes ──────────────────
+drop policy if exists "users_update_own"  on users;
+drop policy if exists "admins_update_own" on admins;
+drop policy if exists "dp_owner_all"      on doctor_profiles;
+-- doctors may still READ their own (unpublished) profile
+create policy "dp_owner_read" on doctor_profiles
+  for select using (user_id = auth.uid());
+
+-- ── B. Doctor credentials (private table + private bucket) ───
+create table if not exists doctor_credentials (
+  doctor_id         uuid primary key references doctor_profiles(id) on delete cascade,
+  license_number    text not null,
+  license_authority text,
+  document_path     text not null,
+  status            text not null default 'pending'
+                    check (status in ('pending','approved','rejected')),
+  rejection_reason  text,
+  submitted_at      timestamptz not null default now(),
+  reviewed_at       timestamptz,
+  reviewed_by       uuid references users(id) on delete set null
+);
+-- RLS on with NO policies = only the server (service key) can touch it
+alter table doctor_credentials enable row level security;
+
+insert into storage.buckets (id, name, public)
+values ('doctor-credentials', 'doctor-credentials', false)
+on conflict (id) do update set public = false;
+
 -- ============================================================
 -- DONE! Database is ready.
 -- ============================================================

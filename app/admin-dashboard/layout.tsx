@@ -55,8 +55,8 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         checkAuth();
     }, [router]);
 
-    const handleSignOut = () => {
-        signOut();
+    const handleSignOut = async () => {
+        await signOut();
         router.push("/admin-login");
     };
 

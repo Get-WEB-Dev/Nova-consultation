@@ -1,47 +1,56 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireUser, isUuid } from '@/lib/server/auth';
+import {
+    fetchAllDoctors, toggleDoctorPublished, toggleDoctorVerified,
+    approveDoctor, rejectDoctor, logAdminAction,
+} from '@/lib/server/admin-queries';
+
+const fail = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
 
 export async function GET(req: Request) {
     const auth = await requireUser(req, ['admin']);
     if (auth.error) return auth.error;
     try {
-        const { fetchAllDoctors } = await import('@/lib/server/admin-queries');
-        const doctors = await fetchAllDoctors();
-        return NextResponse.json({ data: doctors });
+        return NextResponse.json({ data: await fetchAllDoctors() });
     } catch (err: any) {
         console.error('[admin/doctors GET]', err.message);
         return NextResponse.json({ data: [], error: err.message }, { status: 500 });
     }
 }
 
+// actions: publish {value} | verify {value} | reject {reason}
 export async function PATCH(req: Request) {
     const auth = await requireUser(req, ['admin']);
     if (auth.error) return auth.error;
     try {
-        const body = await req.json();
-        const { doctorId, action, value } = body;
-        if (!doctorId || !action) {
-            return NextResponse.json({ error: 'doctorId and action required' }, { status: 400 });
-        }
+        const { doctorId, action, value, reason } = await req.json();
+        if (!isUuid(doctorId) || !action) return fail('A valid doctorId and action are required');
 
         if (action === 'publish') {
-            const { toggleDoctorPublished } = await import('@/lib/server/admin-queries');
-            await toggleDoctorPublished(doctorId, value ?? true);
-            const { logAdminAction } = await import('@/lib/server/admin-queries');
-            await logAdminAction(auth.user, (value ?? true) ? 'doctor.published' : 'doctor.unpublished', 'doctor', doctorId);
+            const publish = value ?? true;
+            await toggleDoctorPublished(doctorId, publish);
+            await logAdminAction(auth.user, publish ? 'doctor.published' : 'doctor.unpublished', 'doctor', doctorId);
         } else if (action === 'verify') {
-            const { toggleDoctorVerified } = await import('@/lib/server/admin-queries');
-            await toggleDoctorVerified(doctorId, value ?? true);
-            const { logAdminAction } = await import('@/lib/server/admin-queries');
-            await logAdminAction(auth.user, (value ?? true) ? 'doctor.verified' : 'doctor.unverified', 'doctor', doctorId);
+            if (value === false) {
+                await toggleDoctorVerified(doctorId, false);
+                await logAdminAction(auth.user, 'doctor.unverified', 'doctor', doctorId);
+            } else {
+                await approveDoctor(doctorId, auth.user.id);
+                await logAdminAction(auth.user, 'doctor.verified', 'doctor', doctorId);
+            }
+        } else if (action === 'reject') {
+            const why = typeof reason === 'string' ? reason.trim() : '';
+            if (why.length < 10 || why.length > 500) {
+                return fail('Give the doctor a reason (10–500 characters)');
+            }
+            await rejectDoctor(doctorId, auth.user.id, why);
+            await logAdminAction(auth.user, 'doctor.rejected', 'doctor', doctorId, why);
         } else {
-            return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+            return fail('Invalid action');
         }
-
-        console.log(`[admin/doctors PATCH] Action ${action} performed for doctor ${doctorId} to ${value}`);
         return NextResponse.json({ success: true });
     } catch (err: any) {
-        console.error('[admin/doctors PATCH] error:', err.message);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        console.error('[admin/doctors PATCH]', err.message);
+        return fail(err.message, 500);
     }
 }

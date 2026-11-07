@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import { getUser, type AuthUser } from "@/lib/supabase/auth";
+import CredentialsCard from "@/components/doctor/CredentialsCard";
 import {
   User,
   Mail,
@@ -118,7 +119,7 @@ export default function ProfilePage() {
           });
         }
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
@@ -233,6 +234,8 @@ export default function ProfilePage() {
         </div>
       )}
 
+      <CredentialsCard />
+
       {/* Profile card — LinkedIn style hero */}
       <div
         className="bg-white border border-slate-200 rounded-2xl overflow-hidden"
@@ -337,10 +340,10 @@ export default function ProfilePage() {
               style={
                 tab === k
                   ? {
-                      color: NAV_BG,
-                      borderBottomColor: NAV_BG,
-                      background: "#eff6ff",
-                    }
+                    color: NAV_BG,
+                    borderBottomColor: NAV_BG,
+                    background: "#eff6ff",
+                  }
                   : { color: "#94a3b8", borderBottomColor: "transparent" }
               }
             >
@@ -578,15 +581,15 @@ export default function ProfilePage() {
                     style={
                       on
                         ? {
-                            background: NAV_BG,
-                            color: "white",
-                            borderColor: NAV_BG,
-                          }
+                          background: NAV_BG,
+                          color: "white",
+                          borderColor: NAV_BG,
+                        }
                         : {
-                            background: "#f8fafc",
-                            color: "#475569",
-                            borderColor: "#e2e8f0",
-                          }
+                          background: "#f8fafc",
+                          color: "#475569",
+                          borderColor: "#e2e8f0",
+                        }
                     }
                   >
                     <Globe className="w-3 h-3" />

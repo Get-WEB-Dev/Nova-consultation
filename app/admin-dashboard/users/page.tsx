@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Trash2, AlertCircle } from "lucide-react";
+import { Search, Trash2, AlertCircle, UserX, UserCheck } from "lucide-react";
 import { adminFetch } from "@/lib/admin-api";
 import { getUser } from "@/lib/supabase/auth";
+
 import { useToast, PageHeader, ConfirmDialog, EmptyState, timeAgo } from "@/components/admin/AdminUI";
 
 interface UserRow {
     id: string; name: string; email: string; role: string; created_at: string; phone?: string | null;
+    is_suspended?: boolean; suspended_reason?: string | null;
 }
 
 const ROLES = ["patient", "doctor", "professional", "admin"];
@@ -15,6 +17,7 @@ const FILTERS = ["all", ...ROLES];
 
 type Pending =
     | { type: "role"; user: UserRow; role: string }
+    | { type: "suspend"; user: UserRow; suspended: boolean }
     | { type: "delete"; user: UserRow };
 
 export default function AdminUsersPage() {
@@ -68,6 +71,12 @@ export default function AdminUsersPage() {
                     body: JSON.stringify({ userId: pending.user.id, role: pending.role }),
                 });
                 toast("success", `${pending.user.name} is now ${pending.role}`);
+            } else if (pending.type === "suspend") {
+                await adminFetch("/api/admin/users", {
+                    method: "PATCH",
+                    body: JSON.stringify({ userId: pending.user.id, suspended: pending.suspended }),
+                });
+                toast("success", `${pending.user.name} was ${pending.suspended ? "suspended" : "reactivated"}`);
             } else {
                 await adminFetch("/api/admin/users", {
                     method: "DELETE",
@@ -127,6 +136,7 @@ export default function AdminUsersPage() {
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-slate-700 truncate">
                                         {u.name} {isMe && <span className="badge badge-navy ml-1">You</span>}
+                                        {u.is_suspended && <span className="badge badge-rose ml-1">Suspended</span>}
                                     </p>
                                     <p className="text-xs text-slate-400 truncate">{u.email} · joined {timeAgo(u.created_at)}</p>
                                 </div>
@@ -139,6 +149,14 @@ export default function AdminUsersPage() {
                                 >
                                     {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                                 </select>
+                                <button
+                                    disabled={isMe}
+                                    onClick={() => setPending({ type: "suspend", user: u, suspended: !u.is_suspended })}
+                                    className="p-2 rounded-lg text-slate-300 hover:text-amber-600 hover:bg-amber-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-300"
+                                    title={u.is_suspended ? "Reactivate user" : "Suspend user"}
+                                >
+                                    {u.is_suspended ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                                </button>
                                 <button
                                     disabled={isMe}
                                     onClick={() => setPending({ type: "delete", user: u })}
@@ -156,17 +174,29 @@ export default function AdminUsersPage() {
             <ConfirmDialog
                 open={!!pending}
                 loading={busy}
-                danger={pending?.type === "delete" || (pending?.type === "role" && pending.role === "admin")}
-                title={pending?.type === "delete" ? "Delete this user?" : "Change role?"}
+                danger={pending?.type === "delete" || (pending?.type === "suspend" && pending.suspended) || (pending?.type === "role" && pending.role === "admin")}
+                title={
+                    pending?.type === "delete" ? "Delete this user?" :
+                        pending?.type === "suspend" ? (pending.suspended ? "Suspend this user?" : "Reactivate this user?") :
+                            "Change role?"
+                }
                 message={
                     !pending ? "" :
                         pending.type === "delete"
                             ? `${pending.user.name} (${pending.user.email}) will be permanently removed. This can't be undone.`
-                            : pending.role === "admin"
-                                ? `${pending.user.name} will get FULL admin access to this dashboard.`
-                                : `${pending.user.name} will change from ${pending.user.role} to ${pending.role}.`
+                            : pending.type === "suspend"
+                                ? pending.suspended
+                                    ? `${pending.user.name} will be signed out and blocked from the platform until you reactivate them.`
+                                    : `${pending.user.name} will be able to sign in again.`
+                                : pending.role === "admin"
+                                    ? `${pending.user.name} will get FULL admin access to this dashboard.`
+                                    : `${pending.user.name} will change from ${pending.user.role} to ${pending.role}.`
                 }
-                confirmLabel={pending?.type === "delete" ? "Delete" : "Change role"}
+                confirmLabel={
+                    pending?.type === "delete" ? "Delete" :
+                        pending?.type === "suspend" ? (pending.suspended ? "Suspend" : "Reactivate") :
+                            "Change role"
+                }
                 onConfirm={confirmAction}
                 onCancel={() => setPending(null)}
             />
