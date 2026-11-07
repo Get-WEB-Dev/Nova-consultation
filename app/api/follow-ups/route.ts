@@ -8,14 +8,18 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, ownsDoctorId, getConsultationAccess, forbidden } from '@/lib/server/auth';
 
 export async function GET(req: NextRequest) {
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
     const { searchParams } = new URL(req.url);
     const doctorId = searchParams.get('doctorId');
 
     if (!doctorId) {
         return NextResponse.json({ data: [], error: 'doctorId is required' }, { status: 400 });
     }
+    if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
 
     try {
         const { fetchFollowUps } = await import('@/lib/server/queries');
@@ -56,6 +60,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
     let body: any;
     try {
         body = await req.json();
@@ -70,6 +76,10 @@ export async function POST(req: NextRequest) {
             { status: 400 }
         );
     }
+
+    // Only the consultation's doctor can schedule a follow-up
+    const access = await getConsultationAccess(auth.user, consultationId);
+    if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
 
     try {
         const { createFollowUp, createNotification } = await import('@/lib/server/queries');
@@ -110,6 +120,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
     let body: any;
     try {
         body = await req.json();
@@ -121,6 +133,9 @@ export async function PATCH(req: NextRequest) {
     if (!consultationId) {
         return NextResponse.json({ error: 'consultationId is required' }, { status: 400 });
     }
+
+    const access = await getConsultationAccess(auth.user, consultationId);
+    if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
 
     try {
         const { createAdminClient } = await import('@/lib/supabase/client');

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { requireUser } from '@/lib/server/auth';
 
-export async function GET() {
+export async function GET(req: Request) {
+    const auth = await requireUser(req, ['admin']);
+    if (auth.error) return auth.error;
     try {
         const { fetchAllDoctors } = await import('@/lib/server/admin-queries');
         const doctors = await fetchAllDoctors();
@@ -12,6 +15,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
+    const auth = await requireUser(req, ['admin']);
+    if (auth.error) return auth.error;
     try {
         const body = await req.json();
         const { doctorId, action, value } = body;

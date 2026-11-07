@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, getConsultationAccess, forbidden } from '@/lib/server/auth';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -44,6 +45,19 @@ export async function POST(req: NextRequest) {
       { error: 'consultationId, doctorId, patientId, and rating are required' },
       { status: 400 }
     );
+  }
+  const ratingNum = Number(rating);
+  if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+    return NextResponse.json({ error: 'rating must be a whole number from 1 to 5' }, { status: 400 });
+  }
+
+  // Only the patient of a consultation can review it, and only for its doctor
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+  if (auth.user.id !== patientId) return forbidden();
+  const access = await getConsultationAccess(auth.user, consultationId);
+  if (!access || access.consultation.patient_id !== patientId || access.consultation.doctor_id !== doctorId) {
+    return forbidden();
   }
 
   try {

@@ -1,0 +1,1644 @@
+diff --git a/.gitignore b/.gitignore
+index 1380c2e..95801ee 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1,8 @@
+ node_modules
+-.next
+\ No newline at end of file
++.next
++.env
++.env.local
++.env.*.local
++*.tsbuildinfo
++next-env.d.ts
++.DS_Store
+diff --git a/app/admin-dashboard/layout.tsx b/app/admin-dashboard/layout.tsx
+index b75186b..2bcb72d 100644
+--- a/app/admin-dashboard/layout.tsx
++++ b/app/admin-dashboard/layout.tsx
+@@ -8,7 +8,7 @@ import {
+     LayoutDashboard, Users, Stethoscope, LogOut,
+     Shield, Menu, X,
+ } from "lucide-react";
+-import { getUser, signOut, type AuthUser } from "@/lib/supabase/auth";
++import { loadUser, signOut, type AuthUser } from "@/lib/supabase/auth";
+ 
+ const adminNav = [
+     { href: "/admin-dashboard", label: "Overview", icon: LayoutDashboard },
+@@ -25,9 +25,24 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
+ 
+     useEffect(() => {
+         async function checkAuth() {
+-            // Bypass auth for testing
+-            setUser({ id: "test-admin", role: "admin", name: "Test Admin", email: "admin@test.com" } as any);
+-            setReady(true);
++            try {
++                const u = await loadUser();
++                if (!u) {
++                    router.replace("/admin-login");
++                    return;
++                }
++                // The server decides who is an admin (never trust the client)
++                const res = await fetch("/api/admin/verify");
++                const json = await res.json().catch(() => ({}));
++                if (!res.ok || !json.isAdmin) {
++                    router.replace("/admin-login");
++                    return;
++                }
++                setUser(u);
++                setReady(true);
++            } catch {
++                router.replace("/admin-login");
++            }
+         }
+         checkAuth();
+     }, [router]);
+diff --git a/app/admin-login/page.tsx b/app/admin-login/page.tsx
+index c57c4a7..6104656 100644
+--- a/app/admin-login/page.tsx
++++ b/app/admin-login/page.tsx
+@@ -18,10 +18,6 @@ function AdminLoginForm() {
+     const [loading, setLoading] = useState(false);
+     const [error, setError] = useState<string | null>(null);
+ 
+-    useEffect(() => {
+-        router.replace("/admin-dashboard");
+-    }, [router]);
+-
+     const handleSubmit = async (e: React.FormEvent) => {
+         e.preventDefault();
+         setError(null);
+diff --git a/app/api/admin/doctors/route.ts b/app/api/admin/doctors/route.ts
+index 4033925..fb4c4d4 100644
+--- a/app/api/admin/doctors/route.ts
++++ b/app/api/admin/doctors/route.ts
+@@ -1,6 +1,9 @@
+ import { NextResponse } from 'next/server';
++import { requireUser } from '@/lib/server/auth';
+ 
+-export async function GET() {
++export async function GET(req: Request) {
++    const auth = await requireUser(req, ['admin']);
++    if (auth.error) return auth.error;
+     try {
+         const { fetchAllDoctors } = await import('@/lib/server/admin-queries');
+         const doctors = await fetchAllDoctors();
+@@ -12,6 +15,8 @@ export async function GET() {
+ }
+ 
+ export async function PATCH(req: Request) {
++    const auth = await requireUser(req, ['admin']);
++    if (auth.error) return auth.error;
+     try {
+         const body = await req.json();
+         const { doctorId, action, value } = body;
+diff --git a/app/api/admin/stats/route.ts b/app/api/admin/stats/route.ts
+index f648387..3cbb605 100644
+--- a/app/api/admin/stats/route.ts
++++ b/app/api/admin/stats/route.ts
+@@ -1,6 +1,12 @@
+ import { NextResponse } from 'next/server';
++import { requireUser } from '@/lib/server/auth';
+ 
+-export async function GET() {
++// Depends on the caller's token, so it must never be prerendered/cached
++export const dynamic = 'force-dynamic';
++
++export async function GET(req: Request) {
++    const auth = await requireUser(req, ['admin']);
++    if (auth.error) return auth.error;
+     try {
+         const { fetchAdminStats } = await import('@/lib/server/admin-queries');
+         const stats = await fetchAdminStats();
+diff --git a/app/api/admin/users/route.ts b/app/api/admin/users/route.ts
+index a5923be..7df69bb 100644
+--- a/app/api/admin/users/route.ts
++++ b/app/api/admin/users/route.ts
+@@ -1,6 +1,9 @@
+ import { NextResponse } from 'next/server';
++import { requireUser } from '@/lib/server/auth';
+ 
+-export async function GET() {
++export async function GET(req: Request) {
++    const auth = await requireUser(req, ['admin']);
++    if (auth.error) return auth.error;
+     try {
+         const { fetchAllUsers } = await import('@/lib/server/admin-queries');
+         const users = await fetchAllUsers();
+@@ -12,9 +15,17 @@ export async function GET() {
+ }
+ 
+ export async function PATCH(req: Request) {
++    const auth = await requireUser(req, ['admin']);
++    if (auth.error) return auth.error;
+     try {
+         const body = await req.json();
+         const { userId, role } = body;
++        if (!['patient', 'doctor', 'professional', 'admin'].includes(role)) {
++            return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
++        }
++        if (userId === auth.user.id) {
++            return NextResponse.json({ error: 'You cannot change your own role' }, { status: 400 });
++        }
+         if (!userId || !role) {
+             return NextResponse.json({ error: 'userId and role required' }, { status: 400 });
+         }
+@@ -28,9 +39,14 @@ export async function PATCH(req: Request) {
+ }
+ 
+ export async function DELETE(req: Request) {
++    const auth = await requireUser(req, ['admin']);
++    if (auth.error) return auth.error;
+     try {
+         const body = await req.json();
+         const { userId } = body;
++        if (userId === auth.user.id) {
++            return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 });
++        }
+         if (!userId) {
+             return NextResponse.json({ error: 'userId required' }, { status: 400 });
+         }
+diff --git a/app/api/admin/verify/route.ts b/app/api/admin/verify/route.ts
+index 74b9773..abc853d 100644
+--- a/app/api/admin/verify/route.ts
++++ b/app/api/admin/verify/route.ts
+@@ -1,50 +1,22 @@
+ /**
+- * GET /api/admin/verify?userId=<uuid>
+- * Checks if a user has admin privileges by looking up the admins table.
++ * GET /api/admin/verify
++ * Tells the signed-in caller whether THEY have admin privileges.
++ * The identity comes from the access token; any ?userId= is ignored.
+  */
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
+-import { createAdminClient } from '@/lib/supabase/client';
++import { requireUser } from '@/lib/server/auth';
+ 
+-export async function GET(req: NextRequest) {
+-    const { searchParams } = new URL(req.url);
+-    const userId = searchParams.get('userId');
+-
+-    if (!userId) {
+-        return NextResponse.json({ isAdmin: false, error: 'userId required' }, { status: 400 });
+-    }
+-
+-    try {
+-        const admin = createAdminClient();
++// Depends on the caller's token, so it must never be prerendered/cached
++export const dynamic = 'force-dynamic';
+ 
+-        // Check admins table
+-        const { data } = await admin
+-            .from('admins')
+-            .select('id, is_super_admin')
+-            .eq('user_id', userId)
+-            .maybeSingle();
+-
+-        // Also check users table role as fallback
+-        if (!data) {
+-            const { data: userRow } = await admin
+-                .from('users')
+-                .select('role')
+-                .eq('id', userId)
+-                .maybeSingle();
+-
+-            return NextResponse.json({
+-                isAdmin: (userRow as any)?.role === 'admin',
+-                isSuperAdmin: false,
+-            });
+-        }
++export async function GET(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+ 
+-        return NextResponse.json({
+-            isAdmin: true,
+-            isSuperAdmin: (data as any)?.is_super_admin ?? false,
+-        });
+-    } catch (err: any) {
+-        console.error('[admin/verify GET]', err.message);
+-        return NextResponse.json({ isAdmin: false, error: 'Internal server error' }, { status: 500 });
+-    }
++    return NextResponse.json({
++        isAdmin: auth.user.isAdmin,
++        isSuperAdmin: auth.user.isSuperAdmin,
++    });
+ }
+diff --git a/app/api/auth/signup/route.ts b/app/api/auth/signup/route.ts
+index 522febe..2458059 100644
+--- a/app/api/auth/signup/route.ts
++++ b/app/api/auth/signup/route.ts
+@@ -63,7 +63,14 @@ export async function POST(req: NextRequest) {
+   }
+ 
+   const cleanName = (name ?? email.split("@")[0]).trim();
+-  const cleanRole = (role === "doctor" || role === "professional" || role === "admin") ? role : "user";
++  // Admin accounts can never be created through public sign-up (create them in Supabase).
++  if (role === "admin") {
++    return NextResponse.json(
++      { error: "Admin accounts cannot be created through sign-up.", code: "forbidden_role" },
++      { status: 403 }
++    );
++  }
++  const cleanRole = (role === "doctor" || role === "professional") ? role : "user";
+   // Map frontend role value → DB enum value
+   const dbRole = cleanRole === "user" ? "patient" : cleanRole;
+   const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=1B3A5C&color=fff&size=128`;
+@@ -143,12 +150,6 @@ export async function POST(req: NextRequest) {
+       await admin.from("patients").insert({
+         user_id: authData.user.id,
+       });
+-    } else if (dbRole === "admin") {
+-      await admin.from("admins").insert({
+-        user_id: authData.user.id,
+-        permissions: ["all"],
+-        is_super_admin: false,
+-      });
+     } else if (dbRole === "doctor") {
+       // Auto-create doctor_profiles so the doctor appears in listings
+       const slug = cleanName.toLowerCase().replace(/^dr\.?\s*/i, "").replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+diff --git a/app/api/consultations/notes/route.ts b/app/api/consultations/notes/route.ts
+index 3adc50e..5da0e1f 100644
+--- a/app/api/consultations/notes/route.ts
++++ b/app/api/consultations/notes/route.ts
+@@ -7,8 +7,12 @@
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, getConsultationAccess, forbidden } from '@/lib/server/auth';
+ 
+ export async function PUT(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
++
+     let body: any;
+     try {
+         body = await req.json();
+@@ -21,6 +25,10 @@ export async function PUT(req: NextRequest) {
+         return NextResponse.json({ error: 'consultationId and notes are required' }, { status: 400 });
+     }
+ 
++    // Only the consultation's doctor can write clinical notes
++    const access = await getConsultationAccess(auth.user, consultationId);
++    if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
++
+     try {
+         const { saveStructuredNotes } = await import('@/lib/server/doctor-queries');
+         const data = await saveStructuredNotes(consultationId, notes);
+diff --git a/app/api/consultations/route.ts b/app/api/consultations/route.ts
+index d77be8e..39cdd27 100644
+--- a/app/api/consultations/route.ts
++++ b/app/api/consultations/route.ts
+@@ -1,5 +1,6 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, isSelf, ownsDoctorId, forbidden } from '@/lib/server/auth';
+ 
+ // ── MOCK DATA (disabled) ─────────────────────────────────────
+ // import consultationsMock from '@/data/consultations.mock.json';
+@@ -13,6 +14,10 @@ export async function GET(req: NextRequest) {
+     return NextResponse.json([], { status: 200 });
+   }
+ 
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++  if (!isSelf(auth.user, patientId)) return forbidden();
++
+   try {
+     const { fetchConsultationsByPatient } = await import('@/lib/server/queries');
+     const data = await fetchConsultationsByPatient(patientId);
+@@ -58,6 +63,11 @@ export async function POST(req: NextRequest) {
+     return NextResponse.json({ error: 'doctorId and patientId are required' }, { status: 400 });
+   }
+ 
++  // Only the patient themself, or the doctor the consultation is with, may create it
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++  if (auth.user.id !== patientId && !ownsDoctorId(auth.user, doctorId)) return forbidden();
++
+   try {
+     const { createConsultation, createNotification } = await import('@/lib/server/queries');
+     const session = await createConsultation({
+diff --git a/app/api/consultations/status/route.ts b/app/api/consultations/status/route.ts
+index ca948a6..fef65c8 100644
+--- a/app/api/consultations/status/route.ts
++++ b/app/api/consultations/status/route.ts
+@@ -1,8 +1,15 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
+-import { createAdminClient } from '@/lib/supabase/client';
++import { requireUser, getConsultationAccess, forbidden } from '@/lib/server/auth';
++
++const ALL_STATUSES = ['active', 'completed', 'missed', 'follow_up', 'waiting', 'cancelled'];
++// A patient may end/leave a consultation but not mark it active/follow_up
++const PATIENT_STATUSES = ['completed', 'cancelled', 'missed'];
+ 
+ export async function PATCH(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
++
+     try {
+         const body = await req.json();
+         const { consultationId, status } = body;
+@@ -10,6 +17,15 @@ export async function PATCH(req: NextRequest) {
+         if (!consultationId || !status) {
+             return NextResponse.json({ error: 'Missing consultationId or status' }, { status: 400 });
+         }
++        if (!ALL_STATUSES.includes(status)) {
++            return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
++        }
++
++        const access = await getConsultationAccess(auth.user, consultationId);
++        if (!access) return forbidden();
++        if (!access.asDoctor && !auth.user.isAdmin && !PATIENT_STATUSES.includes(status)) {
++            return forbidden('Patients cannot set this status');
++        }
+ 
+         const { updateConsultationStatus } = await import('@/lib/server/queries');
+         await updateConsultationStatus(consultationId, status);
+diff --git a/app/api/conversations/route.ts b/app/api/conversations/route.ts
+index 0e0b5d7..435b3d2 100644
+--- a/app/api/conversations/route.ts
++++ b/app/api/conversations/route.ts
+@@ -13,6 +13,7 @@
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, isSelf, ownsDoctorId, forbidden } from '@/lib/server/auth';
+ import { createAdminClient } from '@/lib/supabase/client';
+ 
+ export async function GET(req: NextRequest) {
+@@ -24,6 +25,11 @@ export async function GET(req: NextRequest) {
+     return NextResponse.json({ data: [], error: 'doctorId or patientId required' }, { status: 400 });
+   }
+ 
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++  if (doctorId && !ownsDoctorId(auth.user, doctorId)) return forbidden();
++  if (!doctorId && !isSelf(auth.user, patientId)) return forbidden();
++
+   try {
+     const admin = createAdminClient();
+ 
+@@ -66,7 +72,7 @@ export async function GET(req: NextRequest) {
+           const { data: lastMsgs } = await admin
+             .from('messages')
+             .select('body, attachment_name, created_at, sender_role')
+-            .eq('doctor_id', doctorId)
++            .eq('doctor_id', resolvedDoctorId)
+             .eq('patient_id', conv.patient_id)
+             .is('deleted_at', null)
+             .order('created_at', { ascending: false })
+@@ -79,7 +85,7 @@ export async function GET(req: NextRequest) {
+           const { count: unreadCount } = await admin
+             .from('messages')
+             .select('*', { count: 'exact', head: true })
+-            .eq('doctor_id', doctorId)
++            .eq('doctor_id', resolvedDoctorId)
+             .eq('patient_id', conv.patient_id)
+             .eq('sender_role', 'patient')
+             .is('deleted_at', null)
+diff --git a/app/api/doctor/consultations/route.ts b/app/api/doctor/consultations/route.ts
+index 10f00be..807424c 100644
+--- a/app/api/doctor/consultations/route.ts
++++ b/app/api/doctor/consultations/route.ts
+@@ -1,13 +1,17 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, ownsDoctorId, getConsultationAccess, forbidden } from '@/lib/server/auth';
+ 
+ export async function GET(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+     const { searchParams } = new URL(req.url);
+     const doctorId = searchParams.get('doctorId');
+ 
+     if (!doctorId) {
+         return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
+     }
++    if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
+ 
+     try {
+         const { fetchConsultationsByDoctor, fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
+@@ -51,6 +55,8 @@ export async function GET(req: NextRequest) {
+ }
+ 
+ export async function PATCH(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+     try {
+         const body = await req.json();
+         const { consultationId, status, notes, summary, outcome, followUpPriority,
+@@ -60,6 +66,11 @@ export async function PATCH(req: NextRequest) {
+         if (!consultationId || !status) {
+             return NextResponse.json({ error: 'consultationId and status required' }, { status: 400 });
+         }
++        if (!['active', 'completed', 'missed', 'follow_up', 'waiting', 'cancelled'].includes(status)) {
++            return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
++        }
++        const access = await getConsultationAccess(auth.user, consultationId);
++        if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
+ 
+         const { updateConsultationStatus } = await import('@/lib/server/doctor-queries');
+         const updated = await updateConsultationStatus(consultationId, status, notes, summary, {
+diff --git a/app/api/doctor/patients/route.ts b/app/api/doctor/patients/route.ts
+index 53baa28..a3a70b3 100644
+--- a/app/api/doctor/patients/route.ts
++++ b/app/api/doctor/patients/route.ts
+@@ -1,13 +1,20 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, ownsDoctorId, forbidden } from '@/lib/server/auth';
++
++// Depends on the caller's token, so it must never be prerendered/cached
++export const dynamic = 'force-dynamic';
+ 
+ export async function GET(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+     const { searchParams } = new URL(req.url);
+     const doctorId = searchParams.get('doctorId');
+ 
+     if (!doctorId) {
+         return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
+     }
++    if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
+ 
+     try {
+         const { fetchDoctorPatients } = await import('@/lib/server/doctor-queries');
+diff --git a/app/api/doctor/pending-tasks/route.ts b/app/api/doctor/pending-tasks/route.ts
+index 16e8065..23bdae1 100644
+--- a/app/api/doctor/pending-tasks/route.ts
++++ b/app/api/doctor/pending-tasks/route.ts
+@@ -1,14 +1,21 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, ownsDoctorId, forbidden } from '@/lib/server/auth';
++
++// Depends on the caller's token, so it must never be prerendered/cached
++export const dynamic = 'force-dynamic';
+ import { createAdminClient } from "@/lib/supabase/client";
+ 
+ export async function GET(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+     const { searchParams } = new URL(req.url);
+     const doctorId = searchParams.get('doctorId');
+ 
+     if (!doctorId) {
+         return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
+     }
++    if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
+ 
+     try {
+         const admin = createAdminClient();
+diff --git a/app/api/doctor/profile/route.ts b/app/api/doctor/profile/route.ts
+index 2aacfe8..037a9c8 100644
+--- a/app/api/doctor/profile/route.ts
++++ b/app/api/doctor/profile/route.ts
+@@ -1,13 +1,17 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, ownsDoctorId, forbidden } from '@/lib/server/auth';
+ 
+ export async function GET(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+     const { searchParams } = new URL(req.url);
+     const doctorId = searchParams.get('doctorId');
+ 
+     if (!doctorId) {
+         return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
+     }
++    if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
+ 
+     try {
+         const { fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
+@@ -20,6 +24,8 @@ export async function GET(req: NextRequest) {
+ }
+ 
+ export async function PATCH(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+     try {
+         const body = await req.json();
+         const { doctorId, status, specialty, hospital, experience_years, fee, consultation_duration_mins, languages, consultation_type, profile_picture } = body;
+@@ -27,6 +33,7 @@ export async function PATCH(req: NextRequest) {
+         if (!doctorId) {
+             return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
+         }
++        if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
+ 
+         const { updateDoctorProfile, fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
+ 
+diff --git a/app/api/follow-ups/route.ts b/app/api/follow-ups/route.ts
+index dde1ce7..73d7c88 100644
+--- a/app/api/follow-ups/route.ts
++++ b/app/api/follow-ups/route.ts
+@@ -8,14 +8,18 @@
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, ownsDoctorId, getConsultationAccess, forbidden } from '@/lib/server/auth';
+ 
+ export async function GET(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+     const { searchParams } = new URL(req.url);
+     const doctorId = searchParams.get('doctorId');
+ 
+     if (!doctorId) {
+         return NextResponse.json({ data: [], error: 'doctorId is required' }, { status: 400 });
+     }
++    if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
+ 
+     try {
+         const { fetchFollowUps } = await import('@/lib/server/queries');
+@@ -56,6 +60,8 @@ export async function GET(req: NextRequest) {
+ }
+ 
+ export async function POST(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+     let body: any;
+     try {
+         body = await req.json();
+@@ -71,6 +77,10 @@ export async function POST(req: NextRequest) {
+         );
+     }
+ 
++    // Only the consultation's doctor can schedule a follow-up
++    const access = await getConsultationAccess(auth.user, consultationId);
++    if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
++
+     try {
+         const { createFollowUp, createNotification } = await import('@/lib/server/queries');
+         const data = await createFollowUp({ consultationId, scheduledAt });
+@@ -110,6 +120,8 @@ export async function POST(req: NextRequest) {
+ }
+ 
+ export async function PATCH(req: NextRequest) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
+     let body: any;
+     try {
+         body = await req.json();
+@@ -122,6 +134,9 @@ export async function PATCH(req: NextRequest) {
+         return NextResponse.json({ error: 'consultationId is required' }, { status: 400 });
+     }
+ 
++    const access = await getConsultationAccess(auth.user, consultationId);
++    if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
++
+     try {
+         const { createAdminClient } = await import('@/lib/supabase/client');
+         const admin = createAdminClient();
+diff --git a/app/api/messages/route.ts b/app/api/messages/route.ts
+index e3e3326..0b041f4 100644
+--- a/app/api/messages/route.ts
++++ b/app/api/messages/route.ts
+@@ -8,6 +8,7 @@
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, getThreadAccess, forbidden } from '@/lib/server/auth';
+ import { createAdminClient } from '@/lib/supabase/client';
+ 
+ export async function GET(req: NextRequest) {
+@@ -22,6 +23,11 @@ export async function GET(req: NextRequest) {
+     return NextResponse.json({ data: [], error: 'consultationId, conversationId, or both doctorId and patientId are required' }, { status: 400 });
+   }
+ 
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++  const thread = await getThreadAccess(auth.user, { consultationId, conversationId, doctorId, patientId });
++  if (!thread) return forbidden();
++
+   try {
+     const { fetchMessages } = await import('@/lib/server/queries');
+ 
+@@ -71,8 +77,6 @@ export async function POST(req: NextRequest) {
+     conversationId,
+     doctorId,
+     patientId,
+-    senderId,
+-    senderRole,
+     body: text,
+     attachmentUrl,
+     attachmentName,
+@@ -80,20 +84,28 @@ export async function POST(req: NextRequest) {
+     attachmentSize
+   } = body ?? {};
+ 
+-  if (!senderId || (!text && !attachmentUrl)) {
++  if (!text && !attachmentUrl) {
+     return NextResponse.json(
+-      { error: 'senderId and either body or attachment are required' },
++      { error: 'Either body or attachment is required' },
+       { status: 400 }
+     );
+   }
+ 
++  // The sender is always the signed-in user, and must belong to this thread
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++  const thread = await getThreadAccess(auth.user, { consultationId, conversationId, doctorId, patientId });
++  if (!thread) return forbidden();
++  const senderId = auth.user.id;
++  const senderRole: 'doctor' | 'patient' = thread.asDoctor ? 'doctor' : 'patient';
++
+   try {
+     const { sendMessage, sendAttachmentMessage } = await import('@/lib/server/queries');
+     let message: any;
+ 
+     // Resolve conversationId → doctorId + patientId if needed
+-    let resolvedDoctorId = doctorId;
+-    let resolvedPatientId = patientId;
++    let resolvedDoctorId = thread.doctorProfileId ?? doctorId;
++    let resolvedPatientId = thread.patientId ?? patientId;
+     if (conversationId && (!doctorId || !patientId)) {
+       const admin = createAdminClient();
+       const { data: conv } = await admin
+diff --git a/app/api/notifications/route.ts b/app/api/notifications/route.ts
+index fc69435..46d93f1 100644
+--- a/app/api/notifications/route.ts
++++ b/app/api/notifications/route.ts
+@@ -1,23 +1,25 @@
+ /**
+  * Notifications API
+  *
+- * GET   /api/notifications?userId=<uuid>          — fetch notifications for a user
++ * GET   /api/notifications                        — the signed-in user's notifications
+  * PATCH /api/notifications                        — mark one or all as read
+- *       body: { notifId } | { userId, markAll: true }
++ *       body: { notifId } | { markAll: true }
++ *
++ * Users can only read and update their own notifications.
+  */
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
+ import { createAdminClient } from '@/lib/supabase/client';
++import { requireUser, isSelf, forbidden } from '@/lib/server/auth';
+ 
+ export async function GET(req: NextRequest) {
+-  const { searchParams } = new URL(req.url);
+-  const userId = searchParams.get('userId');
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
+ 
+-  // Always return valid JSON — no userId means no notifications
+-  if (!userId) {
+-    return NextResponse.json({ data: [] });
+-  }
++  const { searchParams } = new URL(req.url);
++  const userId = searchParams.get('userId') ?? auth.user.id;
++  if (!isSelf(auth.user, userId)) return forbidden();
+ 
+   try {
+     const admin = createAdminClient();
+@@ -41,6 +43,9 @@ export async function GET(req: NextRequest) {
+ }
+ 
+ export async function PATCH(req: NextRequest) {
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++
+   let body: any;
+   try {
+     body = await req.json();
+@@ -48,17 +53,26 @@ export async function PATCH(req: NextRequest) {
+     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+   }
+ 
+-  const { notifId, userId, markAll } = body ?? {};
++  const { notifId, markAll } = body ?? {};
+ 
+   try {
+-    if (markAll && userId) {
++    if (markAll) {
+       const { markAllNotificationsRead } = await import('@/lib/server/queries');
+-      await markAllNotificationsRead(userId);
++      // Always the caller's own notifications
++      await markAllNotificationsRead(auth.user.id);
+     } else if (notifId) {
++      const admin = createAdminClient();
++      const { data: notif } = await admin
++        .from('notifications')
++        .select('user_id')
++        .eq('id', notifId)
++        .maybeSingle();
++      if (!notif || !isSelf(auth.user, (notif as any).user_id)) return forbidden();
++
+       const { markNotificationRead } = await import('@/lib/server/queries');
+       await markNotificationRead(notifId);
+     } else {
+-      return NextResponse.json({ error: 'notifId or (userId + markAll) required' }, { status: 400 });
++      return NextResponse.json({ error: 'notifId or markAll required' }, { status: 400 });
+     }
+ 
+     return NextResponse.json({ success: true });
+@@ -67,4 +81,3 @@ export async function PATCH(req: NextRequest) {
+     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+   }
+ }
+-
+diff --git a/app/api/posts/[id]/bookmark/route.ts b/app/api/posts/[id]/bookmark/route.ts
+index 4195583..4d56c87 100644
+--- a/app/api/posts/[id]/bookmark/route.ts
++++ b/app/api/posts/[id]/bookmark/route.ts
+@@ -1,5 +1,6 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser } from '@/lib/server/auth';
+ 
+ export async function POST(
+     req: NextRequest,
+@@ -13,10 +14,9 @@ export async function POST(
+         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+     }
+ 
+-    const { userId } = body ?? {};
+-    if (!userId) {
+-        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+-    }
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
++    const userId = auth.user.id;
+ 
+     try {
+         const { bookmarkBlogPost } = await import('@/lib/server/queries');
+@@ -40,10 +40,9 @@ export async function DELETE(
+         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+     }
+ 
+-    const { userId } = body ?? {};
+-    if (!userId) {
+-        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+-    }
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
++    const userId = auth.user.id;
+ 
+     try {
+         const { unbookmarkBlogPost } = await import('@/lib/server/queries');
+diff --git a/app/api/posts/[id]/comments/route.ts b/app/api/posts/[id]/comments/route.ts
+index a2c0163..6687e23 100644
+--- a/app/api/posts/[id]/comments/route.ts
++++ b/app/api/posts/[id]/comments/route.ts
+@@ -8,6 +8,7 @@
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser } from '@/lib/server/auth';
+ 
+ export async function GET(
+     _req: Request,
+@@ -68,8 +69,11 @@ export async function POST(
+         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+     }
+ 
+-    const { authorId, parentId, body: text } = body ?? {};
+-    if (!authorId || !text) {
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
++    const authorId = auth.user.id;
++    const { parentId, body: text } = body ?? {};
++    if (!text) {
+         return NextResponse.json(
+             { error: 'authorId and body are required' },
+             { status: 400 }
+diff --git a/app/api/posts/[id]/like/route.ts b/app/api/posts/[id]/like/route.ts
+index 5bc7ab6..63ba0a5 100644
+--- a/app/api/posts/[id]/like/route.ts
++++ b/app/api/posts/[id]/like/route.ts
+@@ -10,14 +10,15 @@
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, getAuthUser } from '@/lib/server/auth';
+ 
+ export async function GET(
+     req: NextRequest,
+     { params }: { params: { id: string } }
+ ) {
+     const { id: postId } = params;
+-    const { searchParams } = new URL(req.url);
+-    const userId = searchParams.get('userId');
++    const authUser = await getAuthUser(req).catch(() => null);
++    const userId = authUser?.id ?? null;
+ 
+     if (!userId) {
+         return NextResponse.json({ liked: false });
+@@ -45,10 +46,9 @@ export async function POST(
+         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+     }
+ 
+-    const { userId } = body ?? {};
+-    if (!userId) {
+-        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+-    }
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
++    const userId = auth.user.id;
+ 
+     try {
+         const { likeBlogPost } = await import('@/lib/server/queries');
+@@ -72,10 +72,9 @@ export async function DELETE(
+         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+     }
+ 
+-    const { userId } = body ?? {};
+-    if (!userId) {
+-        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
+-    }
++    const auth = await requireUser(req);
++    if (auth.error) return auth.error;
++    const userId = auth.user.id;
+ 
+     try {
+         const { unlikeBlogPost } = await import('@/lib/server/queries');
+diff --git a/app/api/posts/route.ts b/app/api/posts/route.ts
+index 64e7851..d8b583a 100644
+--- a/app/api/posts/route.ts
++++ b/app/api/posts/route.ts
+@@ -1,6 +1,9 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
+-import { createAdminClient } from '@/lib/supabase/client'; export const revalidate = 300;
++import { createAdminClient } from '@/lib/supabase/client';
++import { getAuthUser, requireUser, forbidden } from '@/lib/server/auth';
++
++export const revalidate = 300;
+ 
+ // ─────────────────────────────────────────
+ // GET POSTS
+@@ -9,7 +12,9 @@ export async function GET(req: NextRequest) {
+   const { searchParams } = new URL(req.url);
+   const doctorId = searchParams.get('doctorId');
+   const tag = searchParams.get('tag');
+-  const userId = searchParams.get('userId');
++  // Per-user like/bookmark flags come from the signed-in user (optional on this public feed)
++  const authUser = await getAuthUser(req).catch(() => null);
++  const userId = authUser?.id ?? null;
+ 
+   try {
+     const { fetchBlogPosts } = await import('@/lib/server/queries');
+@@ -62,7 +67,7 @@ export async function GET(req: NextRequest) {
+       { data: formatted, count: formatted.length },
+       {
+         headers: {
+-          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
++          'Cache-Control': userId ? 'private, no-store' : 'public, s-maxage=300, stale-while-revalidate=600',
+         },
+       }
+     );
+@@ -79,6 +84,10 @@ export async function GET(req: NextRequest) {
+ // CREATE POST
+ // ─────────────────────────────────────────
+ export async function POST(req: NextRequest) {
++  const auth = await requireUser(req, ['doctor', 'professional']);
++  if (auth.error) return auth.error;
++  if (!auth.user.doctorProfileId) return forbidden('A doctor profile is required to publish posts');
++
+   try {
+     const body = await req.json();
+ 
+@@ -98,7 +107,7 @@ export async function POST(req: NextRequest) {
+     const { data: doctorProfile, error: doctorError } = (await admin
+       .from('doctor_profiles')
+       .select('id')
+-      .eq('user_id', String(doctorId))
++      .eq('user_id', auth.user.id)
+       .single()) as { data: { id: string } | null; error: any };
+ 
+     if (doctorError || !doctorProfile) {
+diff --git a/app/api/profile/route.ts b/app/api/profile/route.ts
+index a7c1548..4307d21 100644
+--- a/app/api/profile/route.ts
++++ b/app/api/profile/route.ts
+@@ -8,6 +8,7 @@
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, isSelf, doctorHasPatient, forbidden } from '@/lib/server/auth';
+ import { createAdminClient } from '@/lib/supabase/client';
+ 
+ export async function GET(req: NextRequest) {
+@@ -17,6 +18,14 @@ export async function GET(req: NextRequest) {
+     return NextResponse.json({ error: 'userId required' }, { status: 400 });
+   }
+ 
++  // Your own profile, or (for doctors) a patient you have consulted
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++  if (!isSelf(auth.user, userId)) {
++    const allowed = await doctorHasPatient(auth.user.doctorProfileId, userId);
++    if (!allowed) return forbidden();
++  }
++
+   try {
+     const admin = createAdminClient();
+ 
+@@ -85,6 +94,9 @@ export async function GET(req: NextRequest) {
+ }
+ 
+ export async function PATCH(req: NextRequest) {
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++
+   let body: any;
+   try {
+     body = await req.json();
+@@ -114,6 +126,7 @@ export async function PATCH(req: NextRequest) {
+   if (!userId) {
+     return NextResponse.json({ error: 'userId required' }, { status: 400 });
+   }
++  if (!isSelf(auth.user, userId)) return forbidden();
+ 
+   try {
+     const admin = createAdminClient();
+diff --git a/app/api/queue/route.ts b/app/api/queue/route.ts
+index 9ccead1..ce47a16 100644
+--- a/app/api/queue/route.ts
++++ b/app/api/queue/route.ts
+@@ -1,5 +1,6 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, getAuthUser, isSelf, ownsDoctorId, forbidden, unauthorized } from '@/lib/server/auth';
+ 
+ // ── MOCK DATA (disabled) ─────────────────────────────────────
+ // const MOCK_QUEUE = { 'd2': { position: 2, estimatedWait: 8, total: 3 }, ... };
+@@ -14,6 +15,15 @@ export async function GET(req: NextRequest) {
+     return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
+   }
+ 
++  // Who is asking? Anonymous visitors and other patients only get the queue SIZE.
++  // The full queue (patient names/ids) is for the doctor who owns it.
++  const user = await getAuthUser(req).catch(() => null);
++  const isOwner = !!user && ownsDoctorId(user, doctorId);
++  if (patientId) {
++    if (!user) return unauthorized();
++    if (!isSelf(user, patientId)) return forbidden();
++  }
++
+   try {
+     const { fetchPatientQueueEntry } = await import('@/lib/server/queries');
+     const { fetchDoctorProfileByUserId, fetchDoctorQueue } = await import('@/lib/server/doctor-queries');
+@@ -48,6 +58,7 @@ export async function GET(req: NextRequest) {
+       });
+     }
+ 
++    if (!isOwner) return NextResponse.json({ total: queue.length, queue: [], data: [] });
+     return NextResponse.json({ total: queue.length, queue, data: queue });
+   } catch (err: any) {
+     console.error('[queue GET]', err.message);
+@@ -68,6 +79,11 @@ export async function POST(req: NextRequest) {
+     return NextResponse.json({ error: 'doctorId and patientId are required' }, { status: 400 });
+   }
+ 
++  // A patient can only put THEMSELVES in a queue
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++  if (!isSelf(auth.user, patientId)) return forbidden();
++
+   try {
+     const { joinQueue } = await import('@/lib/server/queries');
+     const entry = await joinQueue(doctorId, patientId, consultationId);
+@@ -91,6 +107,11 @@ export async function DELETE(req: NextRequest) {
+     return NextResponse.json({ error: 'doctorId and patientId are required' }, { status: 400 });
+   }
+ 
++  // A patient can leave their own queue spot; a doctor can remove people from their own queue
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++  if (!isSelf(auth.user, patientId) && !ownsDoctorId(auth.user, doctorId)) return forbidden();
++
+   try {
+     const { leaveQueue } = await import('@/lib/server/queries');
+     const { fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
+diff --git a/app/api/remind-me/route.ts b/app/api/remind-me/route.ts
+index 97eb1e8..8ebaa46 100644
+--- a/app/api/remind-me/route.ts
++++ b/app/api/remind-me/route.ts
+@@ -10,9 +10,12 @@
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, isSelf, forbidden } from '@/lib/server/auth';
+ import { createAdminClient } from '@/lib/supabase/client';
+ 
+ export async function GET(req: NextRequest) {
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
+   const { searchParams } = new URL(req.url);
+   const patientId = searchParams.get('patientId');
+   const doctorId = searchParams.get('doctorId');
+@@ -21,6 +24,8 @@ export async function GET(req: NextRequest) {
+     return NextResponse.json({ active: false });
+   }
+ 
++  if (!isSelf(auth.user, patientId)) return forbidden();
++
+   try {
+     const admin = createAdminClient();
+     const { data, error } = await admin
+@@ -44,6 +49,8 @@ export async function GET(req: NextRequest) {
+ }
+ 
+ export async function POST(req: NextRequest) {
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
+   let body: any;
+   try {
+     body = await req.json();
+@@ -56,6 +63,8 @@ export async function POST(req: NextRequest) {
+     return NextResponse.json({ error: 'patientId and doctorId are required' }, { status: 400 });
+   }
+ 
++  if (!isSelf(auth.user, patientId)) return forbidden();
++
+   try {
+     const admin = createAdminClient();
+     const { error } = await admin
+@@ -78,6 +87,8 @@ export async function POST(req: NextRequest) {
+ }
+ 
+ export async function DELETE(req: NextRequest) {
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
+   let body: any;
+   try {
+     body = await req.json();
+@@ -90,6 +101,8 @@ export async function DELETE(req: NextRequest) {
+     return NextResponse.json({ error: 'patientId and doctorId are required' }, { status: 400 });
+   }
+ 
++  if (!isSelf(auth.user, patientId)) return forbidden();
++
+   try {
+     const admin = createAdminClient();
+     const { error } = await admin
+diff --git a/app/api/reviews/route.ts b/app/api/reviews/route.ts
+index 8edb09e..8263934 100644
+--- a/app/api/reviews/route.ts
++++ b/app/api/reviews/route.ts
+@@ -1,5 +1,6 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, getConsultationAccess, forbidden } from '@/lib/server/auth';
+ 
+ export async function GET(req: NextRequest) {
+   const { searchParams } = new URL(req.url);
+@@ -45,6 +46,19 @@ export async function POST(req: NextRequest) {
+       { status: 400 }
+     );
+   }
++  const ratingNum = Number(rating);
++  if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5) {
++    return NextResponse.json({ error: 'rating must be a whole number from 1 to 5' }, { status: 400 });
++  }
++
++  // Only the patient of a consultation can review it, and only for its doctor
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
++  if (auth.user.id !== patientId) return forbidden();
++  const access = await getConsultationAccess(auth.user, consultationId);
++  if (!access || access.consultation.patient_id !== patientId || access.consultation.doctor_id !== doctorId) {
++    return forbidden();
++  }
+ 
+   try {
+     const { submitReview } = await import('@/lib/server/queries');
+diff --git a/app/api/saved-doctors/route.ts b/app/api/saved-doctors/route.ts
+index e69a75f..0acd681 100644
+--- a/app/api/saved-doctors/route.ts
++++ b/app/api/saved-doctors/route.ts
+@@ -20,10 +20,13 @@
+ 
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
++import { requireUser, isSelf, forbidden } from '@/lib/server/auth';
+ import { createAdminClient } from '@/lib/supabase/client';
+ 
+ // ── GET — fetch saved doctor IDs for one patient ──────────────
+ export async function GET(req: NextRequest) {
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
+   const { searchParams } = new URL(req.url);
+   const patientId = searchParams.get('patientId');
+ 
+@@ -32,6 +35,8 @@ export async function GET(req: NextRequest) {
+     return NextResponse.json({ data: [] });
+   }
+ 
++  if (!isSelf(auth.user, patientId)) return forbidden();
++
+   try {
+     const admin = createAdminClient();
+     const { data, error } = await admin
+@@ -54,6 +59,8 @@ export async function GET(req: NextRequest) {
+ 
+ // ── POST — save a doctor (idempotent upsert) ──────────────────
+ export async function POST(req: NextRequest) {
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
+   let body: any;
+   try {
+     body = await req.json();
+@@ -66,6 +73,8 @@ export async function POST(req: NextRequest) {
+     return NextResponse.json({ error: 'patientId and doctorId are required' }, { status: 400 });
+   }
+ 
++  if (!isSelf(auth.user, patientId)) return forbidden();
++
+   try {
+     const admin = createAdminClient();
+ 
+@@ -93,6 +102,8 @@ export async function POST(req: NextRequest) {
+ 
+ // ── DELETE — unsave a doctor ──────────────────────────────────
+ export async function DELETE(req: NextRequest) {
++  const auth = await requireUser(req);
++  if (auth.error) return auth.error;
+   let body: any;
+   try {
+     body = await req.json();
+@@ -105,6 +116,8 @@ export async function DELETE(req: NextRequest) {
+     return NextResponse.json({ error: 'patientId and doctorId are required' }, { status: 400 });
+   }
+ 
++  if (!isSelf(auth.user, patientId)) return forbidden();
++
+   try {
+     const admin = createAdminClient();
+     const { error } = await admin
+diff --git a/app/api/upload/route.ts b/app/api/upload/route.ts
+index 2759d49..532b76f 100644
+--- a/app/api/upload/route.ts
++++ b/app/api/upload/route.ts
+@@ -1,16 +1,46 @@
+ import { NextResponse } from 'next/server';
+ import type { NextRequest } from 'next/server';
+ import { createAdminClient } from '@/lib/supabase/client';
++import { getAuthUser } from '@/lib/server/auth';
++
++// Only these buckets can be written to through this endpoint.
++const ALLOWED_BUCKETS = ['chat-attachments', 'profile-pictures', 'blog-media', 'doctor-assets'];
++// Doctor sign-up uploads a profile picture BEFORE the account exists, so this
++// one bucket also accepts anonymous image uploads (small images only).
++const ANONYMOUS_BUCKET = 'profile-pictures';
++const MAX_BYTES = 50 * 1024 * 1024;
++const MAX_ANON_BYTES = 5 * 1024 * 1024;
+ 
+ export async function POST(req: NextRequest) {
+     try {
+-        const formData = await req.formData();
+-        const file = formData.get('file') as File;
+-        const bucket = formData.get('bucket') as string || 'chat-attachments';
++        const user = await getAuthUser(req).catch(() => null);
++
++        let formData: FormData;
++        try {
++            formData = await req.formData();
++        } catch {
++            return NextResponse.json({ error: 'Expected multipart form data' }, { status: 400 });
++        }
++        const file = formData.get('file');
++        const bucket = (formData.get('bucket') as string) || 'chat-attachments';
+ 
+-        if (!file) {
++        if (!(file instanceof File)) {
+             return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+         }
++        if (!ALLOWED_BUCKETS.includes(bucket)) {
++            return NextResponse.json({ error: 'Invalid bucket' }, { status: 400 });
++        }
++        if (!user) {
++            if (bucket !== ANONYMOUS_BUCKET) {
++                return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
++            }
++            if (!file.type.startsWith('image/') || file.size > MAX_ANON_BYTES) {
++                return NextResponse.json({ error: 'Only images up to 5 MB are allowed' }, { status: 400 });
++            }
++        }
++        if (file.size > MAX_BYTES) {
++            return NextResponse.json({ error: 'File too large' }, { status: 413 });
++        }
+ 
+         const admin = createAdminClient();
+ 
+diff --git a/app/api/zoom-token/route.js b/app/api/zoom-token/route.js
+index 9aa492e..a514bd6 100644
+--- a/app/api/zoom-token/route.js
++++ b/app/api/zoom-token/route.js
+@@ -1,10 +1,24 @@
+ import { NextResponse } from "next/server";
+ import jwt from "jsonwebtoken";
++import { requireUser, getConsultationAccess, forbidden } from "@/lib/server/auth";
++
++// Depends on the caller's token, so it must never be prerendered/cached
++export const dynamic = 'force-dynamic';
++
++const HEX32 = "[0-9a-f]{32}";
++const toUuid = (h) =>
++    `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+ 
+ export async function GET(request) {
++    // Only signed-in users can get a token
++    const auth = await requireUser(request);
++    if (auth.error) return auth.error;
++    const user = auth.user;
++
+     const { searchParams } = new URL(request.url);
+     const roomName = searchParams.get("roomName");
+-    const role = parseInt(searchParams.get("role") || "1", 10); // 1 = participant, 0 = host
++    const requestedRole = parseInt(searchParams.get("role") || "1", 10);
++    const role = requestedRole === 0 ? 0 : 1; // only 0 or 1 are valid
+ 
+     if (!roomName) {
+         return NextResponse.json(
+@@ -13,6 +27,25 @@ export async function GET(request) {
+         );
+     }
+ 
++    // Room names are built by the app as:
++    //   NovaHealth_<consultationId>              (dashes removed)
++    //   NovaHealth_<doctorId>_<patientId>        (fallback when no consultation yet)
++    // The caller must be a participant of the room they ask for.
++    const single = new RegExp(`^NovaHealth_(${HEX32})$`, "i").exec(roomName);
++    const pair = new RegExp(`^NovaHealth_(${HEX32})_(${HEX32})$`, "i").exec(roomName);
++
++    let allowed = false;
++    if (single) {
++        const access = await getConsultationAccess(user, toUuid(single[1].toLowerCase()));
++        allowed = !!access;
++    } else if (pair) {
++        const ids = [toUuid(pair[1].toLowerCase()), toUuid(pair[2].toLowerCase())];
++        allowed = user.isAdmin || ids.some((id) => id === user.id || id === user.doctorProfileId);
++    }
++    if (!allowed) {
++        return forbidden("You are not a participant of this consultation");
++    }
++
+     const sdkKey = process.env.ZOOM_SDK_KEY;
+     const sdkSecret = process.env.ZOOM_SDK_SECRET;
+ 
+diff --git a/app/layout.tsx b/app/layout.tsx
+index 884c285..783288c 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -1,5 +1,6 @@
+ import type { Metadata } from "next";
+ import "../styles/globals.css";
++import AuthFetchInstaller from "@/components/AuthFetchInstaller";
+ 
+ export const metadata: Metadata = {
+   title: "Nova Health – Your Health, Connected",
+@@ -24,6 +25,7 @@ export default function RootLayout({
+         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+       </head>
+       <body className="min-h-screen bg-slate-50 bg-nova-mesh flex flex-col">
++        <AuthFetchInstaller />
+         <div className="flex-1">{children}</div>
+       </body>
+     </html>
+diff --git a/components/AuthFetchInstaller.tsx b/components/AuthFetchInstaller.tsx
+new file mode 100644
+index 0000000..13fc2f9
+--- /dev/null
++++ b/components/AuthFetchInstaller.tsx
+@@ -0,0 +1,10 @@
++"use client";
++
++import { installAuthFetch } from "@/lib/auth-fetch";
++
++// Runs at module load on the client, before any page effect issues a request.
++installAuthFetch();
++
++export default function AuthFetchInstaller() {
++  return null;
++}
+diff --git a/lib/auth-fetch.ts b/lib/auth-fetch.ts
+new file mode 100644
+index 0000000..723b5a1
+--- /dev/null
++++ b/lib/auth-fetch.ts
+@@ -0,0 +1,52 @@
++/**
++ * Client-side: attach the signed-in user's Supabase access token to every
++ * same-origin /api/* request, so API routes can verify who is calling.
++ *
++ * Installed once (see components/AuthFetchInstaller.tsx) by wrapping
++ * window.fetch, so existing `fetch('/api/...')` calls need no changes.
++ * /api/auth/* (login, signup) is left untouched.
++ */
++
++import { supabase } from '@/lib/supabase/client';
++
++declare global {
++  interface Window {
++    __novaAuthFetchInstalled?: boolean;
++  }
++}
++
++export function installAuthFetch(): void {
++  if (typeof window === 'undefined' || window.__novaAuthFetchInstalled) return;
++  window.__novaAuthFetchInstalled = true;
++
++  const originalFetch = window.fetch.bind(window);
++
++  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
++    try {
++      const rawUrl =
++        typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
++      const url = new URL(rawUrl, window.location.origin);
++      const isOwnApi =
++        url.origin === window.location.origin &&
++        url.pathname.startsWith('/api/') &&
++        !url.pathname.startsWith('/api/auth/');
++
++      if (isOwnApi) {
++        const { data } = await supabase.auth.getSession();
++        const token = data.session?.access_token;
++        if (token) {
++          const headers = new Headers(
++            init?.headers ?? (typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined),
++          );
++          if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
++          return originalFetch(input, { ...init, headers });
++        }
++      }
++    } catch {
++      // never block a request because token lookup failed
++    }
++    return originalFetch(input, init);
++  };
++}
++
++installAuthFetch();
+diff --git a/lib/server/auth.ts b/lib/server/auth.ts
+new file mode 100644
+index 0000000..0e69202
+--- /dev/null
++++ b/lib/server/auth.ts
+@@ -0,0 +1,228 @@
++/**
++ * Nova Health — server-side authentication & authorization helpers.
++ *
++ * Every API route that touches private data must start with one of:
++ *
++ *   const auth = await requireUser(req);              // any signed-in user
++ *   const auth = await requireUser(req, ['admin']);   // admins only
++ *   if (auth.error) return auth.error;
++ *   const user = auth.user;
++ *
++ * The caller's identity ALWAYS comes from the verified Supabase access token
++ * (Authorization: Bearer <token>), never from ids in the body or query string.
++ * Ids sent by the client are only compared against the verified identity.
++ *
++ * Roles come from the `users` table (source of truth), with the `admins`
++ * table also granting admin rights.
++ */
++
++import { NextResponse } from 'next/server';
++import { createAdminClient } from '@/lib/supabase/client';
++
++export type DbRole = 'patient' | 'doctor' | 'professional' | 'admin';
++
++export interface AuthedUser {
++  id: string;
++  email: string | null;
++  role: DbRole;
++  isAdmin: boolean;
++  isSuperAdmin: boolean;
++  /** doctor_profiles.id for this user, or null if they have no doctor profile */
++  doctorProfileId: string | null;
++}
++
++const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++export const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID_RE.test(v);
++
++// ── Error responses ───────────────────────────────────────────
++// `data: []` keeps existing client code (`json.data ?? []`) from crashing.
++export const unauthorized = (message = 'Authentication required') =>
++  NextResponse.json({ error: message, data: [] }, { status: 401 });
++
++export const forbidden = (message = 'You do not have access to this resource') =>
++  NextResponse.json({ error: message, data: [] }, { status: 403 });
++
++// ── Token → user ──────────────────────────────────────────────
++export function getBearerToken(req: Request): string | null {
++  const header = req.headers.get('authorization') ?? '';
++  const match = /^Bearer\s+(.+)$/i.exec(header);
++  return match ? match[1].trim() : null;
++}
++
++/** Returns the verified user, or null when there is no valid session. */
++export async function getAuthUser(req: Request): Promise<AuthedUser | null> {
++  const token = getBearerToken(req);
++  if (!token) return null;
++
++  const admin: any = createAdminClient();
++  const { data, error } = await admin.auth.getUser(token);
++  if (error || !data?.user) return null;
++  const uid: string = data.user.id;
++
++  const [userRes, doctorRes, adminRes] = await Promise.all([
++    admin.from('users').select('role').eq('id', uid).maybeSingle(),
++    admin.from('doctor_profiles').select('id').eq('user_id', uid).maybeSingle(),
++    admin.from('admins').select('is_super_admin').eq('user_id', uid).maybeSingle(),
++  ]);
++
++  if (!userRes.data) return null; // auth user without a profile row
++
++  const role = userRes.data.role as DbRole;
++  const isAdmin = role === 'admin' || !!adminRes.data;
++
++  return {
++    id: uid,
++    email: data.user.email ?? null,
++    role,
++    isAdmin,
++    isSuperAdmin: !!adminRes.data?.is_super_admin,
++    doctorProfileId: doctorRes.data?.id ?? null,
++  };
++}
++
++type Guard =
++  | { user: AuthedUser; error?: undefined }
++  | { user?: undefined; error: NextResponse };
++
++/**
++ * Require a signed-in user, optionally restricted to certain roles.
++ * Passing 'admin' in `roles` also accepts users listed in the admins table.
++ */
++export async function requireUser(req: Request, roles?: DbRole[]): Promise<Guard> {
++  let user: AuthedUser | null = null;
++  try {
++    user = await getAuthUser(req);
++  } catch (err: any) {
++    // Next.js uses a thrown error to mark a route as dynamic — let it through
++    if (err?.digest === 'DYNAMIC_SERVER_USAGE') throw err;
++    console.error('[auth] token verification failed:', err?.message);
++  }
++  if (!user) return { error: unauthorized() };
++
++  if (roles) {
++    const effective: DbRole[] = [user.role, ...(user.isAdmin ? (['admin'] as DbRole[]) : [])];
++    if (!roles.some((r) => effective.includes(r))) return { error: forbidden() };
++  }
++  return { user };
++}
++
++// ── Ownership checks ──────────────────────────────────────────
++/** The id is the caller's own user id (admins pass). */
++export function isSelf(user: AuthedUser, id: unknown): boolean {
++  return typeof id === 'string' && (user.isAdmin || id === user.id);
++}
++
++/**
++ * The id refers to the caller as a doctor. The frontend sometimes sends the
++ * auth user id and sometimes doctor_profiles.id, so accept both (admins pass).
++ */
++export function ownsDoctorId(user: AuthedUser, id: unknown): boolean {
++  if (typeof id !== 'string' || !id) return false;
++  if (user.isAdmin) return true;
++  return id === user.id || (!!user.doctorProfileId && id === user.doctorProfileId);
++}
++
++/** Map an auth user id OR a doctor_profiles.id to doctor_profiles.id. */
++export async function resolveDoctorProfileId(idOrUserId: unknown): Promise<string | null> {
++  if (!isUuid(idOrUserId)) return null;
++  const admin: any = createAdminClient();
++  const { data } = await admin
++    .from('doctor_profiles')
++    .select('id')
++    .or(`id.eq.${idOrUserId},user_id.eq.${idOrUserId}`)
++    .maybeSingle();
++  return data?.id ?? null;
++}
++
++export interface ConsultationAccess {
++  consultation: { id: string; doctor_id: string; patient_id: string; status: string };
++  asDoctor: boolean;
++  asPatient: boolean;
++}
++
++/** Load a consultation and check the caller is its patient, its doctor, or an admin. */
++export async function getConsultationAccess(
++  user: AuthedUser,
++  consultationId: unknown,
++): Promise<ConsultationAccess | null> {
++  if (!isUuid(consultationId)) return null;
++  const admin: any = createAdminClient();
++  const { data } = await admin
++    .from('consultations')
++    .select('id, doctor_id, patient_id, status')
++    .eq('id', consultationId)
++    .maybeSingle();
++  if (!data) return null;
++
++  const asPatient = data.patient_id === user.id;
++  const asDoctor = !!user.doctorProfileId && data.doctor_id === user.doctorProfileId;
++  if (!asPatient && !asDoctor && !user.isAdmin) return null;
++  return { consultation: data, asDoctor, asPatient };
++}
++
++export interface ThreadAccess {
++  doctorProfileId: string | null;
++  patientId: string | null;
++  asDoctor: boolean;
++  asPatient: boolean;
++}
++
++/**
++ * Check the caller belongs to a chat thread, identified by a consultation,
++ * a conversation, or a doctor + patient pair. Returns null when not allowed.
++ */
++export async function getThreadAccess(
++  user: AuthedUser,
++  ref: { consultationId?: unknown; conversationId?: unknown; doctorId?: unknown; patientId?: unknown },
++): Promise<ThreadAccess | null> {
++  const admin: any = createAdminClient();
++
++  if (ref.consultationId) {
++    const access = await getConsultationAccess(user, ref.consultationId);
++    if (!access) return null;
++    return {
++      doctorProfileId: access.consultation.doctor_id,
++      patientId: access.consultation.patient_id,
++      asDoctor: access.asDoctor,
++      asPatient: access.asPatient,
++    };
++  }
++
++  let doctorProfileId: string | null = null;
++  let patientId: string | null = null;
++
++  if (ref.conversationId) {
++    if (!isUuid(ref.conversationId)) return null;
++    const { data } = await admin
++      .from('conversations')
++      .select('doctor_id, patient_id')
++      .eq('id', ref.conversationId)
++      .maybeSingle();
++    if (!data) return null;
++    doctorProfileId = data.doctor_id;
++    patientId = data.patient_id;
++  } else if (ref.doctorId && ref.patientId) {
++    doctorProfileId = await resolveDoctorProfileId(ref.doctorId);
++    patientId = isUuid(ref.patientId) ? ref.patientId : null;
++  }
++
++  if (!doctorProfileId || !patientId) return null;
++
++  const asPatient = patientId === user.id;
++  const asDoctor = !!user.doctorProfileId && doctorProfileId === user.doctorProfileId;
++  if (!asPatient && !asDoctor && !user.isAdmin) return null;
++  return { doctorProfileId, patientId, asDoctor, asPatient };
++}
++
++/** True when this doctor has (or had) a consultation with the patient. */
++export async function doctorHasPatient(doctorProfileId: string | null, patientId: string): Promise<boolean> {
++  if (!doctorProfileId || !isUuid(patientId)) return false;
++  const admin: any = createAdminClient();
++  const { data } = await admin
++    .from('consultations')
++    .select('id')
++    .eq('doctor_id', doctorProfileId)
++    .eq('patient_id', patientId)
++    .limit(1);
++  return !!data && data.length > 0;
++}
+diff --git a/supabase/README.md b/supabase/README.md
+index 3e0a078..756d008 100644
+--- a/supabase/README.md
++++ b/supabase/README.md
+@@ -109,3 +109,23 @@ Replace the mock token logic in `app/api/video/token/route.ts` with:
+ npm install livekit-server-sdk
+ ```
+ Then use `AccessToken` from the SDK (see comments in the route file).
++
++---
++
++## Creating an admin account
++
++Admin accounts can **not** be created through the public sign-up form (the
++API rejects `role: "admin"`). To make someone an admin:
++
++1. Have them register normally (patient sign-up) so a row exists in `users`.
++2. Run this in the Supabase SQL editor:
++
++```sql
++UPDATE users SET role = 'admin' WHERE email = 'admin@example.com';
++
++INSERT INTO admins (user_id, permissions, is_super_admin)
++SELECT id, ARRAY['all'], true FROM users WHERE email = 'admin@example.com'
++ON CONFLICT (user_id) DO NOTHING;
++```
++
++They can then sign in at `/admin-login`.

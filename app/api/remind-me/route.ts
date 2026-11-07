@@ -10,9 +10,12 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, isSelf, forbidden } from '@/lib/server/auth';
 import { createAdminClient } from '@/lib/supabase/client';
 
 export async function GET(req: NextRequest) {
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
   const { searchParams } = new URL(req.url);
   const patientId = searchParams.get('patientId');
   const doctorId = searchParams.get('doctorId');
@@ -20,6 +23,8 @@ export async function GET(req: NextRequest) {
   if (!patientId || !doctorId) {
     return NextResponse.json({ active: false });
   }
+
+  if (!isSelf(auth.user, patientId)) return forbidden();
 
   try {
     const admin = createAdminClient();
@@ -44,6 +49,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
   let body: any;
   try {
     body = await req.json();
@@ -55,6 +62,8 @@ export async function POST(req: NextRequest) {
   if (!patientId || !doctorId) {
     return NextResponse.json({ error: 'patientId and doctorId are required' }, { status: 400 });
   }
+
+  if (!isSelf(auth.user, patientId)) return forbidden();
 
   try {
     const admin = createAdminClient();
@@ -78,6 +87,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
   let body: any;
   try {
     body = await req.json();
@@ -89,6 +100,8 @@ export async function DELETE(req: NextRequest) {
   if (!patientId || !doctorId) {
     return NextResponse.json({ error: 'patientId and doctorId are required' }, { status: 400 });
   }
+
+  if (!isSelf(auth.user, patientId)) return forbidden();
 
   try {
     const admin = createAdminClient();

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, isSelf, ownsDoctorId, forbidden } from '@/lib/server/auth';
 
 // ── MOCK DATA (disabled) ─────────────────────────────────────
 // import consultationsMock from '@/data/consultations.mock.json';
@@ -12,6 +13,10 @@ export async function GET(req: NextRequest) {
   if (!patientId) {
     return NextResponse.json([], { status: 200 });
   }
+
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+  if (!isSelf(auth.user, patientId)) return forbidden();
 
   try {
     const { fetchConsultationsByPatient } = await import('@/lib/server/queries');
@@ -57,6 +62,11 @@ export async function POST(req: NextRequest) {
   if (!doctorId || !patientId) {
     return NextResponse.json({ error: 'doctorId and patientId are required' }, { status: 400 });
   }
+
+  // Only the patient themself, or the doctor the consultation is with, may create it
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+  if (auth.user.id !== patientId && !ownsDoctorId(auth.user, doctorId)) return forbidden();
 
   try {
     const { createConsultation, createNotification } = await import('@/lib/server/queries');

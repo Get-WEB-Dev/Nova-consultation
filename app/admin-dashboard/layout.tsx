@@ -8,7 +8,7 @@ import {
     LayoutDashboard, Users, Stethoscope, LogOut,
     Shield, Menu, X,
 } from "lucide-react";
-import { getUser, signOut, type AuthUser } from "@/lib/supabase/auth";
+import { loadUser, signOut, type AuthUser } from "@/lib/supabase/auth";
 
 const adminNav = [
     { href: "/admin-dashboard", label: "Overview", icon: LayoutDashboard },
@@ -25,9 +25,24 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
     useEffect(() => {
         async function checkAuth() {
-            // Bypass auth for testing
-            setUser({ id: "test-admin", role: "admin", name: "Test Admin", email: "admin@test.com" } as any);
-            setReady(true);
+            try {
+                const u = await loadUser();
+                if (!u) {
+                    router.replace("/admin-login");
+                    return;
+                }
+                // The server decides who is an admin (never trust the client)
+                const res = await fetch("/api/admin/verify");
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok || !json.isAdmin) {
+                    router.replace("/admin-login");
+                    return;
+                }
+                setUser(u);
+                setReady(true);
+            } catch {
+                router.replace("/admin-login");
+            }
         }
         checkAuth();
     }, [router]);

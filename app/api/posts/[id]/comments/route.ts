@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser } from '@/lib/server/auth';
 
 export async function GET(
     _req: Request,
@@ -68,8 +69,11 @@ export async function POST(
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { authorId, parentId, body: text } = body ?? {};
-    if (!authorId || !text) {
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
+    const authorId = auth.user.id;
+    const { parentId, body: text } = body ?? {};
+    if (!text) {
         return NextResponse.json(
             { error: 'authorId and body are required' },
             { status: 400 }

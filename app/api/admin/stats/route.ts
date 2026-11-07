@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
+import { requireUser } from '@/lib/server/auth';
 
-export async function GET() {
+// Depends on the caller's token, so it must never be prerendered/cached
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: Request) {
+    const auth = await requireUser(req, ['admin']);
+    if (auth.error) return auth.error;
     try {
         const { fetchAdminStats } = await import('@/lib/server/admin-queries');
         const stats = await fetchAdminStats();

@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, ownsDoctorId, getConsultationAccess, forbidden } from '@/lib/server/auth';
 
 export async function GET(req: NextRequest) {
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
     const { searchParams } = new URL(req.url);
     const doctorId = searchParams.get('doctorId');
 
     if (!doctorId) {
         return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
     }
+    if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
 
     try {
         const { fetchConsultationsByDoctor, fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
@@ -51,6 +55,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
     try {
         const body = await req.json();
         const { consultationId, status, notes, summary, outcome, followUpPriority,
@@ -60,6 +66,11 @@ export async function PATCH(req: NextRequest) {
         if (!consultationId || !status) {
             return NextResponse.json({ error: 'consultationId and status required' }, { status: 400 });
         }
+        if (!['active', 'completed', 'missed', 'follow_up', 'waiting', 'cancelled'].includes(status)) {
+            return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+        }
+        const access = await getConsultationAccess(auth.user, consultationId);
+        if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
 
         const { updateConsultationStatus } = await import('@/lib/server/doctor-queries');
         const updated = await updateConsultationStatus(consultationId, status, notes, summary, {

@@ -13,6 +13,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, isSelf, ownsDoctorId, forbidden } from '@/lib/server/auth';
 import { createAdminClient } from '@/lib/supabase/client';
 
 export async function GET(req: NextRequest) {
@@ -23,6 +24,11 @@ export async function GET(req: NextRequest) {
   if (!doctorId && !patientId) {
     return NextResponse.json({ data: [], error: 'doctorId or patientId required' }, { status: 400 });
   }
+
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+  if (doctorId && !ownsDoctorId(auth.user, doctorId)) return forbidden();
+  if (!doctorId && !isSelf(auth.user, patientId)) return forbidden();
 
   try {
     const admin = createAdminClient();
@@ -66,7 +72,7 @@ export async function GET(req: NextRequest) {
           const { data: lastMsgs } = await admin
             .from('messages')
             .select('body, attachment_name, created_at, sender_role')
-            .eq('doctor_id', doctorId)
+            .eq('doctor_id', resolvedDoctorId)
             .eq('patient_id', conv.patient_id)
             .is('deleted_at', null)
             .order('created_at', { ascending: false })
@@ -79,7 +85,7 @@ export async function GET(req: NextRequest) {
           const { count: unreadCount } = await admin
             .from('messages')
             .select('*', { count: 'exact', head: true })
-            .eq('doctor_id', doctorId)
+            .eq('doctor_id', resolvedDoctorId)
             .eq('patient_id', conv.patient_id)
             .eq('sender_role', 'patient')
             .is('deleted_at', null)

@@ -18,10 +18,6 @@ function AdminLoginForm() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        router.replace("/admin-dashboard");
-    }, [router]);
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);

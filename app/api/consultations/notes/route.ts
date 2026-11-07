@@ -7,8 +7,12 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, getConsultationAccess, forbidden } from '@/lib/server/auth';
 
 export async function PUT(req: NextRequest) {
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
+
     let body: any;
     try {
         body = await req.json();
@@ -20,6 +24,10 @@ export async function PUT(req: NextRequest) {
     if (!consultationId || !notes) {
         return NextResponse.json({ error: 'consultationId and notes are required' }, { status: 400 });
     }
+
+    // Only the consultation's doctor can write clinical notes
+    const access = await getConsultationAccess(auth.user, consultationId);
+    if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
 
     try {
         const { saveStructuredNotes } = await import('@/lib/server/doctor-queries');

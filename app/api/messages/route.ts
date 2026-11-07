@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, getThreadAccess, forbidden } from '@/lib/server/auth';
 import { createAdminClient } from '@/lib/supabase/client';
 
 export async function GET(req: NextRequest) {
@@ -21,6 +22,11 @@ export async function GET(req: NextRequest) {
   if (!consultationId && !conversationId && (!doctorId || !patientId)) {
     return NextResponse.json({ data: [], error: 'consultationId, conversationId, or both doctorId and patientId are required' }, { status: 400 });
   }
+
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+  const thread = await getThreadAccess(auth.user, { consultationId, conversationId, doctorId, patientId });
+  if (!thread) return forbidden();
 
   try {
     const { fetchMessages } = await import('@/lib/server/queries');
@@ -71,8 +77,6 @@ export async function POST(req: NextRequest) {
     conversationId,
     doctorId,
     patientId,
-    senderId,
-    senderRole,
     body: text,
     attachmentUrl,
     attachmentName,
@@ -80,20 +84,28 @@ export async function POST(req: NextRequest) {
     attachmentSize
   } = body ?? {};
 
-  if (!senderId || (!text && !attachmentUrl)) {
+  if (!text && !attachmentUrl) {
     return NextResponse.json(
-      { error: 'senderId and either body or attachment are required' },
+      { error: 'Either body or attachment is required' },
       { status: 400 }
     );
   }
+
+  // The sender is always the signed-in user, and must belong to this thread
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+  const thread = await getThreadAccess(auth.user, { consultationId, conversationId, doctorId, patientId });
+  if (!thread) return forbidden();
+  const senderId = auth.user.id;
+  const senderRole: 'doctor' | 'patient' = thread.asDoctor ? 'doctor' : 'patient';
 
   try {
     const { sendMessage, sendAttachmentMessage } = await import('@/lib/server/queries');
     let message: any;
 
     // Resolve conversationId → doctorId + patientId if needed
-    let resolvedDoctorId = doctorId;
-    let resolvedPatientId = patientId;
+    let resolvedDoctorId = thread.doctorProfileId ?? doctorId;
+    let resolvedPatientId = thread.patientId ?? patientId;
     if (conversationId && (!doctorId || !patientId)) {
       const admin = createAdminClient();
       const { data: conv } = await admin

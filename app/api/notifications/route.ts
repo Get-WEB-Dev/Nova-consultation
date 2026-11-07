@@ -1,23 +1,25 @@
 /**
  * Notifications API
  *
- * GET   /api/notifications?userId=<uuid>          — fetch notifications for a user
+ * GET   /api/notifications                        — the signed-in user's notifications
  * PATCH /api/notifications                        — mark one or all as read
- *       body: { notifId } | { userId, markAll: true }
+ *       body: { notifId } | { markAll: true }
+ *
+ * Users can only read and update their own notifications.
  */
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/client';
+import { requireUser, isSelf, forbidden } from '@/lib/server/auth';
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get('userId');
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
 
-  // Always return valid JSON — no userId means no notifications
-  if (!userId) {
-    return NextResponse.json({ data: [] });
-  }
+  const { searchParams } = new URL(req.url);
+  const userId = searchParams.get('userId') ?? auth.user.id;
+  if (!isSelf(auth.user, userId)) return forbidden();
 
   try {
     const admin = createAdminClient();
@@ -41,6 +43,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+
   let body: any;
   try {
     body = await req.json();
@@ -48,17 +53,26 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { notifId, userId, markAll } = body ?? {};
+  const { notifId, markAll } = body ?? {};
 
   try {
-    if (markAll && userId) {
+    if (markAll) {
       const { markAllNotificationsRead } = await import('@/lib/server/queries');
-      await markAllNotificationsRead(userId);
+      // Always the caller's own notifications
+      await markAllNotificationsRead(auth.user.id);
     } else if (notifId) {
+      const admin = createAdminClient();
+      const { data: notif } = await admin
+        .from('notifications')
+        .select('user_id')
+        .eq('id', notifId)
+        .maybeSingle();
+      if (!notif || !isSelf(auth.user, (notif as any).user_id)) return forbidden();
+
       const { markNotificationRead } = await import('@/lib/server/queries');
       await markNotificationRead(notifId);
     } else {
-      return NextResponse.json({ error: 'notifId or (userId + markAll) required' }, { status: 400 });
+      return NextResponse.json({ error: 'notifId or markAll required' }, { status: 400 });
     }
 
     return NextResponse.json({ success: true });
@@ -67,4 +81,3 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
-

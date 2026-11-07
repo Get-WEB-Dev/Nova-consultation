@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, getAuthUser, isSelf, ownsDoctorId, forbidden, unauthorized } from '@/lib/server/auth';
 
 // ── MOCK DATA (disabled) ─────────────────────────────────────
 // const MOCK_QUEUE = { 'd2': { position: 2, estimatedWait: 8, total: 3 }, ... };
@@ -12,6 +13,15 @@ export async function GET(req: NextRequest) {
 
   if (!doctorId) {
     return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
+  }
+
+  // Who is asking? Anonymous visitors and other patients only get the queue SIZE.
+  // The full queue (patient names/ids) is for the doctor who owns it.
+  const user = await getAuthUser(req).catch(() => null);
+  const isOwner = !!user && ownsDoctorId(user, doctorId);
+  if (patientId) {
+    if (!user) return unauthorized();
+    if (!isSelf(user, patientId)) return forbidden();
   }
 
   try {
@@ -48,6 +58,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    if (!isOwner) return NextResponse.json({ total: queue.length, queue: [], data: [] });
     return NextResponse.json({ total: queue.length, queue, data: queue });
   } catch (err: any) {
     console.error('[queue GET]', err.message);
@@ -67,6 +78,11 @@ export async function POST(req: NextRequest) {
   if (!doctorId || !patientId) {
     return NextResponse.json({ error: 'doctorId and patientId are required' }, { status: 400 });
   }
+
+  // A patient can only put THEMSELVES in a queue
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+  if (!isSelf(auth.user, patientId)) return forbidden();
 
   try {
     const { joinQueue } = await import('@/lib/server/queries');
@@ -90,6 +106,11 @@ export async function DELETE(req: NextRequest) {
   if (!doctorId || !patientId) {
     return NextResponse.json({ error: 'doctorId and patientId are required' }, { status: 400 });
   }
+
+  // A patient can leave their own queue spot; a doctor can remove people from their own queue
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+  if (!isSelf(auth.user, patientId) && !ownsDoctorId(auth.user, doctorId)) return forbidden();
 
   try {
     const { leaveQueue } = await import('@/lib/server/queries');

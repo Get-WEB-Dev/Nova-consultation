@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, ownsDoctorId, forbidden } from '@/lib/server/auth';
 
 export async function GET(req: NextRequest) {
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
     const { searchParams } = new URL(req.url);
     const doctorId = searchParams.get('doctorId');
 
     if (!doctorId) {
         return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
     }
+    if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
 
     try {
         const { fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
@@ -20,6 +24,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
     try {
         const body = await req.json();
         const { doctorId, status, specialty, hospital, experience_years, fee, consultation_duration_mins, languages, consultation_type, profile_picture } = body;
@@ -27,6 +33,7 @@ export async function PATCH(req: NextRequest) {
         if (!doctorId) {
             return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
         }
+        if (!ownsDoctorId(auth.user, doctorId)) return forbidden();
 
         const { updateDoctorProfile, fetchDoctorProfileByUserId } = await import('@/lib/server/doctor-queries');
 

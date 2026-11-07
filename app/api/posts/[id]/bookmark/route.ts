@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser } from '@/lib/server/auth';
 
 export async function POST(
     req: NextRequest,
@@ -13,10 +14,9 @@ export async function POST(
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { userId } = body ?? {};
-    if (!userId) {
-        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
-    }
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
+    const userId = auth.user.id;
 
     try {
         const { bookmarkBlogPost } = await import('@/lib/server/queries');
@@ -40,10 +40,9 @@ export async function DELETE(
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { userId } = body ?? {};
-    if (!userId) {
-        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
-    }
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
+    const userId = auth.user.id;
 
     try {
         const { unbookmarkBlogPost } = await import('@/lib/server/queries');

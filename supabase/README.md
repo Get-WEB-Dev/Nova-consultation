@@ -109,3 +109,23 @@ Replace the mock token logic in `app/api/video/token/route.ts` with:
 npm install livekit-server-sdk
 ```
 Then use `AccessToken` from the SDK (see comments in the route file).
+
+---
+
+## Creating an admin account
+
+Admin accounts can **not** be created through the public sign-up form (the
+API rejects `role: "admin"`). To make someone an admin:
+
+1. Have them register normally (patient sign-up) so a row exists in `users`.
+2. Run this in the Supabase SQL editor:
+
+```sql
+UPDATE users SET role = 'admin' WHERE email = 'admin@example.com';
+
+INSERT INTO admins (user_id, permissions, is_super_admin)
+SELECT id, ARRAY['all'], true FROM users WHERE email = 'admin@example.com'
+ON CONFLICT (user_id) DO NOTHING;
+```
+
+They can then sign in at `/admin-login`.

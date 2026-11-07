@@ -10,14 +10,15 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, getAuthUser } from '@/lib/server/auth';
 
 export async function GET(
     req: NextRequest,
     { params }: { params: { id: string } }
 ) {
     const { id: postId } = params;
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get('userId');
+    const authUser = await getAuthUser(req).catch(() => null);
+    const userId = authUser?.id ?? null;
 
     if (!userId) {
         return NextResponse.json({ liked: false });
@@ -45,10 +46,9 @@ export async function POST(
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { userId } = body ?? {};
-    if (!userId) {
-        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
-    }
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
+    const userId = auth.user.id;
 
     try {
         const { likeBlogPost } = await import('@/lib/server/queries');
@@ -72,10 +72,9 @@ export async function DELETE(
         return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { userId } = body ?? {};
-    if (!userId) {
-        return NextResponse.json({ error: 'userId is required' }, { status: 400 });
-    }
+    const auth = await requireUser(req);
+    if (auth.error) return auth.error;
+    const userId = auth.user.id;
 
     try {
         const { unlikeBlogPost } = await import('@/lib/server/queries');

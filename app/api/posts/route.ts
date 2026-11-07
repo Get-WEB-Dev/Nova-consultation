@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/client'; export const revalidate = 300;
+import { createAdminClient } from '@/lib/supabase/client';
+import { getAuthUser, requireUser, forbidden } from '@/lib/server/auth';
+
+export const revalidate = 300;
 
 // ─────────────────────────────────────────
 // GET POSTS
@@ -9,7 +12,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const doctorId = searchParams.get('doctorId');
   const tag = searchParams.get('tag');
-  const userId = searchParams.get('userId');
+  // Per-user like/bookmark flags come from the signed-in user (optional on this public feed)
+  const authUser = await getAuthUser(req).catch(() => null);
+  const userId = authUser?.id ?? null;
 
   try {
     const { fetchBlogPosts } = await import('@/lib/server/queries');
@@ -62,7 +67,7 @@ export async function GET(req: NextRequest) {
       { data: formatted, count: formatted.length },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+          'Cache-Control': userId ? 'private, no-store' : 'public, s-maxage=300, stale-while-revalidate=600',
         },
       }
     );
@@ -79,6 +84,10 @@ export async function GET(req: NextRequest) {
 // CREATE POST
 // ─────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const auth = await requireUser(req, ['doctor', 'professional']);
+  if (auth.error) return auth.error;
+  if (!auth.user.doctorProfileId) return forbidden('A doctor profile is required to publish posts');
+
   try {
     const body = await req.json();
 
@@ -98,7 +107,7 @@ export async function POST(req: NextRequest) {
     const { data: doctorProfile, error: doctorError } = (await admin
       .from('doctor_profiles')
       .select('id')
-      .eq('user_id', String(doctorId))
+      .eq('user_id', auth.user.id)
       .single()) as { data: { id: string } | null; error: any };
 
     if (doctorError || !doctorProfile) {

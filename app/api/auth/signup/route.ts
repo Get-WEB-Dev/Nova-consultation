@@ -63,7 +63,14 @@ export async function POST(req: NextRequest) {
   }
 
   const cleanName = (name ?? email.split("@")[0]).trim();
-  const cleanRole = (role === "doctor" || role === "professional" || role === "admin") ? role : "user";
+  // Admin accounts can never be created through public sign-up (create them in Supabase).
+  if (role === "admin") {
+    return NextResponse.json(
+      { error: "Admin accounts cannot be created through sign-up.", code: "forbidden_role" },
+      { status: 403 }
+    );
+  }
+  const cleanRole = (role === "doctor" || role === "professional") ? role : "user";
   // Map frontend role value → DB enum value
   const dbRole = cleanRole === "user" ? "patient" : cleanRole;
   const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=1B3A5C&color=fff&size=128`;
@@ -142,12 +149,6 @@ export async function POST(req: NextRequest) {
     if (dbRole === "patient") {
       await admin.from("patients").insert({
         user_id: authData.user.id,
-      });
-    } else if (dbRole === "admin") {
-      await admin.from("admins").insert({
-        user_id: authData.user.id,
-        permissions: ["all"],
-        is_super_admin: false,
       });
     } else if (dbRole === "doctor") {
       // Auto-create doctor_profiles so the doctor appears in listings

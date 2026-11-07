@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { requireUser, isSelf, doctorHasPatient, forbidden } from '@/lib/server/auth';
 import { createAdminClient } from '@/lib/supabase/client';
 
 export async function GET(req: NextRequest) {
@@ -15,6 +16,14 @@ export async function GET(req: NextRequest) {
   const userId = searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 });
+  }
+
+  // Your own profile, or (for doctors) a patient you have consulted
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+  if (!isSelf(auth.user, userId)) {
+    const allowed = await doctorHasPatient(auth.user.doctorProfileId, userId);
+    if (!allowed) return forbidden();
   }
 
   try {
@@ -85,6 +94,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const auth = await requireUser(req);
+  if (auth.error) return auth.error;
+
   let body: any;
   try {
     body = await req.json();
@@ -114,6 +126,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 });
   }
+  if (!isSelf(auth.user, userId)) return forbidden();
 
   try {
     const admin = createAdminClient();
