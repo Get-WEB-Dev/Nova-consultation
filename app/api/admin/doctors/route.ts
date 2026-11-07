@@ -27,9 +27,13 @@ export async function PATCH(req: Request) {
         if (action === 'publish') {
             const { toggleDoctorPublished } = await import('@/lib/server/admin-queries');
             await toggleDoctorPublished(doctorId, value ?? true);
+            const { logAdminAction } = await import('@/lib/server/admin-queries');
+            await logAdminAction(auth.user, (value ?? true) ? 'doctor.published' : 'doctor.unpublished', 'doctor', doctorId);
         } else if (action === 'verify') {
             const { toggleDoctorVerified } = await import('@/lib/server/admin-queries');
             await toggleDoctorVerified(doctorId, value ?? true);
+            const { logAdminAction } = await import('@/lib/server/admin-queries');
+            await logAdminAction(auth.user, (value ?? true) ? 'doctor.verified' : 'doctor.unverified', 'doctor', doctorId);
         } else {
             return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
         }

@@ -668,6 +668,22 @@ INSERT INTO admins (user_id, department, permissions, is_super_admin) VALUES
 ('00000000-0000-0000-0000-000000000099', 'Platform Operations', ARRAY['all'], true)
 ON CONFLICT (user_id) DO NOTHING;
 
+
+create table if not exists admin_audit_log (
+  id          uuid primary key default gen_random_uuid(),
+  admin_id    uuid references users(id) on delete set null,
+  admin_email text,
+  action      text not null,
+  target_type text,
+  target_id   text,
+  details     text,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists admin_audit_log_created_idx on admin_audit_log (created_at desc);
+
+alter table admin_audit_log enable row level security;
+
 -- ============================================================
 -- DONE! Database is ready.
 -- ============================================================

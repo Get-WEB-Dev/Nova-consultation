@@ -5,8 +5,11 @@ import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
-    LayoutDashboard, Users, Stethoscope, LogOut,
-    Shield, Menu, X,
+    LayoutDashboard, Users, Stethoscope, LogOut, Calendar, Newspaper,
+    Menu,
+    Shield,
+    X,
+    History, Settings,
 } from "lucide-react";
 import { loadUser, signOut, type AuthUser } from "@/lib/supabase/auth";
 import { ToastProvider } from "@/components/admin/AdminUI";
@@ -15,6 +18,10 @@ const adminNav = [
     { href: "/admin-dashboard", label: "Overview", icon: LayoutDashboard },
     { href: "/admin-dashboard/users", label: "Users", icon: Users },
     { href: "/admin-dashboard/doctors", label: "Doctors", icon: Stethoscope },
+    { href: "/admin-dashboard/consultations", label: "Consultations", icon: Calendar },
+    { href: "/admin-dashboard/posts", label: "Blog Posts", icon: Newspaper },
+    { href: "/admin-dashboard/activity", label: "Activity Log", icon: History },
+    { href: "/admin-dashboard/settings", label: "Settings", icon: Settings },
 ];
 
 export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {

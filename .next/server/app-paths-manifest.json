@@ -1,12 +1,21 @@
 {
-  "/admin-login/page": "app/admin-login/page.js",
   "/api/admin/verify/route": "app/api/admin/verify/route.js",
-  "/api/admin/stats/route": "app/api/admin/stats/route.js",
+  "/api/admin/posts/route": "app/api/admin/posts/route.js",
   "/api/admin/users/route": "app/api/admin/users/route.js",
+  "/api/admin/stats/route": "app/api/admin/stats/route.js",
   "/api/admin/doctors/route": "app/api/admin/doctors/route.js",
+  "/api/posts/route": "app/api/posts/route.js",
+  "/api/notifications/route": "app/api/notifications/route.js",
+  "/api/doctors/route": "app/api/doctors/route.js",
+  "/api/admin/activity/route": "app/api/admin/activity/route.js",
+  "/api/admin/health/route": "app/api/admin/health/route.js",
   "/admin-dashboard/page": "app/admin-dashboard/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
   "/admin-dashboard/users/page": "app/admin-dashboard/users/page.js",
+  "/admin-dashboard/consultations/page": "app/admin-dashboard/consultations/page.js",
   "/admin-dashboard/doctors/page": "app/admin-dashboard/doctors/page.js",
-  "/admin-dashboard/posts/page": "app/admin-dashboard/posts/page.js"
+  "/admin-dashboard/posts/page": "app/admin-dashboard/posts/page.js",
+  "/posts/[id]/page": "app/posts/[id]/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/admin-dashboard/activity/page": "app/admin-dashboard/activity/page.js",
+  "/admin-dashboard/settings/page": "app/admin-dashboard/settings/page.js"
 }

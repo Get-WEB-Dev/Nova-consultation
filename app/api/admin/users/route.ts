@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/server/auth';
+import { createAdminClient } from '@/lib/supabase/client';
 
 export async function GET(req: Request) {
     const auth = await requireUser(req, ['admin']);
@@ -31,6 +32,9 @@ export async function PATCH(req: Request) {
         }
         const { updateUserRole } = await import('@/lib/server/admin-queries');
         await updateUserRole(userId, role);
+        const { logAdminAction } = await import('@/lib/server/admin-queries');
+        await logAdminAction(auth.user, 'user.role_changed', 'user', userId, `role → ${role}`);
+
         return NextResponse.json({ success: true });
     } catch (err: any) {
         console.error('[admin/users PATCH]', err.message);
@@ -50,8 +54,11 @@ export async function DELETE(req: Request) {
         if (!userId) {
             return NextResponse.json({ error: 'userId required' }, { status: 400 });
         }
-        const { deleteUser } = await import('@/lib/server/admin-queries');
+        // Remember who it was before they are gone (for the audit log)
+        const { data: target } = await (createAdminClient() as any).from('users').select('email').eq('id', userId).maybeSingle();
+        const { deleteUser, logAdminAction } = await import('@/lib/server/admin-queries');
         await deleteUser(userId);
+        await logAdminAction(auth.user, 'user.deleted', 'user', userId, target?.email ?? undefined);
         return NextResponse.json({ success: true });
     } catch (err: any) {
         console.error('[admin/users DELETE]', err.message);

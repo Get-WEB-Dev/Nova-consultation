@@ -263,3 +263,133 @@ export async function fetchAdminOverview() {
         })),
     };
 }
+
+
+// ── Consultations monitor ─────────────────────────────────────
+export async function fetchAdminConsultations() {
+    const admin: any = createAdminClient();
+    const { data, error } = await admin
+        .from('consultations')
+        .select('id, status, created_at, started_at, ended_at, duration_minutes, patient_rating, is_follow_up, users!patient_id(name, email), doctor_profiles!doctor_id(specialty, users!user_id(name))')
+        .order('created_at', { ascending: false })
+        .limit(200);
+    if (error) throw error;
+    return (data ?? []).map((c: any) => ({
+        id: c.id,
+        status: c.status,
+        createdAt: c.created_at,
+        startedAt: c.started_at,
+        endedAt: c.ended_at,
+        durationMinutes: c.duration_minutes,
+        rating: c.patient_rating,
+        isFollowUp: c.is_follow_up,
+        patientName: c.users?.name ?? 'Unknown',
+        patientEmail: c.users?.email ?? '',
+        doctorName: c.doctor_profiles?.users?.name ?? 'Unknown',
+        specialty: c.doctor_profiles?.specialty ?? '',
+    }));
+}
+
+// Lets an admin clear a stuck session. Only live sessions can be cancelled.
+export async function adminCancelConsultation(consultationId: string) {
+    const admin: any = createAdminClient();
+    const { data, error } = await admin
+        .from('consultations')
+        .update({ status: 'cancelled' })
+        .eq('id', consultationId)
+        .in('status', ['active', 'waiting'])
+        .select('id');
+    if (error) throw error;
+    if (!data?.length) throw new Error('Only active or waiting consultations can be cancelled');
+    // Free the patient's queue spot too
+    await admin.from('consultation_queue').update({ status: 'left' })
+        .eq('consultation_id', consultationId).eq('status', 'waiting');
+}
+
+// ── Blog post moderation ──────────────────────────────────────
+export async function fetchAdminPosts() {
+    const admin: any = createAdminClient();
+    const { data, error } = await admin
+        .from('blog_posts')
+        .select('id, title, slug, is_published, views, likes, comment_count, created_at, doctor_profiles!doctor_id(users!user_id(name))')
+        .order('created_at', { ascending: false })
+        .limit(200);
+    if (error) throw error;
+    return (data ?? []).map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        slug: p.slug,
+        isPublished: p.is_published,
+        views: p.views,
+        likes: p.likes,
+        comments: p.comment_count,
+        createdAt: p.created_at,
+        author: p.doctor_profiles?.users?.name ?? 'Unknown',
+    }));
+}
+
+export async function setPostPublished(postId: string, isPublished: boolean) {
+    const admin: any = createAdminClient();
+    const update: Record<string, unknown> = { is_published: isPublished };
+    if (isPublished) update.published_at = new Date().toISOString();
+    const { error } = await admin.from('blog_posts').update(update).eq('id', postId);
+    if (error) throw error;
+}
+
+export async function deletePostById(postId: string) {
+    const admin: any = createAdminClient();
+    const { error } = await admin.from('blog_posts').delete().eq('id', postId);
+    if (error) throw error;
+}
+
+
+// ── Audit log: who did what ───────────────────────────────────
+// Never throws: a logging problem must not break the admin's action.
+export async function logAdminAction(
+    adminUser: { id: string; email: string | null },
+    action: string,
+    targetType: string,
+    targetId: string,
+    details?: string,
+) {
+    try {
+        const admin: any = createAdminClient();
+        const { error } = await admin.from('admin_audit_log').insert({
+            admin_id: adminUser.id,
+            admin_email: adminUser.email,
+            action,
+            target_type: targetType,
+            target_id: targetId,
+            details: details ?? null,
+        });
+        if (error) console.warn('[audit] insert failed:', error.message);
+    } catch (err: any) {
+        console.warn('[audit] failed:', err?.message);
+    }
+}
+
+export async function fetchAuditLog() {
+    const admin: any = createAdminClient();
+    const { data, error } = await admin
+        .from('admin_audit_log')
+        .select('id, admin_email, action, target_type, target_id, details, created_at')
+        .order('created_at', { ascending: false })
+        .limit(200);
+    if (error) throw error;
+    return data ?? [];
+}
+
+// ── System health (for the Settings page) ─────────────────────
+export async function checkSystemHealth() {
+    const admin: any = createAdminClient();
+    const started = Date.now();
+    const db = await admin.from('users').select('id', { count: 'exact', head: true });
+    const dbMs = Date.now() - started;
+    const audit = await admin.from('admin_audit_log').select('id', { count: 'exact', head: true });
+    return {
+        database: { ok: !db.error, ms: dbMs, error: db.error?.message ?? null },
+        auditLogTable: { ok: !audit.error },
+        zoom: { ok: !!(process.env.ZOOM_SDK_KEY && process.env.ZOOM_SDK_SECRET) },
+        serviceRoleKey: { ok: !!process.env.SUPABASE_SERVICE_ROLE_KEY },
+    };
+}
