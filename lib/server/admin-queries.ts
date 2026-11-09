@@ -7,6 +7,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/client';
+import { fetchAllRows } from '@/lib/server/admin-list';
 
 // ── Fetch all users ───────────────────────────────────────────
 export async function fetchAllUsers() {
@@ -484,4 +485,159 @@ export async function rejectDoctor(doctorId: string, adminId: string, reason: st
     }).eq('doctor_id', doctorId);
     await notifyDoctor(doc.user_id, 'Credentials need attention',
         `We couldn't approve your profile yet: ${reason}`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Paged + searchable lists (used by the admin pages and CSV export)
+// Each *Query function builds a FRESH query so it can be reused safely.
+// ═══════════════════════════════════════════════════════════════
+
+const USER_ROLES = ['patient', 'doctor', 'professional', 'admin'];
+
+function usersQuery(o: { q: string; role?: string; status?: string }, withCount = false) {
+    const admin: any = createAdminClient();
+    let query = admin
+        .from('users')
+        .select(
+            'id, name, email, phone, role, avatar_url, is_suspended, suspended_reason, created_at',
+            withCount ? { count: 'exact' } : undefined,
+        )
+        .order('created_at', { ascending: false })
+        .order('id'); // tie-breaker so pages never overlap
+    if (o.role && USER_ROLES.includes(o.role)) query = query.eq('role', o.role);
+    if (o.status === 'suspended') query = query.eq('is_suspended', true);
+    if (o.q) query = query.or(`name.ilike.%${o.q}%,email.ilike.%${o.q}%`);
+    return query;
+}
+
+export async function listUsers(o: { q: string; role?: string; status?: string; from: number; to: number }) {
+    const { data, error, count } = await usersQuery(o, true).range(o.from, o.to);
+    if (error) throw error;
+
+    // Counts for the role chips (not affected by the search box)
+    const admin: any = createAdminClient();
+    const results = await Promise.all([
+        admin.from('users').select('id', { count: 'exact', head: true }),
+        ...USER_ROLES.map((r) => admin.from('users').select('id', { count: 'exact', head: true }).eq('role', r)),
+    ]);
+    const counts: Record<string, number> = { all: results[0].count ?? 0 };
+    USER_ROLES.forEach((r, i) => { counts[r] = results[i + 1].count ?? 0; });
+
+    return { data: data ?? [], total: count ?? 0, counts };
+}
+
+export function exportUsers(o: { q: string; role?: string; status?: string }) {
+    return fetchAllRows((f, t) => usersQuery(o).range(f, t));
+}
+
+// ── Audit log ────────────────────────────────────────────────
+const AUDIT_CATEGORIES = ['user', 'doctor', 'consultation', 'post', 'export'];
+
+function auditQuery(o: { q: string; category?: string; since?: string; until?: string }, withCount = false) {
+    const admin: any = createAdminClient();
+    let query = admin
+        .from('admin_audit_log')
+        .select('id, admin_email, action, target_type, target_id, details, created_at', withCount ? { count: 'exact' } : undefined)
+        .order('created_at', { ascending: false })
+        .order('id');
+    if (o.category && AUDIT_CATEGORIES.includes(o.category)) query = query.like('action', `${o.category}.%`);
+    if (o.since) query = query.gte('created_at', `${o.since}T00:00:00.000Z`);
+    if (o.until) query = query.lte('created_at', `${o.until}T23:59:59.999Z`);
+    if (o.q) query = query.or(`admin_email.ilike.%${o.q}%,action.ilike.%${o.q}%,details.ilike.%${o.q}%`);
+    return query;
+}
+
+export async function listAuditLog(o: { q: string; category?: string; since?: string; until?: string; from: number; to: number }) {
+    const { data, error, count } = await auditQuery(o, true).range(o.from, o.to);
+    if (error) throw error;
+    return { data: data ?? [], total: count ?? 0 };
+}
+
+export function exportAuditLog(o: { q: string; category?: string; since?: string; until?: string }) {
+    return fetchAllRows((f, t) => auditQuery(o).range(f, t));
+}
+
+// ── Consultations ────────────────────────────────────────────
+const CONSULT_STATUSES = ['active', 'waiting', 'completed', 'follow_up', 'missed', 'cancelled'];
+const CONSULT_SELECT =
+    'id, status, created_at, started_at, ended_at, duration_minutes, patient_rating, is_follow_up, users!patient_id(name, email), doctor_profiles!doctor_id(specialty, users!user_id(name))';
+
+function mapConsultation(c: any) {
+    return {
+        id: c.id,
+        status: c.status,
+        createdAt: c.created_at,
+        startedAt: c.started_at,
+        endedAt: c.ended_at,
+        durationMinutes: c.duration_minutes,
+        rating: c.patient_rating,
+        isFollowUp: c.is_follow_up,
+        patientName: c.users?.name ?? 'Unknown',
+        patientEmail: c.users?.email ?? '',
+        doctorName: c.doctor_profiles?.users?.name ?? 'Unknown',
+        specialty: c.doctor_profiles?.specialty ?? '',
+    };
+}
+
+/**
+ * A consultation has no name column, so searching "John" is two steps:
+ * 1) find users named John, 2) find consultations where they are the patient
+ * or the doctor. Returns an .or() filter, or null when nobody matches.
+ */
+async function resolveConsultationSearch(q: string): Promise<string | null> {
+    const admin: any = createAdminClient();
+    const { data: users } = await admin
+        .from('users').select('id').or(`name.ilike.%${q}%,email.ilike.%${q}%`).limit(50);
+    const ids = (users ?? []).map((u: any) => u.id);
+    if (!ids.length) return null;
+    const { data: docs } = await admin.from('doctor_profiles').select('id').in('user_id', ids);
+    const docIds = (docs ?? []).map((d: any) => d.id);
+    const parts = [`patient_id.in.(${ids.join(',')})`];
+    if (docIds.length) parts.push(`doctor_id.in.(${docIds.join(',')})`);
+    return parts.join(',');
+}
+
+function consultationsQuery(status: string | undefined, search: string | null, withCount = false) {
+    const admin: any = createAdminClient();
+    let query = admin
+        .from('consultations')
+        .select(CONSULT_SELECT, withCount ? { count: 'exact' } : undefined)
+        .order('created_at', { ascending: false })
+        .order('id');
+    if (status && CONSULT_STATUSES.includes(status)) query = query.eq('status', status);
+    if (search) query = query.or(search);
+    return query;
+}
+
+async function consultationCounts() {
+    const admin: any = createAdminClient();
+    const keys = ['all', ...CONSULT_STATUSES];
+    const res = await Promise.all(keys.map((k) => {
+        let q = admin.from('consultations').select('id', { count: 'exact', head: true });
+        if (k !== 'all') q = q.eq('status', k);
+        return q;
+    }));
+    return Object.fromEntries(keys.map((k, i) => [k, res[i].count ?? 0])) as Record<string, number>;
+}
+
+export async function listConsultations(o: { q: string; status?: string; from: number; to: number }) {
+    const counts = await consultationCounts();
+    let search: string | null = null;
+    if (o.q) {
+        search = await resolveConsultationSearch(o.q);
+        if (!search) return { data: [], total: 0, counts }; // the search matched nobody
+    }
+    const { data, error, count } = await consultationsQuery(o.status, search, true).range(o.from, o.to);
+    if (error) throw error;
+    return { data: (data ?? []).map(mapConsultation), total: count ?? 0, counts };
+}
+
+export async function exportConsultations(o: { q: string; status?: string }) {
+    let search: string | null = null;
+    if (o.q) {
+        search = await resolveConsultationSearch(o.q);
+        if (!search) return [];
+    }
+    const rows = await fetchAllRows((f, t) => consultationsQuery(o.status, search, false).range(f, t));
+    return rows.map(mapConsultation);
 }

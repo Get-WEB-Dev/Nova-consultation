@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { requireUser, isUuid } from '@/lib/server/auth';
 import { createAdminClient } from '@/lib/supabase/client';
 import {
-    fetchAllUsers, updateUserRole, deleteUser, setUserSuspended,
+    listUsers, exportUsers, updateUserRole, deleteUser, setUserSuspended,
     isSuperAdminUser, logAdminAction,
 } from '@/lib/server/admin-queries';
+import { parseListParams, toCsv, csvResponse, today } from '@/lib/server/admin-list';
 
 const ROLES = ['patient', 'doctor', 'professional', 'admin'];
 
@@ -21,10 +22,34 @@ export async function GET(req: Request) {
     const auth = await requireUser(req, ['admin']);
     if (auth.error) return auth.error;
     try {
-        return NextResponse.json({ data: await fetchAllUsers() });
+        const { sp, q, from, to, wantsCsv } = parseListParams(req);
+        const opts = {
+            q,
+            role: sp.get('role') ?? undefined,
+            status: sp.get('status') ?? undefined,
+        };
+
+        if (wantsCsv) {
+            const rows = await exportUsers(opts);
+            // Exporting personal data is itself an auditable action
+            await logAdminAction(auth.user, 'export.users', 'user', auth.user.id, `${rows.length} rows`);
+            return csvResponse(
+                toCsv(rows, [
+                    { header: 'Name', value: (u) => u.name },
+                    { header: 'Email', value: (u) => u.email },
+                    { header: 'Phone', value: (u) => u.phone },
+                    { header: 'Role', value: (u) => u.role },
+                    { header: 'Suspended', value: (u) => (u.is_suspended ? 'yes' : 'no') },
+                    { header: 'Joined', value: (u) => u.created_at },
+                ]),
+                `users-${today()}.csv`,
+            );
+        }
+
+        return NextResponse.json(await listUsers({ ...opts, from, to }));
     } catch (err: any) {
         console.error('[admin/users GET]', err.message);
-        return NextResponse.json({ data: [], error: err.message }, { status: 500 });
+        return NextResponse.json({ data: [], total: 0, error: err.message }, { status: 500 });
     }
 }
 

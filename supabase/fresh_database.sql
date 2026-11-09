@@ -721,6 +721,15 @@ alter table doctor_profiles
   add column if not exists break_duration_mins int not null default 15
     check (break_duration_mins between 0 and 120);
 
+
+create extension if not exists pg_trgm with schema extensions;
+
+create index if not exists idx_users_created   on users (created_at desc);
+create index if not exists idx_consult_created on consultations (created_at desc);
+create index if not exists idx_audit_created   on admin_audit_log (created_at desc);
+create index if not exists idx_users_name_trgm  on users using gin (name  extensions.gin_trgm_ops);
+create index if not exists idx_users_email_trgm on users using gin (email extensions.gin_trgm_ops);
+
 -- ============================================================
 -- DONE! Database is ready.
 -- ============================================================

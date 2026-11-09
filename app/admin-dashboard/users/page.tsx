@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, Trash2, AlertCircle, UserX, UserCheck } from "lucide-react";
-import { adminFetch } from "@/lib/admin-api";
+import { useState } from "react";
+import { Search, Trash2, AlertCircle, UserX, UserCheck, Download, Loader2 } from "lucide-react";
+import { adminFetch, downloadCsv } from "@/lib/admin-api";
+import { useServerList } from "@/lib/use-server-list";
+import Pagination from "@/components/admin/Pagination";
 import { getUser } from "@/lib/supabase/auth";
 
 import { useToast, PageHeader, ConfirmDialog, EmptyState, timeAgo } from "@/components/admin/AdminUI";
@@ -24,42 +26,26 @@ export default function AdminUsersPage() {
     const toast = useToast();
     const myId = getUser()?.id;
 
-    const [users, setUsers] = useState<UserRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [query, setQuery] = useState("");
     const [filter, setFilter] = useState("all");
     const [pending, setPending] = useState<Pending | null>(null);
     const [busy, setBusy] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
+    const {
+        rows: users, total, counts, loading, error, q: query, setQ: setQuery,
+        page, setPage, pageSize, reload: load, exportUrl,
+    } = useServerList<UserRow>("/api/admin/users", filter === "all" ? {} : { role: filter });
+
+    const exportCsv = async () => {
+        setExporting(true);
         try {
-            const json = await adminFetch<{ data: UserRow[] }>("/api/admin/users");
-            setUsers(json.data);
+            await downloadCsv(exportUrl(), `users-${new Date().toISOString().slice(0, 10)}.csv`);
         } catch (e: any) {
-            setError(e.message);
+            toast("error", e.message);
         } finally {
-            setLoading(false);
+            setExporting(false);
         }
-    }, []);
-    useEffect(() => { load(); }, [load]);
-
-    // How many users per role (for the filter chips)
-    const counts = useMemo(() => {
-        const c: Record<string, number> = { all: users.length };
-        users.forEach((u) => { c[u.role] = (c[u.role] ?? 0) + 1; });
-        return c;
-    }, [users]);
-
-    const filtered = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        return users.filter((u) =>
-            (filter === "all" || u.role === filter) &&
-            (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
-        );
-    }, [users, query, filter]);
+    };
 
     const confirmAction = async () => {
         if (!pending) return;
@@ -96,7 +82,15 @@ export default function AdminUsersPage() {
 
     return (
         <div className="space-y-5 animate-fade-up">
-            <PageHeader title="Users" subtitle={`${users.length} accounts on the platform`} />
+            <PageHeader
+                title="Users"
+                subtitle={`${(counts.all ?? 0).toLocaleString()} accounts on the platform`}
+                right={
+                    <button onClick={exportCsv} disabled={exporting} className="btn btn-sm btn-secondary">
+                        {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Export CSV
+                    </button>
+                }
+            />
 
             {/* Search + role filter */}
             <div className="space-y-3">
@@ -114,7 +108,7 @@ export default function AdminUsersPage() {
                 </div>
             </div>
 
-            {loading ? (
+            {loading && users.length === 0 ? (
                 <div className="space-y-2">{[1, 2, 3, 4].map((i) => <div key={i} className="animate-shimmer h-16 rounded-2xl" />)}</div>
             ) : error ? (
                 <div className="card text-center py-8 space-y-3">
@@ -122,11 +116,11 @@ export default function AdminUsersPage() {
                     <p className="text-sm text-slate-600">{error}</p>
                     <button onClick={load} className="btn btn-sm btn-primary">Try again</button>
                 </div>
-            ) : filtered.length === 0 ? (
+            ) : users.length === 0 ? (
                 <EmptyState text="No users match your search" />
             ) : (
                 <div className="card p-0 divide-y divide-slate-50">
-                    {filtered.map((u) => {
+                    {users.map((u) => {
                         const isMe = u.id === myId;
                         return (
                             <div key={u.id} className="flex items-center gap-3 px-4 py-3 flex-wrap sm:flex-nowrap">
@@ -170,6 +164,8 @@ export default function AdminUsersPage() {
                     })}
                 </div>
             )}
+
+            <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} disabled={loading} />
 
             <ConfirmDialog
                 open={!!pending}

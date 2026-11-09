@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, XCircle, AlertCircle, AlertTriangle, RefreshCw } from "lucide-react";
-import { adminFetch } from "@/lib/admin-api";
+import { useState } from "react";
+import { Search, XCircle, AlertCircle, AlertTriangle, RefreshCw, Download, Loader2 } from "lucide-react";
+import { adminFetch, downloadCsv } from "@/lib/admin-api";
+import { useServerList } from "@/lib/use-server-list";
+import Pagination from "@/components/admin/Pagination";
 import { useToast, PageHeader, ConfirmDialog, EmptyState, StatusBadge, timeAgo } from "@/components/admin/AdminUI";
 
 interface Row {
@@ -16,41 +18,26 @@ const STUCK_AFTER_HOURS = 6; // a live session older than this is probably stuck
 
 export default function AdminConsultationsPage() {
     const toast = useToast();
-    const [rows, setRows] = useState<Row[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState("all");
-    const [query, setQuery] = useState("");
     const [cancelRow, setCancelRow] = useState<Row | null>(null);
     const [busy, setBusy] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
+    const {
+        rows, total, counts, loading, error, q: query, setQ: setQuery,
+        page, setPage, pageSize, reload: load, exportUrl,
+    } = useServerList<Row>("/api/admin/consultations", filter === "all" ? {} : { status: filter });
+
+    const exportCsv = async () => {
+        setExporting(true);
         try {
-            const json = await adminFetch<{ data: Row[] }>("/api/admin/consultations");
-            setRows(json.data);
+            await downloadCsv(exportUrl(), `consultations-${new Date().toISOString().slice(0, 10)}.csv`);
         } catch (e: any) {
-            setError(e.message);
+            toast("error", e.message);
         } finally {
-            setLoading(false);
+            setExporting(false);
         }
-    }, []);
-    useEffect(() => { load(); }, [load]);
-
-    const counts = useMemo(() => {
-        const c: Record<string, number> = { all: rows.length };
-        rows.forEach((r) => { c[r.status] = (c[r.status] ?? 0) + 1; });
-        return c;
-    }, [rows]);
-
-    const filtered = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        return rows.filter((r) =>
-            (filter === "all" || r.status === filter) &&
-            (!q || r.patientName.toLowerCase().includes(q) || r.doctorName.toLowerCase().includes(q))
-        );
-    }, [rows, filter, query]);
+    };
 
     const isStuck = (r: Row) =>
         (r.status === "active" || r.status === "waiting") &&
@@ -79,8 +66,17 @@ export default function AdminConsultationsPage() {
         <div className="space-y-5 animate-fade-up">
             <PageHeader
                 title="Consultations"
-                subtitle="Latest 200 sessions across the platform"
-                right={<button onClick={load} disabled={loading} className="btn btn-sm btn-secondary"><RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh</button>}
+                subtitle={`${(counts.all ?? 0).toLocaleString()} sessions across the platform`}
+                right={
+                    <div className="flex gap-2">
+                        <button onClick={exportCsv} disabled={exporting} className="btn btn-sm btn-secondary">
+                            {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} Export CSV
+                        </button>
+                        <button onClick={load} disabled={loading} className="btn btn-sm btn-secondary">
+                            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+                        </button>
+                    </div>
+                }
             />
 
             <div className="space-y-3">
@@ -106,11 +102,11 @@ export default function AdminConsultationsPage() {
                     <p className="text-sm text-slate-600">{error}</p>
                     <button onClick={load} className="btn btn-sm btn-primary">Try again</button>
                 </div>
-            ) : filtered.length === 0 ? (
+            ) : rows.length === 0 ? (
                 <EmptyState text="No consultations match" />
             ) : (
                 <div className="card p-0 divide-y divide-slate-50">
-                    {filtered.map((r) => {
+                    {rows.map((r) => {
                         const live = r.status === "active" || r.status === "waiting";
                         return (
                             <div key={r.id} className="flex items-center gap-3 px-4 py-3 flex-wrap sm:flex-nowrap">
@@ -141,7 +137,7 @@ export default function AdminConsultationsPage() {
                     })}
                 </div>
             )}
-
+            <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} disabled={loading} />
             <ConfirmDialog
                 open={!!cancelRow}
                 danger
