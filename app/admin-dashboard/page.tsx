@@ -22,11 +22,11 @@ interface Overview {
 }
 
 export default function AdminDashboardPage() {
-    const toast = useToast();
+    // const toast = useToast();
     const [data, setData] = useState<Overview | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [verifyingId, setVerifyingId] = useState<string | null>(null);
+    // const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -44,21 +44,21 @@ export default function AdminDashboardPage() {
     useEffect(() => { load(); }, [load]);
 
     // Approve a doctor straight from the dashboard
-    const verifyDoctor = async (doctorId: string) => {
-        setVerifyingId(doctorId);
-        try {
-            await adminFetch("/api/admin/doctors", {
-                method: "PATCH",
-                body: JSON.stringify({ doctorId, action: "verify", value: true }),
-            });
-            toast("success", "Doctor verified and published");
-            await load();
-        } catch (e: any) {
-            toast("error", e.message);
-        } finally {
-            setVerifyingId(null);
-        }
-    };
+    // const verifyDoctor = async (doctorId: string) => {
+    //     setVerifyingId(doctorId);
+    //     try {
+    //         await adminFetch("/api/admin/doctors", {
+    //             method: "PATCH",
+    //             body: JSON.stringify({ doctorId, action: "verify", value: true }),
+    //         });
+    //         toast("success", "Doctor verified and published");
+    //         await load();
+    //     } catch (e: any) {
+    //         toast("error", e.message);
+    //     } finally {
+    //         setVerifyingId(null);
+    //     }
+    // };
 
     if (loading && !data) {
         return (
@@ -175,10 +175,9 @@ export default function AdminDashboardPage() {
                                         <p className="text-xs text-slate-400 truncate">{d.specialty}{d.hospital ? ` · ${d.hospital}` : ""}</p>
                                         <p className="text-[11px] text-slate-300">{timeAgo(d.createdAt)}</p>
                                     </div>
-                                    <button onClick={() => verifyDoctor(d.id)} disabled={verifyingId === d.id} className="btn btn-sm btn-success">
-                                        {verifyingId === d.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BadgeCheck className="w-3.5 h-3.5" />}
-                                        Verify
-                                    </button>
+                                    <Link href="/admin-dashboard/doctors" className="btn btn-sm btn-success">
+                                        <BadgeCheck className="w-3.5 h-3.5" /> Review
+                                    </Link>
                                 </div>
                             ))}
                         </div>

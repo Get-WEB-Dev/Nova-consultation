@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Shield, KeyRound, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
+// import { supabase } from "@/lib/supabase/client";
 import { getUser } from "@/lib/supabase/auth";
 import { adminFetch } from "@/lib/admin-api";
+import SignOutEverywhere from "@/components/admin/SignOutEverywhere";
 import { useToast, PageHeader } from "@/components/admin/AdminUI";
 
 interface Health {
@@ -34,11 +35,10 @@ export default function AdminSettingsPage() {
         setSaving(true);
         try {
             // 1) Prove the person at the keyboard knows the current password
-            const { error: authError } = await supabase.auth.signInWithPassword({ email: me.email, password: current });
-            if (authError) throw new Error("Current password is incorrect");
-            // 2) Set the new one
-            const { error } = await supabase.auth.updateUser({ password: next });
-            if (error) throw new Error(error.message);
+            await adminFetch("/api/auth/change-password", {
+                method: "POST",
+                body: JSON.stringify({ oldPassword: current, newPassword: next }),
+            });
             toast("success", "Password updated");
             setCurrent(""); setNext(""); setConfirm("");
         } catch (err: any) {
@@ -128,6 +128,7 @@ export default function AdminSettingsPage() {
                     </div>
                 )}
             </section>
+            <SignOutEverywhere />
         </div>
     );
 }

@@ -53,6 +53,8 @@ const CONTACT_ITEMS = [
 
 export default function ContactPage() {
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -60,9 +62,24 @@ export default function ContactPage() {
     message: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSent(true);
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not send your message");
+      setSent(true);
+    } catch (err: any) {
+      setSendError(err.message);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -352,11 +369,12 @@ export default function ContactPage() {
                         className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-[13px] font-medium text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-300 focus:bg-white transition-all resize-none"
                       />
                     </div>
-
+                    {sendError && <p className="text-[12px] text-rose-600">{sendError}</p>}
                     <button
                       type="submit"
                       className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl text-[14px] font-extrabold text-white transition-all hover:opacity-90 active:scale-[0.99]"
                       style={{ background: NAV_BG }}
+                      disabled={sending}
                     >
                       <Send className="w-4 h-4" /> Send Message
                     </button>
