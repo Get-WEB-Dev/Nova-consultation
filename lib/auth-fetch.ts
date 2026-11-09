@@ -30,6 +30,11 @@ function emitError(message: string) {
   window.dispatchEvent(new CustomEvent(API_ERROR_EVENT, { detail: { message } }));
 }
 
+/** Show the red error toast from any page, e.g. when a data load fails. */
+export function notifyError(message: string) {
+  if (typeof window !== 'undefined') emitError(message);
+}
+
 async function emitFromResponse(res: Response) {
   let message = '';
   try {

@@ -33,6 +33,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { getUser } from "@/lib/supabase/auth";
+import { notifyError } from "@/lib/auth-fetch";
 import { useRouter } from "next/navigation";
 
 const NAV_BG = "#003580";
@@ -270,11 +271,13 @@ export default function FollowUpsPage() {
       try {
         const res = await fetch(`/api/follow-ups?doctorId=${user.id}`);
         const json = await res.json();
-        if (json.data) {
-          setItems(json.data);
-        }
-      } catch (err) {
-        console.error(err);
+        if (!res.ok) throw new Error(json.error || "Could not load follow-ups");
+        // Anything still pending whose time has passed counts as missed
+        setItems((json.data ?? []).map((fu: FollowUp) =>
+          fu.status === "pending" && new Date(fu.scheduledAt) < new Date() ? { ...fu, status: "missed" as FUStatus } : fu,
+        ));
+      } catch (err: any) {
+        notifyError(err?.message || "Could not load follow-ups");
       } finally {
         setLoading(false);
       }
@@ -282,28 +285,33 @@ export default function FollowUpsPage() {
     fetchFollowUps();
   }, []);
 
-  // Auto-mark missed
-  useEffect(() => {
-    setItems((prev) =>
-      prev.map((fu) =>
-        fu.status === "pending" && new Date(fu.scheduledAt) < new Date()
-          ? { ...fu, status: "missed" as FUStatus }
-          : fu,
-      ),
-    );
-  }, []);
+  // // Auto-mark missed
+  // useEffect(() => {
+  //   setItems((prev) =>
+  //     prev.map((fu) =>
+  //       fu.status === "pending" && new Date(fu.scheduledAt) < new Date()
+  //         ? { ...fu, status: "missed" as FUStatus }
+  //         : fu,
+  //     ),
+  //   );
+  // }, []);
 
-  const handleComplete = useCallback((id: string) => {
-    setItems((prev) =>
-      prev.map((fu) =>
-        fu.id === id ? { ...fu, status: "completed" as FUStatus } : fu,
-      ),
-    );
-    fetch("/api/follow-ups", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ consultationId: id, status: "completed" }),
-    }).catch(console.error);
+  const handleComplete = useCallback(async (id: string) => {
+    let previous: FollowUp[] = [];
+    setItems((prev) => {
+      previous = prev;
+      return prev.map((fu) => (fu.id === id ? { ...fu, status: "completed" as FUStatus } : fu));
+    });
+    try {
+      const res = await fetch("/api/follow-ups", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consultationId: id, status: "completed" }),
+      });
+      if (!res.ok) throw new Error("update failed");
+    } catch {
+      setItems(previous); // the server didn't save it — put the card back
+    }
   }, []);
 
   const handleReschedule = useCallback(

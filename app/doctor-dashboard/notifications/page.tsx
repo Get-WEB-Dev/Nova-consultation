@@ -1,170 +1,152 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { getUser, loadUser } from "@/lib/supabase/auth";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Bell, Video, MessageCircle, ShieldCheck, CheckCheck,
-  BellRing, Users, Zap, Loader2, Bookmark, CheckCircle2,
-  Activity, Calendar,
+  Bell, MessageCircle, ShieldCheck, CheckCheck, BellRing, Users, Zap,
+  Bookmark, CheckCircle2, Activity, Calendar,
 } from "lucide-react";
-
-const NAV_BG = "#003580";
-const ACCENT = "#0071c2";
-const SKY = "#38bdf8";
+import { startPolling } from "@/lib/polling";
+import { notifyError } from "@/lib/auth-fetch";
+import { PageHeader, Card, EmptyState, ErrorState, SkeletonRows, Chip, ACCENT, timeAgo, dayGroup } from "@/components/doctor/ui";
 
 interface Notification {
-  id: string; type: string; title: string; message: string;
-  read: boolean; doctor_name?: string; action_url?: string; created_at: string;
+  id: string; type: string; title: string; message: string | null;
+  read: boolean; action_url?: string | null; created_at: string;
 }
 
 const TYPE_META: Record<string, { icon: any; color: string; bg: string }> = {
-  doctor_available:      { icon: Zap,          color: "#16a34a", bg: "#f0fdf4" },
-  queue_called:          { icon: Users,         color: "#d97706", bg: "#fffbeb" },
-  follow_up:             { icon: BellRing,      color: ACCENT,    bg: "#eff6ff" },
-  consultation_complete: { icon: CheckCircle2,  color: "#0891b2", bg: "#ecfeff" },
-  saved_doctor_online:   { icon: Bookmark,      color: "#e11d48", bg: "#fff1f2" },
-  chat:                  { icon: MessageCircle, color: ACCENT,    bg: "#eff6ff" },
-  system:                { icon: ShieldCheck,   color: "#64748b", bg: "#f8fafc" },
-  new_consultation:      { icon: Activity,      color: "#d97706", bg: "#fffbeb" },
-  appointment:           { icon: Calendar,      color: "#7c3aed", bg: "#f5f3ff" },
+  doctor_available: { icon: Zap, color: "#16a34a", bg: "#f0fdf4" },
+  queue_called: { icon: Users, color: "#d97706", bg: "#fffbeb" },
+  follow_up: { icon: BellRing, color: ACCENT, bg: "#eff6ff" },
+  consultation_complete: { icon: CheckCircle2, color: "#0891b2", bg: "#ecfeff" },
+  saved_doctor_online: { icon: Bookmark, color: "#e11d48", bg: "#fff1f2" },
+  chat: { icon: MessageCircle, color: ACCENT, bg: "#eff6ff" },
+  system: { icon: ShieldCheck, color: "#64748b", bg: "#f8fafc" },
+  new_consultation: { icon: Activity, color: "#d97706", bg: "#fffbeb" },
+  appointment: { icon: Calendar, color: "#7c3aed", bg: "#f5f3ff" },
 };
-
-function timeAgo(d: string) {
-  const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
+const CONSULT_TYPES = ["queue_called", "new_consultation", "follow_up", "consultation_complete"];
+type Tab = "all" | "unread" | "consult" | "chat" | "system";
 
 export default function DoctorNotificationsPage() {
-  const [notifs, setNotifs] = useState<Notification[]>([]);
+  const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("all");
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("all");
 
-  const load = useCallback(async () => {
-    let u = getUser();
-    if (!u) u = await loadUser();
-    if (!u) { setLoading(false); return; }
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) { setLoading(true); setError(null); }
     try {
-      const res = await fetch(`/api/notifications?userId=${u.id}`);
-      const json = await res.json();
-      setNotifs(json.data || []);
-    } catch { setNotifs([]); }
-    finally { setLoading(false); }
+      const res = await fetch("/api/notifications");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not load notifications");
+      setItems(json.data ?? []);
+      setError(null);
+    } catch (e: any) {
+      if (!quiet) setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    return startPolling(() => load(true), 30000); // quiet background refresh
+  }, [load]);
 
-  const markRead = async (id: string) => {
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    await fetch("/api/notifications", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notifId: id }),
-    }).catch(() => {});
+  // Optimistic update with rollback if the server says no
+  const patch = async (body: object, optimistic: (n: Notification) => Notification) => {
+    const before = items;
+    setItems((prev) => prev.map(optimistic));
+    try {
+      const res = await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error();
+    } catch {
+      setItems(before);
+      notifyError("Couldn't update the notification. Please try again.");
+    }
   };
+  const markRead = (id: string) => patch({ notifId: id }, (n) => (n.id === id ? { ...n, read: true } : n));
+  const markAll = () => patch({ markAll: true }, (n) => ({ ...n, read: true }));
 
-  const markAll = async () => {
-    const u = getUser(); if (!u) return;
-    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
-    await fetch("/api/notifications", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: u.id, markAll: true }),
-    }).catch(() => {});
-  };
+  const unread = items.filter((n) => !n.read).length;
+  const counts = useMemo(() => ({
+    all: items.length,
+    unread,
+    consult: items.filter((n) => CONSULT_TYPES.includes(n.type)).length,
+    chat: items.filter((n) => n.type === "chat").length,
+    system: items.filter((n) => n.type === "system").length,
+  }), [items, unread]);
 
-  const TABS = [
-    { key: "all",          label: "All"      },
-    { key: "consultation", label: "Consults" },
-    { key: "chat",         label: "Messages" },
-    { key: "system",       label: "System"   },
-  ];
+  const filtered = items.filter((n) =>
+    tab === "all" ? true : tab === "unread" ? !n.read : tab === "consult" ? CONSULT_TYPES.includes(n.type) : n.type === tab);
 
-  const filtered = tab === "all" ? notifs
-    : tab === "consultation" ? notifs.filter(n => ["queue_called", "new_consultation", "follow_up", "consultation_complete"].includes(n.type))
-    : tab === "chat"         ? notifs.filter(n => n.type === "chat")
-    : notifs.filter(n => n.type === "system");
-
-  const unread = notifs.filter(n => !n.read).length;
+  const groups = (["Today", "Yesterday", "Earlier"] as const)
+    .map((g) => ({ label: g, rows: filtered.filter((n) => dayGroup(n.created_at) === g) }))
+    .filter((g) => g.rows.length > 0);
 
   return (
     <div className="space-y-4 max-w-2xl pb-10">
-
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="font-extrabold text-slate-900 text-[18px] sm:text-[20px]">Notifications</h1>
-          <p className="text-[12px] text-slate-400 mt-0.5">
-            {unread > 0 ? `${unread} unread` : "All caught up ✓"}
-          </p>
-        </div>
-        {unread > 0 && (
-          <button onClick={markAll}
-            className="flex items-center gap-1.5 text-[12px] font-bold px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all"
-            style={{ color: ACCENT }}>
-            <CheckCheck className="w-4 h-4" /> Mark all read
+      <PageHeader
+        title="Notifications"
+        subtitle={unread > 0 ? `${unread} unread` : "You're all caught up"}
+        right={unread > 0 && (
+          <button onClick={markAll} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-[12px] font-bold text-slate-600 hover:bg-slate-50">
+            <CheckCheck className="w-3.5 h-3.5" /> Mark all read
           </button>
         )}
+      />
+
+      <div className="flex gap-2 flex-wrap">
+        <Chip active={tab === "all"} onClick={() => setTab("all")} count={counts.all}>All</Chip>
+        <Chip active={tab === "unread"} onClick={() => setTab("unread")} count={counts.unread}>Unread</Chip>
+        <Chip active={tab === "consult"} onClick={() => setTab("consult")} count={counts.consult}>Consults</Chip>
+        <Chip active={tab === "chat"} onClick={() => setTab("chat")} count={counts.chat}>Messages</Chip>
+        <Chip active={tab === "system"} onClick={() => setTab("system")} count={counts.system}>System</Chip>
       </div>
 
-      {/* Tab bar */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden"
-        style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-        <div className="flex border-b border-slate-100">
-          {TABS.map(({ key, label }) => (
-            <button key={key} onClick={() => setTab(key)}
-              className="flex-1 py-3 text-[13px] font-bold transition-all border-b-2 whitespace-nowrap"
-              style={tab === key
-                ? { color: NAV_BG, borderBottomColor: NAV_BG, background: "#eff6ff" }
-                : { color: "#94a3b8", borderBottomColor: "transparent" }}>
-              {label}
-              {key === "all" && unread > 0 && (
-                <span className="ml-1 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full" style={{ background: "#ef4444" }}>{unread}</span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-5 h-5 animate-spin" style={{ color: ACCENT }} />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{ background: "#eff6ff" }}>
-              <Bell className="w-5 h-5" style={{ color: ACCENT }} />
+      {loading ? <SkeletonRows count={5} height="h-20" />
+        : error ? <ErrorState message={error} onRetry={() => load()} />
+          : filtered.length === 0 ? (
+            <EmptyState icon={Bell}
+              title={tab === "unread" ? "No unread notifications" : "Nothing here yet"}
+              text={tab === "all" ? "New patients, messages and follow-up reminders will show up here." : "Try a different filter."} />
+          ) : (
+            <div className="space-y-5">
+              {groups.map((g) => (
+                <section key={g.label}>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">{g.label}</p>
+                  <div className="space-y-2">
+                    {g.rows.map((n) => {
+                      const meta = TYPE_META[n.type] ?? TYPE_META.system;
+                      const Icon = meta.icon;
+                      // Only link inside the doctor portal (some stored links point to pages that don't exist)
+                      const href = n.action_url && n.action_url.startsWith("/doctor-dashboard") ? n.action_url : null;
+                      const body = (
+                        <Card className={`p-3.5 flex items-start gap-3 transition-all ${n.read ? "" : "border-blue-200 bg-blue-50/40"} ${href ? "hover:shadow-md" : ""}`}>
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: meta.bg }}>
+                            <Icon className="w-[18px] h-[18px]" style={{ color: meta.color }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className={`text-[13px] leading-snug ${n.read ? "font-semibold text-slate-700" : "font-extrabold text-slate-900"}`}>{n.title}</p>
+                              <span className="text-[10px] text-slate-400 shrink-0 mt-0.5">{timeAgo(n.created_at)}</span>
+                            </div>
+                            {n.message && <p className="text-[12px] text-slate-500 mt-0.5 leading-relaxed">{n.message}</p>}
+                          </div>
+                          {!n.read && <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: ACCENT }} aria-label="Unread" />}
+                        </Card>
+                      );
+                      return href
+                        ? <Link key={n.id} href={href} onClick={() => !n.read && markRead(n.id)} className="block">{body}</Link>
+                        : <div key={n.id} onClick={() => !n.read && markRead(n.id)} className={n.read ? "" : "cursor-pointer"}>{body}</div>;
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
-            <p className="font-bold text-slate-600">No notifications here</p>
-            <p className="text-[12px] text-slate-400 mt-1">You're all caught up</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-50">
-            {filtered.map(n => {
-              const meta = TYPE_META[n.type] || TYPE_META.system;
-              const Icon = meta.icon;
-              const Wrap: any = n.action_url ? Link : "div";
-              return (
-                <Wrap key={n.id} href={n.action_url || ""} onClick={() => markRead(n.id)}
-                  className={`flex items-start gap-3 px-4 py-3.5 hover:bg-slate-50 transition-colors cursor-pointer ${!n.read ? "bg-blue-50/40" : ""}`}>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: meta.bg }}>
-                    <Icon className="w-4 h-4" style={{ color: meta.color }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-[13px] leading-snug ${!n.read ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
-                      {n.title}
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
-                    <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n.created_at)}</p>
-                  </div>
-                  {!n.read && <div className="w-2 h-2 rounded-full flex-shrink-0 mt-2" style={{ background: ACCENT }} />}
-                </Wrap>
-              );
-            })}
-          </div>
-        )}
-      </div>
+          )}
     </div>
   );
 }
