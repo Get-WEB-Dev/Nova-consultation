@@ -6,20 +6,23 @@ import { useRouter, usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
     LayoutDashboard, Users, Stethoscope, LogOut, Calendar, Newspaper,
-    Menu,
-    Shield,
-    X,
-    History, Settings,
+    Menu, Shield, X, History, Settings,
+    BarChart3, Star, MessageSquare, Megaphone, ShieldCheck,
 } from "lucide-react";
 import { loadUser, signOut, type AuthUser } from "@/lib/supabase/auth";
 import { ToastProvider } from "@/components/admin/AdminUI";
 
 const adminNav = [
     { href: "/admin-dashboard", label: "Overview", icon: LayoutDashboard },
+    { href: "/admin-dashboard/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/admin-dashboard/users", label: "Users", icon: Users },
     { href: "/admin-dashboard/doctors", label: "Doctors", icon: Stethoscope },
     { href: "/admin-dashboard/consultations", label: "Consultations", icon: Calendar },
+    { href: "/admin-dashboard/reviews", label: "Reviews", icon: Star },
     { href: "/admin-dashboard/posts", label: "Blog Posts", icon: Newspaper },
+    { href: "/admin-dashboard/messages", label: "Messages", icon: MessageSquare },
+    { href: "/admin-dashboard/announcements", label: "Announcements", icon: Megaphone },
+    { href: "/admin-dashboard/admins", label: "Admins", icon: ShieldCheck },
     { href: "/admin-dashboard/activity", label: "Activity Log", icon: History },
     { href: "/admin-dashboard/settings", label: "Settings", icon: Settings },
 ];

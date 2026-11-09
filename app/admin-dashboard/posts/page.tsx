@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
+import { useServerList } from "@/lib/use-server-list";
+import Pagination from "@/components/admin/Pagination";
 import Link from "next/link";
 import { Search, Eye, EyeOff, Trash2, ExternalLink, AlertCircle, Heart, MessageCircle } from "lucide-react";
 import { adminFetch } from "@/lib/admin-api";
@@ -13,35 +15,11 @@ interface PostRow {
 
 export default function AdminPostsPage() {
     const toast = useToast();
-    const [posts, setPosts] = useState<PostRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [query, setQuery] = useState("");
     const [onlyHidden, setOnlyHidden] = useState(false);
     const [deletePost, setDeletePost] = useState<PostRow | null>(null);
     const [busy, setBusy] = useState(false);
-
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const json = await adminFetch<{ data: PostRow[] }>("/api/admin/posts");
-            setPosts(json.data);
-        } catch (e: any) {
-            setError(e.message);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-    useEffect(() => { load(); }, [load]);
-
-    const visible = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        return posts.filter((p) =>
-            (!onlyHidden || !p.isPublished) &&
-            (!q || p.title.toLowerCase().includes(q) || p.author.toLowerCase().includes(q))
-        );
-    }, [posts, query, onlyHidden]);
+    const { rows: posts, total, loading, error, q: query, setQ: setQuery, page, setPage, pageSize, reload: load } =
+        useServerList<PostRow>("/api/admin/posts", onlyHidden ? { status: "hidden" } : {});
 
     const togglePublished = async (p: PostRow) => {
         try {
@@ -86,7 +64,7 @@ export default function AdminPostsPage() {
                 </label>
             </div>
 
-            {loading ? (
+            {loading && posts.length === 0 ? (
                 <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="animate-shimmer h-16 rounded-2xl" />)}</div>
             ) : error ? (
                 <div className="card text-center py-8 space-y-3">
@@ -94,11 +72,11 @@ export default function AdminPostsPage() {
                     <p className="text-sm text-slate-600">{error}</p>
                     <button onClick={load} className="btn btn-sm btn-primary">Try again</button>
                 </div>
-            ) : visible.length === 0 ? (
+            ) : posts.length === 0 ? (
                 <EmptyState text="No posts found" />
             ) : (
                 <div className="card p-0 divide-y divide-slate-50">
-                    {visible.map((p) => (
+                    {posts.map((p) => (
                         <div key={p.id} className="flex items-center gap-3 px-4 py-3 flex-wrap sm:flex-nowrap">
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-slate-700 truncate">{p.title}</p>
@@ -126,7 +104,7 @@ export default function AdminPostsPage() {
                     ))}
                 </div>
             )}
-
+            <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} disabled={loading} />
             <ConfirmDialog
                 open={!!deletePost}
                 danger

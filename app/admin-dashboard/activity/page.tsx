@@ -31,11 +31,18 @@ const LABELS: Record<string, string> = {
     "export.users": "exported the user list",
     "export.consultations": "exported consultations",
     "export.audit_log": "exported the activity log",
+    "review.hidden": "hid a review",
+    "review.published": "published a review",
+    "review.deleted": "deleted a review",
+    "message.resolved": "resolved a contact message",
+    "message.deleted": "deleted a contact message",
+    "announcement.sent": "sent an announcement",
 };
 const DOT: Record<string, string> = {
     user: "bg-primary-500", doctor: "bg-accent-500", consultation: "bg-gold-500", post: "bg-slate-500", export: "bg-rose-500",
+    review: "bg-gold-500", message: "bg-primary-500", announcement: "bg-rose-500",
 };
-const FILTERS = ["all", "user", "doctor", "consultation", "post", "export"];
+const FILTERS = ["all", "user", "doctor", "consultation", "post", "review", "message", "announcement", "export"];
 
 export default function AdminActivityPage() {
     const toast = useToast();
