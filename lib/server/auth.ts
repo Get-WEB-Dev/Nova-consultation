@@ -29,6 +29,8 @@ export interface AuthedUser {
   isSuperAdmin: boolean;
   /** doctor_profiles.id for this user, or null if they have no doctor profile */
   doctorProfileId: string | null;
+  /** Assurance level of THIS session: aal2 means a second factor (TOTP) was used */
+  aal: 'aal1' | 'aal2';
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,6 +50,22 @@ export function getBearerToken(req: Request): string | null {
   const match = /^Bearer\s+(.+)$/i.exec(header);
   return match ? match[1].trim() : null;
 }
+
+/**
+ * Reads the `aal` claim from the access token. Safe to trust because the token
+ * was already verified by supabase.auth.getUser() before this is called.
+ */
+function tokenAal(token: string): 'aal1' | 'aal2' {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+    return payload.aal === 'aal2' ? 'aal2' : 'aal1';
+  } catch {
+    return 'aal1';
+  }
+}
+
+/** Set ADMIN_REQUIRE_MFA=true once every admin has enrolled a second factor. */
+export const adminMfaRequired = () => process.env.ADMIN_REQUIRE_MFA === 'true';
 
 /** Returns the verified user, or null when there is no valid session. */
 export async function getAuthUser(req: Request): Promise<AuthedUser | null> {
@@ -81,6 +99,7 @@ export async function getAuthUser(req: Request): Promise<AuthedUser | null> {
     isAdmin,
     isSuperAdmin: !!adminRes.data?.is_super_admin,
     doctorProfileId: doctorRes.data?.id ?? null,
+    aal: tokenAal(token),
   };
 }
 
@@ -112,6 +131,16 @@ export async function requireUser(req: Request, roles?: DbRole[]): Promise<Guard
   if (roles) {
     const effective: DbRole[] = [user.role, ...(user.isAdmin ? (['admin'] as DbRole[]) : [])];
     if (!roles.some((r) => effective.includes(r))) return { error: forbidden() };
+
+    // Admin-only endpoints additionally need a second factor (when switched on)
+    if (roles.includes('admin') && user.isAdmin && adminMfaRequired() && user.aal !== 'aal2') {
+      return {
+        error: NextResponse.json(
+          { error: 'Two-factor authentication required', code: 'mfa_required', data: [] },
+          { status: 403 },
+        ),
+      };
+    }
   }
   return { user };
 }

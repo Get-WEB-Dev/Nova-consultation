@@ -49,6 +49,11 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
                     router.replace("/admin-login");
                     return;
                 }
+                // Server requires two-factor for admins and this session has not used it yet
+                if (json.mfaRequired && json.aal !== "aal2") {
+                    router.replace("/admin-login/mfa");
+                    return;
+                }
                 setUser(u);
                 setReady(true);
             } catch {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -34,7 +35,12 @@ function AdminLoginForm() {
                 setLoading(false);
                 return;
             }
-            router.push("/admin-dashboard");
+            // Second factor needed? (server requires it, or this admin enrolled one)
+            const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+            const needsMfa =
+                (json.mfaRequired && json.aal !== "aal2") ||
+                (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2");
+            router.push(needsMfa ? "/admin-login/mfa" : "/admin-dashboard");
         } catch (err: any) {
             setError(err?.message || "Authentication failed");
         } finally {

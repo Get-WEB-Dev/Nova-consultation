@@ -7,6 +7,7 @@ import { getUser } from "@/lib/supabase/auth";
 import { adminFetch } from "@/lib/admin-api";
 import SignOutEverywhere from "@/components/admin/SignOutEverywhere";
 import { useToast, PageHeader } from "@/components/admin/AdminUI";
+import TwoFactorCard from "@/components/admin/TwoFactorCard";
 
 interface Health {
     database: { ok: boolean; ms: number; error: string | null };
@@ -129,6 +130,7 @@ export default function AdminSettingsPage() {
                 )}
             </section>
             <SignOutEverywhere />
+            <TwoFactorCard />
         </div>
     );
 }

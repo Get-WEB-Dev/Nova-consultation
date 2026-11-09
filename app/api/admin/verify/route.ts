@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { requireUser } from '@/lib/server/auth';
+import { requireUser, adminMfaRequired } from '@/lib/server/auth';
 
 // Depends on the caller's token, so it must never be prerendered/cached
 export const dynamic = 'force-dynamic';
@@ -18,5 +18,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
         isAdmin: auth.user.isAdmin,
         isSuperAdmin: auth.user.isSuperAdmin,
+        aal: auth.user.aal,
+        mfaRequired: adminMfaRequired(),
     });
 }
