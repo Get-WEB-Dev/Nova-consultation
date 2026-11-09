@@ -284,7 +284,7 @@ export default function DoctorHomePage() {
         fetch(`/api/queue?doctorId=${u.id}`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
-        fetch(`/api/doctor/consultations?doctorId=${u.id}`)
+        fetch(`/api/doctor/consultations?doctorId=${u.id}&limit=60`)
           .then((r) => r.json())
           .catch(() => ({ data: [] })),
         fetch(`/api/follow-ups?doctorId=${u.id}`)
@@ -326,12 +326,12 @@ export default function DoctorHomePage() {
           const today = new Date().toDateString();
           const done = (c.data || []).filter(
             (x: any) =>
-              x.status === "completed" &&
-              new Date(x.created_at).toDateString() === today,
+              (x.status === "completed" || x.status === "follow_up") &&
+              new Date(x.endedAt || x.created_at).toDateString() === today,
           );
           setCompletedToday(done.length);
           const allDone = (c.data || []).filter(
-            (x: any) => x.status === "completed",
+            (x: any) => x.status === "completed" || x.status === "follow_up",
           );
           if (allDone.length) {
             const last = allDone.sort(
@@ -368,10 +368,16 @@ export default function DoctorHomePage() {
 
   const toggleStatus = async (val: boolean) => {
     if (!user || toggling) return;
+    // Don't strand waiting patients by accident
+    if (!val && queue.length > 0 &&
+      !window.confirm(`${queue.length} patient${queue.length > 1 ? "s are" : " is"} still waiting. Go offline anyway?`)) {
+      return;
+    }
     setToggling(true);
-    setIsOnline(val);
+    const previous = isOnline;
+    setIsOnline(val); // optimistic: feels instant
     try {
-      await fetch("/api/doctor/profile", {
+      const res = await fetch("/api/doctor/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -379,7 +385,10 @@ export default function DoctorHomePage() {
           status: val ? "available" : "offline",
         }),
       });
-    } catch { }
+      if (!res.ok) throw new Error("status update failed");
+    } catch {
+      setIsOnline(previous); // the server kept the old status — show the truth
+    }
     setToggling(false);
   };
 

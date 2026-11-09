@@ -22,13 +22,15 @@ export async function fetchDoctorProfileByUserId(userId: string) {
 }
 
 // ── Consultations for a doctor ────────────────────────────────
-export async function fetchConsultationsByDoctor(doctorId: string) {
+export async function fetchConsultationsByDoctor(doctorId: string, limit?: number) {
     const admin = createAdminClient();
-    const { data, error } = await admin
+    let query = admin
         .from('consultations')
         .select('*, users!patient_id(name, email, avatar_url)')
         .eq('doctor_id', doctorId)
         .order('created_at', { ascending: false });
+    if (limit) query = query.limit(limit);
+    const { data, error } = await query;
     if (error) throw error;
     return data ?? [];
 }

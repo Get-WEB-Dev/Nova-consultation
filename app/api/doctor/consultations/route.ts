@@ -7,6 +7,8 @@ export async function GET(req: NextRequest) {
     if (auth.error) return auth.error;
     const { searchParams } = new URL(req.url);
     const doctorId = searchParams.get('doctorId');
+    // Optional: only the newest N consultations (the home page doesn't need the full history)
+    const limit = Math.min(parseInt(searchParams.get('limit') ?? '', 10) || 0, 500) || undefined;
 
     if (!doctorId) {
         return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
@@ -19,7 +21,7 @@ export async function GET(req: NextRequest) {
         let resolvedId = doctorId;
         const profile = await fetchDoctorProfileByUserId(doctorId) as any;
         if (profile?.id) resolvedId = profile.id;
-        const data = await fetchConsultationsByDoctor(resolvedId);
+        const data = await fetchConsultationsByDoctor(resolvedId, limit);
 
         const formatted = data.map((row: any) => ({
             id: row.id,

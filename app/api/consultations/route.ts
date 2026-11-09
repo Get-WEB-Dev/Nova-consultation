@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { resolveDoctorProfileId } from '@/lib/server/auth';
 import { requireUser, isSelf, ownsDoctorId, forbidden } from '@/lib/server/auth';
 
 // ── MOCK DATA (disabled) ─────────────────────────────────────
@@ -69,6 +70,39 @@ export async function POST(req: NextRequest) {
   if (auth.user.id !== patientId && !ownsDoctorId(auth.user, doctorId)) return forbidden();
 
   try {
+    const { createAdminClient: makeAdmin } = await import('@/lib/supabase/client');
+    const db: any = makeAdmin();
+    const profileId = (await resolveDoctorProfileId(doctorId)) ?? doctorId;
+
+    // Attach a consultation to the patient's waiting queue row, so the id survives page refreshes
+    const linkToQueue = (consultationId: string) =>
+      db.from('consultation_queue')
+        .update({ consultation_id: consultationId })
+        .eq('doctor_id', profileId)
+        .eq('patient_id', patientId)
+        .in('status', ['waiting', 'called', 'joined'])
+        .is('consultation_id', null);
+
+    // Idempotent: if this patient already has an open consultation with this doctor
+    // (created in the last 24h), reuse it instead of creating a duplicate.
+    if (!isFollowUp) {
+      const { data: existing } = await db
+        .from('consultations')
+        .select('*')
+        .eq('doctor_id', profileId)
+        .eq('patient_id', patientId)
+        .eq('is_follow_up', false)
+        .in('status', ['waiting', 'active'])
+        .gte('created_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existing) {
+        await linkToQueue(existing.id);
+        return NextResponse.json({ data: existing, reused: true });
+      }
+    }
+
     const { createConsultation, createNotification } = await import('@/lib/server/queries');
     const session = await createConsultation({
       doctorId,
@@ -79,6 +113,8 @@ export async function POST(req: NextRequest) {
       durationDescription: duration ?? undefined,
       notes: notes ?? undefined,
     });
+
+    await linkToQueue(session.id);
 
     // Generate notification for the doctor
     try {
