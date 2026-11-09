@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { SignedImg, SignedLink } from "@/components/media/SignedMedia";
 import { useSearchParams } from "next/navigation";
 import {
     Search, Send, Paperclip, ChevronLeft, MessageSquare,
@@ -453,7 +454,7 @@ export default function PatientMessagesPage() {
                                                 <div className={`max-w-[70%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
                                                     {msg.fileUrl && msg.fileType === "image" ? (
                                                         <div className="rounded-2xl overflow-hidden border border-slate-200" style={{ maxWidth: 240 }}>
-                                                            <img src={msg.fileUrl} alt="image" className="w-full" />
+                                                            <SignedImg src={msg.fileUrl} alt="image" className="w-full" />
                                                         </div>
                                                     ) : msg.fileUrl ? (
                                                         <div className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl border ${isMe ? "border-blue-200 bg-blue-50" : "bg-white border-slate-200"}`}>

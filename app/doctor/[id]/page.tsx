@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { SignedImg, SignedLink } from "@/components/media/SignedMedia";
 import PostCard from "@/components/ui/PostCard";
 import {
   Star,
@@ -373,13 +374,13 @@ export default function DoctorDetailPage() {
         setChatMessages(
           msgs.length === 0
             ? [
-                {
-                  id: "c1",
-                  from: "doctor",
-                  text: `Hi! I'm ${doctor.name}. How can I help you today?`,
-                  time: "Now",
-                },
-              ]
+              {
+                id: "c1",
+                from: "doctor",
+                text: `Hi! I'm ${doctor.name}. How can I help you today?`,
+                time: "Now",
+              },
+            ]
             : msgs,
         );
       }
@@ -421,7 +422,7 @@ export default function DoctorDetailPage() {
           body: txt,
         }),
       });
-    } catch {}
+    } catch { }
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -689,13 +690,13 @@ export default function DoctorDetailPage() {
                     ))}
                   {(doctor.status === "busy" ||
                     doctor.status === "in_consultation") && (
-                    <button
-                      onClick={joinQueue}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-extrabold text-white bg-amber-500 hover:bg-amber-600 active:scale-95 transition-all w-full justify-center"
-                    >
-                      <Users className="w-4 h-4" /> Join Queue
-                    </button>
-                  )}
+                      <button
+                        onClick={joinQueue}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-extrabold text-white bg-amber-500 hover:bg-amber-600 active:scale-95 transition-all w-full justify-center"
+                      >
+                        <Users className="w-4 h-4" /> Join Queue
+                      </button>
+                    )}
                   {isOffline && (
                     <button
                       onClick={toggleRemind}
@@ -775,13 +776,13 @@ export default function DoctorDetailPage() {
                     ))}
                   {(doctor.status === "busy" ||
                     doctor.status === "in_consultation") && (
-                    <button
-                      onClick={joinQueue}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-extrabold text-white bg-amber-500"
-                    >
-                      <Users className="w-4 h-4" /> Join Queue
-                    </button>
-                  )}
+                      <button
+                        onClick={joinQueue}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-extrabold text-white bg-amber-500"
+                      >
+                        <Users className="w-4 h-4" /> Join Queue
+                      </button>
+                    )}
                   {isOffline && (
                     <button
                       onClick={toggleRemind}
@@ -881,10 +882,10 @@ export default function DoctorDetailPage() {
                   style={
                     activeTab === key
                       ? {
-                          color: NAV_BG,
-                          borderBottomColor: NAV_BG,
-                          background: "#eff6ff",
-                        }
+                        color: NAV_BG,
+                        borderBottomColor: NAV_BG,
+                        background: "#eff6ff",
+                      }
                       : { color: "#94a3b8", borderBottomColor: "transparent" }
                   }
                 >
@@ -1314,7 +1315,7 @@ export default function DoctorDetailPage() {
               >
                 {msg.fileType === "image" && msg.fileUrl ? (
                   <div className="p-1.5">
-                    <img
+                    <SignedImg
                       src={msg.fileUrl}
                       alt=""
                       className="rounded-xl max-w-full max-h-48 object-contain block"

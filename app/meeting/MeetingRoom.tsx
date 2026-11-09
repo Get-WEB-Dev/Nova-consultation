@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { SignedImg, SignedLink } from "@/components/media/SignedMedia";
 import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -741,7 +742,7 @@ export default function MeetingRoom({
                       >
                         {msg.fileType === "image" && msg.fileUrl ? (
                           <div className="p-2">
-                            <img
+                            <SignedImg
                               src={msg.fileUrl}
                               alt="shared"
                               className="rounded-lg max-w-full max-h-48 object-contain"
@@ -755,7 +756,7 @@ export default function MeetingRoom({
                           </div>
                         ) : msg.fileType === "file" ? (
                           <div className="px-3.5 py-2.5">
-                            <a
+                            <SignedLink
                               href={msg.fileUrl}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -765,7 +766,7 @@ export default function MeetingRoom({
                               <span className="text-xs truncate max-w-[120px]">
                                 {msg.fileName}
                               </span>
-                            </a>
+                            </SignedLink>
                             <div className={`flex items-center gap-1 mt-1 ${msg.from === "me" ? "justify-end" : ""}`}>
                               <p className={`text-[10px] ${msg.from === "me" ? "text-white/60" : "text-slate-400"}`}>
                                 {msg.time}

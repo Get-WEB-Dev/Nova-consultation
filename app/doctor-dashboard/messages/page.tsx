@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import { SignedImg, SignedLink } from "@/components/media/SignedMedia";
 import {
   Search,
   Send,
@@ -733,7 +734,7 @@ export default function MessagesPage() {
                               className="rounded-2xl overflow-hidden border border-slate-200"
                               style={{ maxWidth: 240 }}
                             >
-                              <img
+                              <SignedImg
                                 src={msg.fileUrl}
                                 alt="image"
                                 className="w-full"

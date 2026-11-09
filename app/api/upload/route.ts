@@ -1,15 +1,31 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { randomUUID } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/client';
 import { getAuthUser } from '@/lib/server/auth';
+import { sniffFileType, type DetectedFile } from '@/lib/server/file-types';
+import { toPrivateRef } from '@/lib/attachment-ref';
 
-// Only these buckets can be written to through this endpoint.
-const ALLOWED_BUCKETS = ['chat-attachments', 'profile-pictures', 'blog-media', 'doctor-assets'];
-// Doctor sign-up uploads a profile picture BEFORE the account exists, so this
-// one bucket also accepts anonymous image uploads (small images only).
+const MB = 1024 * 1024;
+
+interface BucketRule {
+    /** Private buckets are never reachable by URL; files are opened through signed links */
+    isPrivate: boolean;
+    maxBytes: number;
+    kinds: DetectedFile['kind'][];
+}
+
+// Only these buckets can be written to through this endpoint, with strict rules.
+const BUCKETS: Record<string, BucketRule> = {
+    'chat-attachments': { isPrivate: true, maxBytes: 20 * MB, kinds: ['image', 'pdf', 'document'] },
+    'profile-pictures': { isPrivate: false, maxBytes: 5 * MB, kinds: ['image'] },
+    'doctor-assets': { isPrivate: false, maxBytes: 10 * MB, kinds: ['image', 'pdf'] },
+    'blog-media': { isPrivate: false, maxBytes: 50 * MB, kinds: ['image', 'video'] },
+};
+// Doctor sign-up uploads a profile picture BEFORE the account exists.
 const ANONYMOUS_BUCKET = 'profile-pictures';
-const MAX_BYTES = 50 * 1024 * 1024;
-const MAX_ANON_BYTES = 5 * 1024 * 1024;
+
+const fail = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
 
 export async function POST(req: NextRequest) {
     try {
@@ -19,63 +35,58 @@ export async function POST(req: NextRequest) {
         try {
             formData = await req.formData();
         } catch {
-            return NextResponse.json({ error: 'Expected multipart form data' }, { status: 400 });
+            return fail('Expected multipart form data');
         }
         const file = formData.get('file');
         const bucket = (formData.get('bucket') as string) || 'chat-attachments';
+        const rule = BUCKETS[bucket];
 
-        if (!(file instanceof File)) {
-            return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+        if (!(file instanceof File)) return fail('No file provided');
+        if (!rule) return fail('Invalid bucket');
+        if (!user && bucket !== ANONYMOUS_BUCKET) return fail('Authentication required', 401);
+        if (file.size === 0) return fail('The file is empty');
+        if (file.size > rule.maxBytes) {
+            return fail(`File too large (max ${Math.round(rule.maxBytes / MB)} MB)`, 413);
         }
-        if (!ALLOWED_BUCKETS.includes(bucket)) {
-            return NextResponse.json({ error: 'Invalid bucket' }, { status: 400 });
-        }
-        if (!user) {
-            if (bucket !== ANONYMOUS_BUCKET) {
-                return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-            }
-            if (!file.type.startsWith('image/') || file.size > MAX_ANON_BYTES) {
-                return NextResponse.json({ error: 'Only images up to 5 MB are allowed' }, { status: 400 });
-            }
-        }
-        if (file.size > MAX_BYTES) {
-            return NextResponse.json({ error: 'File too large' }, { status: 413 });
+
+        // Decide the type from the file's real bytes, never from its name or declared type
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const detected = sniffFileType(bytes);
+        if (!detected || !rule.kinds.includes(detected.kind)) {
+            return fail('This file type is not allowed. Use a photo, a PDF or a Word document.', 415);
         }
 
         const admin = createAdminClient();
-
-        // Ensure bucket exists (best effort)
         try {
-            await admin.storage.createBucket(bucket, { public: true });
-        } catch (err) {
-            // Bucket probably already exists
+            await admin.storage.createBucket(bucket, { public: !rule.isPrivate });
+        } catch {
+            // Bucket already exists (normal)
         }
 
-        const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-        const { data, error } = await admin.storage
-            .from(bucket)
-            .upload(filename, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
-
+        // Random, unguessable name inside a per-user folder; the original name is never used as a path
+        const path = `${user?.id ?? 'anon'}/${randomUUID()}.${detected.ext}`;
+        const { error } = await admin.storage.from(bucket).upload(path, bytes, {
+            contentType: detected.mime,
+            cacheControl: '3600',
+            upsert: false,
+        });
         if (error) {
             console.error('[upload POST] storage error:', error.message);
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            return fail('Upload failed. Please try again.', 500);
         }
 
-        const { data: urlData } = admin.storage
-            .from(bucket)
-            .getPublicUrl(filename);
+        const url = rule.isPrivate
+            ? toPrivateRef(path)
+            : admin.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 
         return NextResponse.json({
-            url: urlData.publicUrl,
-            name: file.name,
-            type: file.type,
-            size: file.size
+            url,
+            name: file.name.slice(0, 200),
+            type: detected.mime,
+            size: file.size,
         });
     } catch (err: any) {
         console.error('[upload POST] unexpected:', err.message);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        return fail('Internal server error', 500);
     }
 }

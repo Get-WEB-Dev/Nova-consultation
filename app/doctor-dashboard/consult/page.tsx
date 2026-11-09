@@ -10,6 +10,7 @@
  */
 import { startPolling } from "@/lib/polling";
 import { useState, useRef, useEffect, useCallback } from "react";
+import { SignedImg, SignedLink } from "@/components/media/SignedMedia";
 import { useRouter } from "next/navigation";
 import {
   Mic, MicOff, Video, VideoOff, PhoneOff,
@@ -697,9 +698,9 @@ export default function ConsultPortal() {
                         {msg.attachment_url ? (
                           <div>
                             {msg.attachment_type === 'image' ? (
-                              <img src={msg.attachment_url} alt={msg.attachment_name || "image"} className="rounded-lg max-w-full max-h-40 object-contain" />
+                              <SignedImg src={msg.attachment_url} alt={msg.attachment_name || "image"} className="rounded-lg max-w-full max-h-40 object-contain" />
                             ) : (
-                              <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"><Download className="w-4 h-4" /><span className="text-xs truncate">{msg.attachment_name || 'File'}</span></a>
+                              <SignedLink href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"><Download className="w-4 h-4" /><span className="text-xs truncate">{msg.attachment_name || 'File'}</span></SignedLink>
                             )}
                             <div className={`flex items-center gap-1 justify-end text-[10px] mt-1 ${msg.from === "doctor" ? "text-primary-200" : "text-slate-500"}`}>
                               {msg.time}
@@ -812,7 +813,7 @@ export default function ConsultPortal() {
                     <div key={m.id} className="flex items-center gap-2.5 p-2.5 bg-white/[0.04] rounded-xl">
                       <div className="w-8 h-8 rounded-lg bg-primary-500/20 text-primary-400 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">{m.attachment_type === 'image' ? 'IMG' : 'DOC'}</div>
                       <div className="flex-1 min-w-0"><p className="text-xs font-medium text-slate-300 truncate">{m.attachment_name || 'File'}</p><p className="text-[10px] text-slate-600">From {m.from}</p></div>
-                      <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-slate-400 transition-colors"><Download className="w-4 h-4" /></a>
+                      <SignedLink href={m.attachment_url} target="_blank" rel="noopener noreferrer" className="text-slate-600 hover:text-slate-400 transition-colors"><Download className="w-4 h-4" /></SignedLink>
                     </div>
                   ))}
                 </div>

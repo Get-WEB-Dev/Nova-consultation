@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { SignedImg, SignedLink } from "@/components/media/SignedMedia";
 import {
   Search, Send, Paperclip, MessageSquare, ChevronLeft, Calendar,
   Bell, Check, CheckCheck, Loader2, Clock, Video, BellOff,
@@ -1033,7 +1034,7 @@ export default function ConsultationsPage() {
                                 >
                                   {msg.fileType === "image" && msg.fileUrl ? (
                                     <div className="p-1.5">
-                                      <img
+                                      <SignedImg
                                         src={msg.fileUrl} alt={msg.fileName ?? "img"}
                                         className="rounded-xl max-w-full max-h-52 object-contain block"
                                         onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
@@ -1052,7 +1053,7 @@ export default function ConsultationsPage() {
                                     </div>
                                   ) : msg.fileType === "file" && msg.fileUrl ? (
                                     <div className="px-3 py-2.5">
-                                      <a
+                                      <SignedLink
                                         href={msg.fileUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -1078,7 +1079,7 @@ export default function ConsultationsPage() {
                                         >
                                           {msg.fileName ?? "attachment"}
                                         </span>
-                                      </a>
+                                      </SignedLink>
                                       <p
                                         className={`text-[10px] text-right ${msg.from === "me" ? "text-white/50" : "text-slate-400"}`}
                                       >

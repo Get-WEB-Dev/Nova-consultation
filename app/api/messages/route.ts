@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { requireUser, getThreadAccess, forbidden } from '@/lib/server/auth';
+import { parseAttachmentRef } from '@/lib/attachment-ref';
 import { createAdminClient } from '@/lib/supabase/client';
 
 export async function GET(req: NextRequest) {
@@ -96,6 +97,14 @@ export async function POST(req: NextRequest) {
   if (auth.error) return auth.error;
   const thread = await getThreadAccess(auth.user, { consultationId, conversationId, doctorId, patientId });
   if (!thread) return forbidden();
+
+  // An attachment must be a file THIS user uploaded (stops pointing a message at someone else's file)
+  if (attachmentUrl) {
+    const ref = parseAttachmentRef(attachmentUrl);
+    if (!ref || !ref.path.startsWith(`${auth.user.id}/`)) {
+      return NextResponse.json({ error: 'Invalid attachment. Please upload the file again.' }, { status: 400 });
+    }
+  }
   const senderId = auth.user.id;
   const senderRole: 'doctor' | 'patient' = thread.asDoctor ? 'doctor' : 'patient';
 

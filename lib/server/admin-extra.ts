@@ -171,3 +171,97 @@ export async function listPosts(o: { q: string; status?: string; from: number; t
         })),
     };
 }
+
+// ── Overview dashboard ───────────────────────────────────────
+/**
+ * Everything the Overview page needs, in ONE call:
+ * what needs attention, headline numbers, a 7-day trend, and short "recent" lists.
+ * Only cheap head-counts and tiny lists, so it stays fast as the data grows.
+ */
+export async function fetchOverview() {
+    const admin: any = createAdminClient();
+    const now = Date.now();
+    const iso = (ms: number) => new Date(ms).toISOString();
+
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const yesterdayStart = todayStart.getTime() - 86_400_000;
+    const weekAgo = iso(now - 7 * 86_400_000);
+    const stuckBefore = iso(now - 6 * 3_600_000);
+
+    const count = (table: string, f?: (q: any) => any) => {
+        let q = admin.from(table).select('id', { count: 'exact', head: true });
+        if (f) q = f(q);
+        return q;
+    };
+
+    const [
+        licenseReview, newMessages, lowReviews, stuck,
+        totalUsers, usersWeek, doctorsLive, doctorsTotal,
+        today, yesterday, active, waiting,
+        trendRes, pendingList, recentConsults, recentActivity,
+    ] = await Promise.all([
+        count('doctor_credentials', (q) => q.eq('status', 'pending')),
+        count('contact_messages', (q) => q.eq('status', 'new')),
+        count('reviews', (q) => q.lte('rating', 2).eq('is_published', true).gte('created_at', weekAgo)),
+        count('consultations', (q) => q.in('status', ['active', 'waiting']).lt('created_at', stuckBefore)),
+        count('users'),
+        count('users', (q) => q.gte('created_at', weekAgo)),
+        count('doctor_profiles', (q) => q.eq('is_verified', true).eq('is_published', true)),
+        count('doctor_profiles'),
+        count('consultations', (q) => q.gte('created_at', iso(todayStart.getTime()))),
+        count('consultations', (q) => q.gte('created_at', iso(yesterdayStart)).lt('created_at', iso(todayStart.getTime()))),
+        count('consultations', (q) => q.eq('status', 'active')),
+        count('consultation_queue', (q) => q.eq('status', 'waiting')),
+        admin.rpc('admin_analytics', { p_days: 7 }),
+        admin.from('doctor_profiles')
+            .select('id, specialty, hospital, created_at, users!user_id(name), doctor_credentials(status)')
+            .eq('is_verified', false).order('created_at', { ascending: false }).limit(5),
+        admin.from('consultations')
+            .select('id, status, created_at, users!patient_id(name), doctor_profiles!doctor_id(users!user_id(name))')
+            .order('created_at', { ascending: false }).limit(6),
+        admin.from('admin_audit_log')
+            .select('id, admin_email, action, details, created_at')
+            .order('created_at', { ascending: false }).limit(6),
+    ]);
+
+    // A missing table (feature not set up yet) just counts as 0 instead of breaking the page
+    const n = (r: any) => r?.count ?? 0;
+
+    return {
+        generatedAt: new Date().toISOString(),
+        attention: {
+            licenseReview: n(licenseReview),
+            newMessages: n(newMessages),
+            lowReviews: n(lowReviews),
+            stuckConsultations: n(stuck),
+        },
+        kpis: {
+            totalUsers: n(totalUsers),
+            usersThisWeek: n(usersWeek),
+            doctorsLive: n(doctorsLive),
+            doctorsTotal: n(doctorsTotal),
+            consultationsToday: n(today),
+            consultationsYesterday: n(yesterday),
+            activeNow: n(active),
+            waitingNow: n(waiting),
+        },
+        trend: (trendRes?.data?.series ?? []) as { day: string; users: number; consultations: number; completed: number }[],
+        pendingDoctors: (pendingList?.data ?? []).map((d: any) => ({
+            id: d.id,
+            name: d.users?.name ?? 'Unknown',
+            specialty: d.specialty,
+            hospital: d.hospital,
+            createdAt: d.created_at,
+            license: (d.doctor_credentials?.status as 'pending' | 'rejected' | 'approved' | undefined) ?? 'none',
+        })),
+        recentConsultations: (recentConsults?.data ?? []).map((c: any) => ({
+            id: c.id,
+            status: c.status,
+            createdAt: c.created_at,
+            patientName: c.users?.name ?? 'Unknown',
+            doctorName: c.doctor_profiles?.users?.name ?? 'Unknown',
+        })),
+        recentActivity: recentActivity?.data ?? [],
+    };
+}
