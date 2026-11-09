@@ -247,10 +247,10 @@ function WeekCalendarPreview({ schedule }: { schedule: WeekSchedule }) {
           const isToday = day === currentDay;
           const totalHours = sched.enabled
             ? sched.slots.reduce((sum, s) => {
-                const [sh] = s.start.split(":").map(Number);
-                const [eh] = s.end.split(":").map(Number);
-                return sum + Math.max(0, eh - sh);
-              }, 0)
+              const [sh] = s.start.split(":").map(Number);
+              const [eh] = s.end.split(":").map(Number);
+              return sum + Math.max(0, eh - sh);
+            }, 0)
             : 0;
 
           return (
@@ -325,7 +325,7 @@ export default function SchedulePage() {
           if (j.data?.maxPerDay) setMaxPerDay(j.data.maxPerDay);
           if (j.data?.breakDuration) setBreakDuration(j.data.breakDuration);
         }
-      } catch {}
+      } catch { }
       setLoading(false);
     };
     load();
@@ -336,19 +336,20 @@ export default function SchedulePage() {
     if (!u || saving) return;
     setSaving(true);
     try {
-      await fetch("/api/doctor/schedule", {
+      const res = await fetch("/api/doctor/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          doctorId: u.id,
-          schedule,
-          maxPerDay,
-          breakDuration,
-        }),
+        body: JSON.stringify({ schedule, maxPerDay, breakDuration }),
       });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Could not save your schedule");
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch {}
+    } catch (e: any) {
+      alert(e.message || "Could not save your schedule");
+    }
     setSaving(false);
   };
 
@@ -562,10 +563,10 @@ export default function SchedulePage() {
                   style={
                     notifications.reminderBefore === m
                       ? {
-                          background: ACCENT,
-                          color: "white",
-                          borderColor: ACCENT,
-                        }
+                        background: ACCENT,
+                        color: "white",
+                        borderColor: ACCENT,
+                      }
                       : { borderColor: "#e2e8f0", color: "#64748b" }
                   }
                 >

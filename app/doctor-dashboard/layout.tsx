@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { useState, useEffect, useRef, useCallback } from "react";
+import VerificationBanner from "@/components/doctor/VerificationBanner";
 import {
   Home,
   MessageSquare,
@@ -25,6 +26,7 @@ import {
   Zap,
   Video,
   Loader2,
+  BarChart3,
   Menu,
   ChevronRight,
 } from "lucide-react";
@@ -94,6 +96,7 @@ const NAV = [
 
 const MGMT = [
   { href: "/doctor-dashboard/profile", label: "Update Profile", icon: User },
+  { href: "/doctor-dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/doctor-dashboard/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/doctor-dashboard/settings", label: "Settings", icon: Settings },
 ];
@@ -566,7 +569,7 @@ export default function DoctorDashboardLayout({
           </div>
         </header>
 
-        <main className="pb-24 px-3 py-4">{children}</main>
+        <main className="pb-24 px-3 py-4"><VerificationBanner />{children}</main>
 
         {/* Mobile bottom nav */}
         <nav
@@ -699,7 +702,7 @@ export default function DoctorDashboardLayout({
             </div>
           </header>
 
-          <main className="flex-1 px-5 xl:px-8 py-6 w-full mx-auto">{children}</main>
+          <main className="flex-1 px-5 xl:px-8 py-6 w-full mx-auto"><VerificationBanner />{children}</main>
         </div>
       </div>
     </div>

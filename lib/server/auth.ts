@@ -56,6 +56,8 @@ export async function getAuthUser(req: Request): Promise<AuthedUser | null> {
 
   const admin: any = createAdminClient();
   const { data, error } = await admin.auth.getUser(token);
+  // A bad token is a 4xx. Anything else (network, 5xx) is a temporary outage.
+  if (error && (!error.status || error.status >= 500)) throw error;
   if (error || !data?.user) return null;
   const uid: string = data.user.id;
 
@@ -65,7 +67,8 @@ export async function getAuthUser(req: Request): Promise<AuthedUser | null> {
     admin.from('admins').select('is_super_admin').eq('user_id', uid).maybeSingle(),
   ]);
 
-  if (!userRes.data) return null; // auth user without a profile row
+  if (userRes.error) throw userRes.error; // database hiccup ≠ signed out
+  if (!userRes.data) return null; // auth user without a profile row // auth user without a profile row
   if (userRes.data.is_suspended) return null; // suspended accounts lose all API access
 
   const role = userRes.data.role as DbRole;
@@ -97,6 +100,12 @@ export async function requireUser(req: Request, roles?: DbRole[]): Promise<Guard
     // Next.js uses a thrown error to mark a route as dynamic — let it through
     if (err?.digest === 'DYNAMIC_SERVER_USAGE') throw err;
     console.error('[auth] token verification failed:', err?.message);
+    return {
+      error: NextResponse.json(
+        { error: 'Authentication service is temporarily unavailable. Please try again.', data: [] },
+        { status: 503 },
+      ),
+    };
   }
   if (!user) return { error: unauthorized() };
 

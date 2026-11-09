@@ -713,6 +713,14 @@ insert into storage.buckets (id, name, public)
 values ('doctor-credentials', 'doctor-credentials', false)
 on conflict (id) do update set public = false;
 
+
+
+alter table doctor_profiles
+  add column if not exists max_per_day int not null default 10
+    check (max_per_day between 1 and 100),
+  add column if not exists break_duration_mins int not null default 15
+    check (break_duration_mins between 0 and 120);
+
 -- ============================================================
 -- DONE! Database is ready.
 -- ============================================================
