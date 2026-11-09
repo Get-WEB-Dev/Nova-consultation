@@ -1,5 +1,5 @@
 "use client";
-
+import { startPolling } from "@/lib/polling";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
@@ -193,7 +193,7 @@ export default function DoctorDashboardLayout({
   useEffect(() => {
     if (!user) return;
     fetchNotifs(user.id);
-    const iv = setInterval(() => fetchNotifs(user.id), 30000);
+    const stopPolling = startPolling(() => fetchNotifs(user.id), 30000);
     const unsub = subscribeToNotifications(user.id, (n) => {
       setNotifs((prev) => [
         {
@@ -209,7 +209,7 @@ export default function DoctorDashboardLayout({
       ]);
     });
     return () => {
-      clearInterval(iv);
+      stopPolling();
       unsub();
     };
   }, [user, fetchNotifs]);

@@ -1,4 +1,5 @@
 "use client";
+import { startPolling } from "@/lib/polling";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getUser } from "@/lib/supabase/auth";
@@ -781,8 +782,7 @@ export default function HistoryPage() {
       };
     } catch {
       // Fall back to polling
-      const iv = setInterval(() => load(), 10000);
-      return () => clearInterval(iv);
+      return startPolling(load, 10000);
     }
   }, [load]);
 

@@ -347,8 +347,8 @@ export default function SchedulePage() {
       }
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (e: any) {
-      alert(e.message || "Could not save your schedule");
+    } catch {
+      // the red error toast is shown automatically (lib/auth-fetch.ts)
     }
     setSaving(false);
   };

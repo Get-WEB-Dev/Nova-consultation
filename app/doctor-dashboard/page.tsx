@@ -1,5 +1,5 @@
 "use client";
-
+import { startPolling } from "@/lib/polling";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { getUser, type AuthUser } from "@/lib/supabase/auth";
 import Image from "next/image";
@@ -363,8 +363,7 @@ export default function DoctorHomePage() {
         .finally(() => setLoading(false));
 
     loadData();
-    const iv = setInterval(loadData, 10000);
-    return () => clearInterval(iv);
+    return startPolling(loadData, 10000);
   }, []);
 
   const toggleStatus = async (val: boolean) => {

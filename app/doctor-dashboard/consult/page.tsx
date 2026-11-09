@@ -8,7 +8,7 @@
  * Chat + file attachments use our backend (/api/messages, /api/upload).
  * All message operations use doctorProfileId (not auth UUID).
  */
-
+import { startPolling } from "@/lib/polling";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -214,8 +214,7 @@ export default function ConsultPortal() {
       } catch (_) { }
     };
     loadQueue();
-    const interval = setInterval(loadQueue, 8000);
-    return () => clearInterval(interval);
+    return startPolling(loadQueue, 8000);
   }, [doctorUserId, doctorProfileId]);
 
   // (Zoom initialization is handled by ZoomVideoCall)
@@ -248,8 +247,8 @@ export default function ConsultPortal() {
       } catch (_) { }
     };
     fetchMsgs();
-    const interval = setInterval(fetchMsgs, 5000);
-    return () => { controller.abort(); clearInterval(interval); };
+    const stopPolling = startPolling(fetchMsgs, 5000);
+    return () => { controller.abort(); stopPolling(); };
   }, [active?.consultation_id, active?.id, doctorProfileId, doctorUserId]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chats]);
@@ -342,9 +341,8 @@ export default function ConsultPortal() {
     setEnding(true);
     try {
       const consultId = active.consultation_id;
-
-      // 1. Save structured notes
-      await fetch('/api/consultations/notes', {
+      // 1. Save structured notes — REQUIRED: never end a consult if the notes didn't save
+      const notesRes = await fetch('/api/consultations/notes', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -354,6 +352,7 @@ export default function ConsultPortal() {
           notes: notes
         })
       });
+      if (!notesRes.ok) throw new Error('Your notes could not be saved');
 
       // 2. Calculate duration
       const startedAt = active.started_at || active.joinedAt;
@@ -361,13 +360,13 @@ export default function ConsultPortal() {
         ? Math.round((Date.now() - new Date(startedAt).getTime()) / 60000)
         : undefined;
 
-      // 3. Update consultation status with full structured data
+      // 3. Update consultation status with full structured data — REQUIRED
       const statusToSave = outcome === 'follow_up' ? 'follow_up' : 'completed';
       const followUpScheduledAt = (outcome === 'follow_up' && followUpDate && followUpTime)
         ? new Date(`${followUpDate}T${followUpTime}`).toISOString()
         : undefined;
 
-      await fetch('/api/doctor/consultations', {
+      const statusRes = await fetch('/api/doctor/consultations', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -387,10 +386,11 @@ export default function ConsultPortal() {
           durationMinutes,
         })
       });
+      if (!statusRes.ok) throw new Error('The consultation could not be closed');
 
-      // 4. Create follow-up entry if applicable
+      // 4. Follow-up entry — if this fails the consultation is still safely saved, so only warn
       if (outcome === 'follow_up' && followUpScheduledAt) {
-        await fetch('/api/follow-ups', {
+        const followRes = await fetch('/api/follow-ups', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -398,19 +398,22 @@ export default function ConsultPortal() {
             scheduledAt: followUpScheduledAt,
           })
         });
+        if (!followRes.ok) {
+          showToast("Consultation saved, but the follow-up could not be scheduled. Add it from Follow Ups.", "error");
+        }
       }
 
-      // 5. Remove from queue
+      // 5. Remove from queue — best effort (the consultation is already saved)
       const dId = doctorProfileId || doctorUserId;
       if (dId) await fetch("/api/queue", {
         method: "DELETE", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ doctorId: dId, patientId: active.id })
-      });
+      }).catch(() => { });
 
       setShowEndDialog(false);
     } catch (err) {
       console.error("Failed to end consult", err);
-      showToast("Failed to end consultation. Please try again.", "error");
+      showToast(`${(err as Error)?.message || "Failed to end consultation"}. Nothing was lost — please try again.`, "error");
       setEnding(false);
       return;
     }
