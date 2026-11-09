@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, BadgeCheck, Eye, EyeOff, ShieldOff, AlertCircle, Loader2 } from "lucide-react";
+import { Search, BadgeCheck, Eye, EyeOff, ShieldOff, AlertCircle, Loader2, FileSearch } from "lucide-react";
 import { adminFetch } from "@/lib/admin-api";
+import DoctorReviewModal from "@/components/admin/DoctorReviewModal";
 import { useToast, PageHeader, ConfirmDialog, EmptyState, timeAgo } from "@/components/admin/AdminUI";
 
 interface DoctorRow {
     id: string; specialty: string; hospital: string | null; experience_years: number; fee: number;
     rating: number; review_count: number; is_verified: boolean; is_published: boolean; created_at: string;
     users: { name: string; email: string } | null;
+    doctor_credentials?: { status: string } | null;
 }
 
 // A doctor is in exactly one of these three groups
@@ -27,6 +29,7 @@ export default function AdminDoctorsPage() {
     const [query, setQuery] = useState("");
     const [busyId, setBusyId] = useState<string | null>(null);
     const [revoke, setRevoke] = useState<DoctorRow | null>(null);
+    const [reviewing, setReviewing] = useState<DoctorRow | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -112,13 +115,22 @@ export default function AdminDoctorsPage() {
                                         {d.specialty}{d.hospital ? ` · ${d.hospital}` : ""} · {d.experience_years}y exp · ${d.fee}
                                     </p>
                                     <p className="text-[11px] text-slate-300">Registered {timeAgo(d.created_at)}{d.review_count > 0 ? ` · ★ ${d.rating} (${d.review_count})` : ""}</p>
+                                    {!d.is_verified && (
+                                        <p className="mt-1">
+                                            <span className={`badge ${d.doctor_credentials?.status === "pending" ? "badge-gold" : d.doctor_credentials?.status === "rejected" ? "badge-rose" : "badge-slate"}`}>
+                                                {d.doctor_credentials?.status === "pending" ? "License submitted"
+                                                    : d.doctor_credentials?.status === "rejected" ? "Rejected — awaiting resubmission"
+                                                        : "No license yet"}
+                                            </span>
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="flex items-center gap-2 shrink-0">
                                     {busy && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
                                     {!d.is_verified ? (
-                                        <button disabled={busy} onClick={() => act(d, "verify", true, `${d.users?.name} verified and published`)} className="btn btn-sm btn-success">
-                                            <BadgeCheck className="w-3.5 h-3.5" /> Verify & publish
+                                        <button disabled={busy} onClick={() => setReviewing(d)} className="btn btn-sm btn-success">
+                                            <FileSearch className="w-3.5 h-3.5" /> Review
                                         </button>
                                     ) : (
                                         <>
@@ -149,6 +161,13 @@ export default function AdminDoctorsPage() {
                 onConfirm={() => revoke && act(revoke, "verify", false, "Verification revoked")}
                 onCancel={() => setRevoke(null)}
             />
+            {reviewing && (
+                <DoctorReviewModal
+                    doctor={{ id: reviewing.id, name: reviewing.users?.name ?? "Unknown", specialty: reviewing.specialty, hospital: reviewing.hospital }}
+                    onClose={() => setReviewing(null)}
+                    onDone={() => { setReviewing(null); load(); }}
+                />
+            )}
         </div>
     );
 }
