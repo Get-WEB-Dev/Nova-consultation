@@ -30,10 +30,14 @@ const SKY = "#0cbcad";
 
 export type Lang = "en" | "am";
 export function getLang(): Lang {
-  if (typeof window === "undefined") return "en";
-  return (localStorage.getItem("hc-lang") as Lang) || "en";
+  if (typeof document === "undefined") return "en";
+  const m = document.cookie.match(/(?:^|; )NEXT_LOCALE=(en|am)/);
+  return (m?.[1] as Lang) || "en";
 }
 export function setLangGlobal(lang: Lang) {
+  // The cookie is what the SERVER reads (see i18n.ts), so pages render in the right language.
+  document.cookie = `NEXT_LOCALE=${lang}; path=/; max-age=31536000; samesite=lax`;
+  // Kept for now so the old login page keeps working until it is converted (Step 3).
   localStorage.setItem("hc-lang", lang);
   window.dispatchEvent(new CustomEvent("hc-lang-change", { detail: lang }));
 }
@@ -196,6 +200,7 @@ export default function Navbar() {
     const next: Lang = lang === "en" ? "am" : "en";
     setLang(next);
     setLangGlobal(next);
+    router.refresh();
   };
 
   return (
