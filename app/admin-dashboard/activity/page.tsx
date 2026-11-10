@@ -5,6 +5,7 @@ import { AlertCircle, RefreshCw, Search, Download, Loader2, X } from "lucide-rea
 import { downloadCsv } from "@/lib/admin-api";
 import { useServerList } from "@/lib/use-server-list";
 import Pagination from "@/components/admin/Pagination";
+import { actionLabel } from "@/lib/admin-labels";
 import { useToast, PageHeader, EmptyState, timeAgo } from "@/components/admin/AdminUI";
 
 interface Entry {
@@ -12,32 +13,6 @@ interface Entry {
     target_type: string | null; target_id: string | null; details: string | null; created_at: string;
 }
 
-// Plain-English version of each action code
-const LABELS: Record<string, string> = {
-    "user.role_changed": "changed a user's role",
-    "user.suspended": "suspended a user",
-    "user.reactivated": "reactivated a user",
-    "user.deleted": "deleted a user",
-    "doctor.verified": "approved a doctor",
-    "doctor.rejected": "rejected a doctor's credentials",
-    "doctor.unverified": "revoked a doctor's verification",
-    "doctor.published": "published a doctor",
-    "doctor.unpublished": "hid a doctor",
-    "doctor.credentials_viewed": "viewed a doctor's license document",
-    "consultation.cancelled": "cancelled a consultation",
-    "post.published": "published a post",
-    "post.hidden": "hid a post",
-    "post.deleted": "deleted a post",
-    "export.users": "exported the user list",
-    "export.consultations": "exported consultations",
-    "export.audit_log": "exported the activity log",
-    "review.hidden": "hid a review",
-    "review.published": "published a review",
-    "review.deleted": "deleted a review",
-    "message.resolved": "resolved a contact message",
-    "message.deleted": "deleted a contact message",
-    "announcement.sent": "sent an announcement",
-};
 const DOT: Record<string, string> = {
     user: "bg-primary-500", doctor: "bg-accent-500", consultation: "bg-gold-500", post: "bg-slate-500", export: "bg-rose-500",
     review: "bg-gold-500", message: "bg-primary-500", announcement: "bg-rose-500",
@@ -138,7 +113,7 @@ export default function AdminActivityPage() {
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm text-slate-700">
                                     <span className="font-semibold">{e.admin_email ?? "An admin"}</span>{" "}
-                                    {LABELS[e.action] ?? e.action}
+                                    {actionLabel(e.action)}
                                 </p>
                                 <p className="text-xs text-slate-400 truncate">
                                     {e.details ?? (e.target_id ? `ID ${e.target_id.slice(0, 8)}…` : "")}

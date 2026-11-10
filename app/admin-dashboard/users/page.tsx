@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Search, Trash2, AlertCircle, UserX, UserCheck, Download, Loader2 } from "lucide-react";
 import { adminFetch, downloadCsv } from "@/lib/admin-api";
 import { useServerList } from "@/lib/use-server-list";
@@ -129,7 +130,7 @@ export default function AdminUsersPage() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-slate-700 truncate">
-                                        {u.name} {isMe && <span className="badge badge-navy ml-1">You</span>}
+                                        <Link href={`/admin-dashboard/users/${u.id}`} className="hover:underline">{u.name}</Link> {isMe && <span className="badge badge-navy ml-1">You</span>}
                                         {u.is_suspended && <span className="badge badge-rose ml-1">Suspended</span>}
                                     </p>
                                     <p className="text-xs text-slate-400 truncate">{u.email} · joined {timeAgo(u.created_at)}</p>

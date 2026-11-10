@@ -233,7 +233,7 @@ export default function AdminDashboardPage() {
                     ) : (
                         <div className="space-y-2">
                             {data.pendingDoctors.map((d) => (
-                                <Link key={d.id} href="/admin-dashboard/doctors" className="card flex items-center gap-3 hover:shadow-sm transition-all">
+                                <Link key={d.id} href={`/admin-dashboard/doctors/${d.id}`} className="card flex items-center gap-3 hover:shadow-sm transition-all">
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-semibold text-slate-700 truncate">{d.name}</p>
                                         <p className="text-xs text-slate-400 truncate">{d.specialty}{d.hospital ? ` · ${d.hospital}` : ""}</p>
@@ -256,7 +256,7 @@ export default function AdminDashboardPage() {
                     ) : (
                         <div className="card p-0 divide-y divide-slate-50">
                             {data.recentConsultations.map((c) => (
-                                <div key={c.id} className="flex items-center gap-3 px-4 py-3">
+                                <Link key={c.id} href={`/admin-dashboard/consultations/${c.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50">
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium text-slate-700 truncate">
                                             {c.patientName} → Dr. {c.doctorName.replace(/^dr\.?\s*/i, "")}
@@ -264,7 +264,7 @@ export default function AdminDashboardPage() {
                                         <p className="text-[11px] text-slate-400">{timeAgo(c.createdAt)}</p>
                                     </div>
                                     <StatusBadge status={c.status} />
-                                </div>
+                                </Link>
                             ))}
                         </div>
                     )}

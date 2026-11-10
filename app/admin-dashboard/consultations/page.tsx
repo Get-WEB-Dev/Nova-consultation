@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Search, XCircle, AlertCircle, AlertTriangle, RefreshCw, Download, Loader2 } from "lucide-react";
 import { adminFetch, downloadCsv } from "@/lib/admin-api";
 import { useServerList } from "@/lib/use-server-list";
@@ -112,7 +113,7 @@ export default function AdminConsultationsPage() {
                             <div key={r.id} className="flex items-center gap-3 px-4 py-3 flex-wrap sm:flex-nowrap">
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-slate-700 truncate">
-                                        {r.patientName} <span className="text-slate-300 font-normal">→</span> Dr. {r.doctorName.replace(/^dr\.?\s*/i, "")}
+                                        <Link href={`/admin-dashboard/consultations/${r.id}`} className="hover:underline">{r.patientName} <span className="text-slate-300 font-normal">→</span> Dr. {r.doctorName.replace(/^dr\.?\s*/i, "")}</Link>
                                     </p>
                                     <p className="text-xs text-slate-400 truncate">
                                         {r.specialty} · {timeAgo(r.createdAt)}

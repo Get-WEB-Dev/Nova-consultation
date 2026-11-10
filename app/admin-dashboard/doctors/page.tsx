@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Search, BadgeCheck, Eye, EyeOff, ShieldOff, AlertCircle, Loader2, FileSearch } from "lucide-react";
 import { adminFetch } from "@/lib/admin-api";
 import DoctorReviewModal from "@/components/admin/DoctorReviewModal";
@@ -109,7 +110,7 @@ export default function AdminDoctorsPage() {
                                     {(d.users?.name ?? "?").charAt(0).toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-slate-700 truncate">{d.users?.name ?? "Unknown"}</p>
+                                    <Link href={`/admin-dashboard/doctors/${d.id}`} className="block text-sm font-semibold text-slate-700 truncate hover:underline">{d.users?.name ?? "Unknown"}</Link>
                                     <p className="text-xs text-slate-400 truncate">{d.users?.email}</p>
                                     <p className="text-xs text-slate-500 mt-0.5">
                                         {d.specialty}{d.hospital ? ` · ${d.hospital}` : ""} · {d.experience_years}y exp · ${d.fee}
