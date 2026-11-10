@@ -72,8 +72,8 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans: ['"Inter"', 'system-ui', 'sans-serif'],
-        display: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        sans: ['"Inter"', '"Noto Sans Ethiopic"', 'system-ui', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', '"Noto Sans Ethiopic"', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         '2xs': ['0.65rem', { lineHeight: '1rem' }],
