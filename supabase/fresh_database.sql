@@ -730,6 +730,40 @@ create index if not exists idx_audit_created   on admin_audit_log (created_at de
 create index if not exists idx_users_name_trgm  on users using gin (name  extensions.gin_trgm_ops);
 create index if not exists idx_users_email_trgm on users using gin (email extensions.gin_trgm_ops);
 
+-- ══ Internal notes (private to admins: RLS on, no policies = server only) ══
+create table if not exists admin_notes (
+  id          uuid primary key default gen_random_uuid(),
+  entity_type text not null check (entity_type in ('user','doctor','consultation','message')),
+  entity_id   uuid not null,
+  admin_id    uuid references users(id) on delete set null,
+  admin_email text,
+  note        text not null check (char_length(note) between 1 and 2000),
+  created_at  timestamptz not null default now()
+);
+alter table admin_notes enable row level security;
+create index if not exists idx_admin_notes_entity on admin_notes (entity_type, entity_id, created_at desc);
+
+-- "Admin activity" tab on each user page filters the audit log by target
+create index if not exists idx_audit_target on admin_audit_log (target_id, created_at desc);
+
+-- ══ Exact doctor performance numbers, computed in the database ══
+create or replace function admin_doctor_metrics(p_doctor uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'total',           count(*),
+    'completed',       count(*) filter (where status = 'completed'),
+    'missed',          count(*) filter (where status = 'missed'),
+    'cancelled',       count(*) filter (where status = 'cancelled'),
+    'avg_duration',    round((avg(duration_minutes) filter (where status = 'completed'))::numeric, 1),
+    'avg_rating',      round(avg(patient_rating)::numeric, 2),
+    'unique_patients', count(distinct patient_id),
+    'last_30d',        count(*) filter (where created_at >= now() - interval '30 days')
+  )
+  from consultations where doctor_id = p_doctor;
+$$;
+revoke all on function admin_doctor_metrics(uuid) from public, anon, authenticated;
+grant execute on function admin_doctor_metrics(uuid) to service_role;
+
 -- ============================================================
 -- DONE! Database is ready.
 -- ============================================================
