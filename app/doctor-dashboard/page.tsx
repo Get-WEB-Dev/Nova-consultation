@@ -1,115 +1,63 @@
 "use client";
-import { startPolling } from "@/lib/polling";
-import { useEffect, useState, useRef, useCallback } from "react";
-import { getUser, type AuthUser } from "@/lib/supabase/auth";
-import Image from "next/image";
+
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  Users,
-  CheckCircle2,
-  Clock,
-  Zap,
-  Play,
-  Stethoscope,
-  Power,
-  ChevronRight,
-  SkipForward,
-  FileText,
-  Pill,
-  AlertCircle,
-  CalendarDays,
-  TrendingUp,
-  Video,
+  Users, CheckCircle2, Clock, Zap, Play, Stethoscope, ChevronRight, SkipForward, FileText, Pill,
+  AlertCircle, CalendarDays, Video, Star, BarChart3, MessageSquare, BookOpen, Minus, Plus,
+  Activity, TrendingUp, RefreshCw,
 } from "lucide-react";
+import { startPolling } from "@/lib/polling";
+import { getUser, type AuthUser } from "@/lib/supabase/auth";
+import { Card, Avatar, NAV_BG, NAV_DARK, ACCENT, TEAL, SKY } from "@/components/doctor/ui";
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-const NAV_BG = "#003580";
-const ACCENT = "#0071c2";
-const SKY = "#38bdf8";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────
 interface Profile {
-  specialty: string;
-  status: string;
-  fee: number;
-  patients_served: number;
-  rating: number;
-  review_count: number;
-  experience_years: number;
-  hospital: string | null;
+  specialty: string; status: string; fee: number; patients_served: number;
+  rating: number; review_count: number; experience_years: number; hospital: string | null;
 }
 interface QueuePatient {
-  id: string;
-  patientName: string;
-  patientAvatar?: string;
-  symptoms?: string;
-  duration?: string;
-  severity?: string;
-  notes?: string;
-  joinedAt: string;
-  queuePosition: number;
+  id: string; patientName: string; patientAvatar?: string; symptoms?: string; duration?: string;
+  severity?: string; notes?: string; joinedAt: string; queuePosition: number;
 }
-interface ConsultSummary {
-  patientName: string;
-  issue: string;
-  durationMinutes: number;
-}
-interface FollowUpItem {
-  id: string;
-  patientName: string;
-  reason: string;
-  scheduledAt: string;
-}
-interface PendingTask {
-  id: string;
-  type: "note" | "prescription";
-  patientName: string;
-  details: string;
+interface ConsultSummary { patientName: string; issue: string; durationMinutes: number }
+interface FollowUpItem { id: string; patientName: string; reason: string; scheduledAt: string; status?: string }
+interface PendingTask { id: string; type: "note" | "prescription"; patientName: string; details: string }
+
+// ── Small helpers ─────────────────────────────────────────────
+const waitMinutes = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+const waitTone = (m: number) => (m >= 20 ? "#e11d48" : m >= 10 ? "#d97706" : "#64748b");
+
+function whenLabel(iso: string) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const day = new Date(d); day.setHours(0, 0, 0, 0);
+  const diff = Math.round((day.getTime() - start.getTime()) / 86400000);
+  if (diff === 0) return `Today · ${time}`;
+  if (diff === 1) return `Tomorrow · ${time}`;
+  return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${time}`;
 }
 
-// ── Status toggle ─────────────────────────────────────────────────────────────
-function StatusToggle({
-  online,
-  onChange,
-  busy,
-}: {
-  online: boolean;
-  onChange: (v: boolean) => void;
-  busy: boolean;
-}) {
+// ── Building blocks ───────────────────────────────────────────
+function StatusSwitch({ online, busy, onChange }: { online: boolean; busy: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
-      onClick={() => !busy && onChange(!online)}
-      disabled={busy}
-      className="flex items-center gap-2.5 px-4 py-2 rounded-xl font-bold text-[13px] transition-all disabled:opacity-60 border"
-      style={
-        online
-          ? { background: "#f0fdf4", color: "#15803d", borderColor: "#bbf7d0" }
-          : { background: "#f8fafc", color: "#475569", borderColor: "#e2e8f0" }
-      }
+      role="switch" aria-checked={online} disabled={busy} onClick={() => onChange(!online)}
+      className={`flex items-center gap-3 pl-4 pr-2 py-2 rounded-2xl border transition-all disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 ${online ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200 hover:bg-slate-100"}`}
     >
-      <span className="relative flex items-center justify-center w-5 h-5">
-        {online ? (
-          <>
-            <span
-              className="absolute inset-0 rounded-full animate-ping opacity-40"
-              style={{ background: "#22c55e" }}
-            />
-            <span
-              className="relative w-3 h-3 rounded-full"
-              style={{ background: "#22c55e" }}
-            />
-          </>
-        ) : (
-          <Power className="w-4 h-4 text-slate-400" />
-        )}
+      <span className="text-left leading-tight">
+        <span className={`block text-[13px] font-bold ${online ? "text-emerald-700" : "text-slate-600"}`}>{online ? "You're online" : "You're offline"}</span>
+        <span className="block text-[11px] text-slate-400">{online ? "Accepting patients" : "Tap to start accepting"}</span>
       </span>
-      {online ? "Online & Accepting" : "Currently Offline"}
+      <span className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${online ? "bg-emerald-500" : "bg-slate-300"}`}>
+        <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${online ? "translate-x-5" : ""}`} />
+      </span>
     </button>
   );
 }
 
-// ── Severity badge ────────────────────────────────────────────────────────────
 function SeverityBadge({ severity }: { severity?: string }) {
   if (!severity) return null;
   const cfg: Record<string, { bg: string; text: string; border: string }> = {
@@ -118,160 +66,136 @@ function SeverityBadge({ severity }: { severity?: string }) {
     Mild: { bg: "#f0fdf4", text: "#15803d", border: "#bbf7d0" },
   };
   const s = cfg[severity] ?? cfg.Mild;
+  return <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full border" style={{ background: s.bg, color: s.text, borderColor: s.border }}>{severity}</span>;
+}
+
+function Kpi({ icon: Icon, label, value, sub, tint, color }: { icon: any; label: string; value: string | number; sub?: string; tint: string; color: string }) {
   return (
-    <span
-      className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border"
-      style={{ background: s.bg, color: s.text, borderColor: s.border }}
-    >
-      {severity}
-    </span>
+    <Card className="p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11.5px] font-semibold text-slate-500">{label}</p>
+        <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: tint }}><Icon className="w-4 h-4" style={{ color }} /></span>
+      </div>
+      <p className="font-display font-extrabold text-[28px] leading-none text-slate-900 mt-3 tabular-nums">{value}</p>
+      {sub && <p className="text-[11px] text-slate-400 mt-1.5 truncate">{sub}</p>}
+    </Card>
   );
 }
 
-// ── Queue card ────────────────────────────────────────────────────────────────
-function QueueCard({
-  p,
-  pos,
-  onStart,
-  onSkip,
-}: {
-  p: QueuePatient;
-  pos: number;
-  onStart: () => void;
-  onSkip: () => void;
+function SectionCard({ title, icon: Icon, iconColor = ACCENT, href, hrefLabel = "View all", children }: {
+  title: string; icon: any; iconColor?: string; href?: string; hrefLabel?: string; children: React.ReactNode;
 }) {
-  const mins = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(p.joinedAt).getTime()) / 60000),
-  );
   return (
-    <div
-      className="bg-white border border-slate-200 rounded-xl p-4"
-      style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
-    >
-      <div className="flex items-start gap-3">
-        {/* Avatar + position */}
-        <div className="relative flex-shrink-0">
-          <div className="w-11 h-11 rounded-full overflow-hidden bg-slate-100 border border-slate-200">
-            {p.patientAvatar ? (
-              <Image
-                src={p.patientAvatar}
-                alt={p.patientName}
-                width={44}
-                height={44}
-                className="object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <span className="font-extrabold text-slate-400 text-base">
-                  {p.patientName[0]}
-                </span>
-              </div>
-            )}
-          </div>
-          <div
-            className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-extrabold shadow"
-            style={{ background: NAV_BG }}
-          >
-            {pos}
-          </div>
-        </div>
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-display font-bold text-[14.5px] text-slate-900 flex items-center gap-2">
+          <Icon className="w-[18px] h-[18px]" style={{ color: iconColor }} /> {title}
+        </h3>
+        {href && (
+          <Link href={href} className="text-[12px] font-semibold flex items-center gap-0.5 hover:underline" style={{ color: ACCENT }}>
+            {hrefLabel} <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        )}
+      </div>
+      {children}
+    </Card>
+  );
+}
 
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <p className="font-extrabold text-[14px] text-slate-900">
-              {p.patientName}
-            </p>
+function NextUpCard({ p, onStart, onSkip, canSkip }: { p: QueuePatient; onStart: () => void; onSkip: () => void; canSkip: boolean }) {
+  const mins = waitMinutes(p.joinedAt);
+  return (
+    <Card className="p-5 relative overflow-hidden">
+      <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${NAV_BG}, ${TEAL})` }} />
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] px-2.5 py-1 rounded-full" style={{ background: "#effefb", color: ACCENT }}>Next up</span>
+        <span className="flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: waitTone(mins) }}>
+          <Clock className="w-3.5 h-3.5" /> Waiting {mins} min
+        </span>
+      </div>
+      <div className="flex items-start gap-4">
+        <Avatar name={p.patientName} src={p.patientAvatar} size={56} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-display font-extrabold text-[17px] text-slate-900">{p.patientName}</p>
             <SeverityBadge severity={p.severity} />
           </div>
-          <p className="text-[12px] text-slate-500 truncate">
-            {p.symptoms || "No symptoms specified"}
-          </p>
-          <div className="flex items-center gap-1.5 mt-1.5">
-            <Clock
-              className="w-3 h-3 flex-shrink-0"
-              style={{ color: mins >= 10 ? "#f59e0b" : "#94a3b8" }}
-            />
-            <span
-              className="text-[11px] font-bold"
-              style={{ color: mins >= 10 ? "#f59e0b" : "#94a3b8" }}
-            >
-              {mins} min wait
-            </span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={onSkip}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
-          >
-            <SkipForward className="w-3.5 h-3.5" /> Skip
-          </button>
-          <button
-            onClick={onStart}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-extrabold text-white transition-all active:scale-95"
-            style={{ background: ACCENT }}
-          >
-            <Play className="w-3 h-3 fill-white" /> Start
-          </button>
+          <p className="text-[13px] text-slate-600 mt-1 line-clamp-2">{p.symptoms || "No symptoms specified"}</p>
+          {p.duration && <p className="text-[12px] text-slate-400 mt-1">Symptoms for {p.duration}</p>}
         </div>
       </div>
-    </div>
+      <div className="flex gap-2.5 mt-5">
+        <button onClick={onStart} className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-[14px] text-white transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2"
+          style={{ background: `linear-gradient(135deg, ${NAV_BG}, ${ACCENT})`, boxShadow: "0 6px 18px rgba(26,53,88,0.28)" }}>
+          <Play className="w-4 h-4 fill-white" /> Start consultation
+        </button>
+        {canSkip && (
+          <button onClick={onSkip} className="px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-[13px] flex items-center gap-1.5 hover:bg-slate-50">
+            <SkipForward className="w-4 h-4" /> Skip
+          </button>
+        )}
+      </div>
+    </Card>
   );
 }
 
-// ── Empty queue ───────────────────────────────────────────────────────────────
-function EmptyQueue() {
+function QueueRow({ p, pos, onStart }: { p: QueuePatient; pos: number; onStart: () => void }) {
+  const mins = waitMinutes(p.joinedAt);
   return (
-    <div className="flex flex-col items-center justify-center py-16 bg-white border border-dashed border-slate-200 rounded-2xl">
-      <div className="relative mb-4">
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center"
-          style={{ background: "#eff6ff" }}
-        >
-          <Stethoscope className="w-7 h-7" style={{ color: ACCENT }} />
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-white hover:border-slate-200 transition-colors">
+      <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 text-[11px] font-bold flex items-center justify-center shrink-0">{pos}</span>
+      <Avatar name={p.patientName} src={p.patientAvatar} size={38} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="font-bold text-[13.5px] text-slate-900 truncate">{p.patientName}</p>
+          <SeverityBadge severity={p.severity} />
         </div>
-        <span
-          className="absolute -top-1 -right-1 w-4 h-4 rounded-full animate-ping opacity-30"
-          style={{ background: "#22c55e" }}
-        />
-        <span
-          className="absolute -top-1 -right-1 w-4 h-4 rounded-full"
-          style={{ background: "#22c55e" }}
-        />
+        <p className="text-[12px] text-slate-400 truncate">{p.symptoms || "No symptoms specified"}</p>
       </div>
-      <p className="font-extrabold text-slate-700">Waiting for patients…</p>
-      <p className="text-[12px] text-slate-400 mt-1">
-        Your queue will appear here when patients join.
-      </p>
+      <span className="hidden sm:block text-[11.5px] font-semibold shrink-0" style={{ color: waitTone(mins) }}>{mins} min</span>
+      <button onClick={onStart} aria-label={`Start consultation with ${p.patientName}`}
+        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-white hover:opacity-90" style={{ background: ACCENT }}>
+        <Play className="w-3.5 h-3.5 fill-white" />
+      </button>
     </div>
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// MAIN PAGE
-// ═════════════════════════════════════════════════════════════════════════════
+function Stepper({ label, value, onDec, onInc }: { label: string; value: number; onDec: () => void; onInc: () => void }) {
+  return (
+    <div>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">{label}</p>
+      <div className="flex items-center gap-2">
+        <button onClick={onDec} aria-label={`Decrease ${label}`} className="w-10 h-10 rounded-xl border border-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-50"><Minus className="w-4 h-4" /></button>
+        <span className="flex-1 text-center font-display font-extrabold text-[20px] text-slate-900 tabular-nums">{value}</span>
+        <button onClick={onInc} aria-label={`Increase ${label}`} className="w-10 h-10 rounded-xl border border-slate-200 text-slate-600 flex items-center justify-center hover:bg-slate-50"><Plus className="w-4 h-4" /></button>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────
 export default function DoctorHomePage() {
+  const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [queue, setQueue] = useState<QueuePatient[]>([]);
+  const [skipped, setSkipped] = useState<string[]>([]);
   const [completedToday, setCompletedToday] = useState(0);
   const [lastConsult, setLastConsult] = useState<ConsultSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
+  const [pendingTasks, setPendingTasks] = useState<PendingTask[]>([]);
 
-  // Session setup state
+  // Session planner
   const [maxPatients, setMaxPatients] = useState(10);
   const [avgTime, setAvgTime] = useState(15);
   const [sessionFee, setSessionFee] = useState(0);
 
-  // Remote follow-ups & pending tasks
-  const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
-  const [pendingTasks, setPendingTasks] = useState<PendingTask[]>([]);
+  const [loadTick, setLoadTick] = useState(0);
 
   useEffect(() => {
     const u = getUser();
@@ -281,64 +205,46 @@ export default function DoctorHomePage() {
     const loadData = () =>
       Promise.all([
         fetch(`/api/doctor/profile?doctorId=${u.id}`).then((r) => r.json()),
-        fetch(`/api/queue?doctorId=${u.id}`)
-          .then((r) => r.json())
-          .catch(() => ({ data: [] })),
-        fetch(`/api/doctor/consultations?doctorId=${u.id}&limit=60`)
-          .then((r) => r.json())
-          .catch(() => ({ data: [] })),
-        fetch(`/api/follow-ups?doctorId=${u.id}`)
-          .then((r) => r.json())
-          .catch(() => ({ data: [] })),
-        fetch(`/api/doctor/pending-tasks?doctorId=${u.id}`)
-          .then((r) => r.json())
-          .catch(() => ({ data: [] })),
+        fetch(`/api/queue?doctorId=${u.id}`).then((r) => r.json()).catch(() => ({ data: [] })),
+        fetch(`/api/doctor/consultations?doctorId=${u.id}&limit=60`).then((r) => r.json()).catch(() => ({ data: [] })),
+        fetch(`/api/follow-ups?doctorId=${u.id}`).then((r) => r.json()).catch(() => ({ data: [] })),
+        fetch(`/api/doctor/pending-tasks?doctorId=${u.id}`).then((r) => r.json()).catch(() => ({ data: [] })),
       ])
         .then(([p, q, c, f, t]) => {
           if (p.data) {
             setProfile(p.data);
-            setIsOnline(
-              ["available", "in_consultation"].includes(p.data.status),
-            );
-            setSessionFee(p.data.fee || 0);
+            setIsOnline(["available", "in_consultation"].includes(p.data.status));
+            setSessionFee((prev) => prev || p.data.fee || 0);
+            setLoadFailed(false);
+          } else {
+            setLoadFailed(true);
           }
+
           const sorted = [...(q.data || [])].sort((a: any, b: any) => {
-            const order: Record<string, number> = {
-              Severe: 0,
-              Moderate: 1,
-              Mild: 2,
-            };
+            const order: Record<string, number> = { Severe: 0, Moderate: 1, Mild: 2 };
             return (order[a.severity] ?? 3) - (order[b.severity] ?? 3);
           });
-          setQueue(
-            sorted.map((e: any, i: number) => ({
-              id: e.id,
-              patientName: e.patientName || e.patient_name || "Patient",
-              patientAvatar: e.patientAvatar,
-              symptoms: e.symptoms,
-              duration: e.duration,
-              severity: e.severity,
-              notes: e.notes,
-              joinedAt: e.joinedAt || e.joined_at || new Date().toISOString(),
-              queuePosition: i + 1,
-            })),
-          );
+          setQueue(sorted.map((e: any, i: number) => ({
+            id: e.id,
+            patientName: e.patientName || e.patient_name || "Patient",
+            patientAvatar: e.patientAvatar,
+            symptoms: e.symptoms,
+            duration: e.duration,
+            severity: e.severity,
+            notes: e.notes,
+            joinedAt: e.joinedAt || e.joined_at || new Date().toISOString(),
+            queuePosition: i + 1,
+          })));
+
           const today = new Date().toDateString();
-          const done = (c.data || []).filter(
-            (x: any) =>
-              (x.status === "completed" || x.status === "follow_up") &&
-              new Date(x.endedAt || x.created_at).toDateString() === today,
-          );
+          const done = (c.data || []).filter((x: any) =>
+            (x.status === "completed" || x.status === "follow_up") &&
+            new Date(x.endedAt || x.created_at).toDateString() === today);
           setCompletedToday(done.length);
-          const allDone = (c.data || []).filter(
-            (x: any) => x.status === "completed" || x.status === "follow_up",
-          );
+
+          const allDone = (c.data || []).filter((x: any) => x.status === "completed" || x.status === "follow_up");
           if (allDone.length) {
-            const last = allDone.sort(
-              (a: any, b: any) =>
-                new Date(b.created_at).getTime() -
-                new Date(a.created_at).getTime(),
-            )[0];
+            const last = allDone.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
             setLastConsult({
               patientName: last.patientName || "Patient",
               issue: last.diagnosis || last.summary || last.notes || "General consultation",
@@ -347,24 +253,22 @@ export default function DoctorHomePage() {
           }
 
           if (f.data) {
-            setFollowUps(
-              f.data.map((x: any) => ({
-                id: x.id,
-                patientName: x.patientName || x.users?.name || "Patient",
-                reason: x.reason || x.diagnosis || x.summary || "Follow-up",
-                scheduledAt: x.scheduledAt || x.follow_up_scheduled_at,
-              }))
-            );
+            setFollowUps(f.data.map((x: any) => ({
+              id: x.id,
+              patientName: x.patientName || x.users?.name || "Patient",
+              reason: x.reason || x.diagnosis || x.summary || "Follow-up",
+              scheduledAt: x.scheduledAt || x.follow_up_scheduled_at,
+              status: x.status,
+            })));
           }
-          if (t.data) {
-            setPendingTasks(t.data);
-          }
+          if (t.data) setPendingTasks(t.data);
         })
+        .catch(() => setLoadFailed(true))
         .finally(() => setLoading(false));
 
     loadData();
     return startPolling(loadData, 10000);
-  }, []);
+  }, [loadTick]);
 
   const toggleStatus = async (val: boolean) => {
     if (!user || toggling) return;
@@ -377,523 +281,276 @@ export default function DoctorHomePage() {
     const previous = isOnline;
     setIsOnline(val); // optimistic: feels instant
     try {
+      const status = val ? "available" : "offline";
       const res = await fetch("/api/doctor/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          doctorId: user.id,
-          status: val ? "available" : "offline",
-        }),
+        body: JSON.stringify({ doctorId: user.id, status }),
       });
       if (!res.ok) throw new Error("status update failed");
+      window.dispatchEvent(new CustomEvent("nova:doctor-status", { detail: { status } })); // keep the sidebar in sync
     } catch {
       setIsOnline(previous); // the server kept the old status — show the truth
     }
     setToggling(false);
   };
 
-  // Derived session estimates
-  const estimatedDuration = maxPatients * avgTime;
-  const estimatedHours = Math.floor(estimatedDuration / 60);
-  const estimatedMins = estimatedDuration % 60;
+  // Skipped patients go to the back of the line — and stay there across refreshes
+  const orderedQueue = useMemo(
+    () => [...queue.filter((p) => !skipped.includes(p.id)), ...queue.filter((p) => skipped.includes(p.id))],
+    [queue, skipped],
+  );
 
-  if (loading)
+  const upcoming = useMemo(
+    () => followUps
+      .filter((f) => (!f.status || f.status === "pending") && f.scheduledAt)
+      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+      .slice(0, 4),
+    [followUps],
+  );
+
+  const startConsult = (id: string) => router.push(`/doctor-dashboard/consult?patientId=${id}`);
+
+  const estimatedTotal = maxPatients * avgTime;
+  const estH = Math.floor(estimatedTotal / 60);
+  const estM = estimatedTotal % 60;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const dateLabel = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+
+  // ── Loading skeleton ──
+  if (loading && !profile) {
     return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-14 bg-white rounded-2xl" />
-        <div className="h-40 bg-white rounded-2xl" />
-        <div className="h-64 bg-white rounded-2xl" />
+      <div className="space-y-5 animate-pulse">
+        <div className="h-28 bg-white rounded-2xl border border-slate-100" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[1, 2, 3, 4].map((i) => <div key={i} className="h-28 bg-white rounded-2xl border border-slate-100" />)}</div>
+        <div className="grid lg:grid-cols-3 gap-5"><div className="lg:col-span-2 h-72 bg-white rounded-2xl border border-slate-100" /><div className="h-72 bg-white rounded-2xl border border-slate-100" /></div>
       </div>
     );
+  }
+
+  if (loadFailed && !profile) {
+    return (
+      <Card className="text-center py-14 px-6 max-w-md mx-auto">
+        <AlertCircle className="w-9 h-9 text-rose-400 mx-auto" />
+        <p className="font-display font-bold text-slate-800 mt-3">We couldn't load your dashboard</p>
+        <p className="text-[13px] text-slate-500 mt-1">Check your connection and try again.</p>
+        <button onClick={() => { setLoading(true); setLoadTick((t) => t + 1); }} className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold" style={{ background: NAV_BG }}>
+          <RefreshCw className="w-4 h-4" /> Try again
+        </button>
+      </Card>
+    );
+  }
+
+  const rating = Number(profile?.rating ?? 0);
 
   return (
-    <div className="space-y-5 pb-10">
-      {/* ── PAGE HEADER ─────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="font-extrabold text-slate-900 text-[18px] sm:text-[20px]">
-            {isOnline ? "Live Session" : "Physician Portal"}
-          </h1>
-          <p className="text-[12px] text-slate-400 mt-0.5">
-            {profile?.specialty || "Specialist"} ·{" "}
-            {isOnline ? `${queue.length} in queue` : "Offline"}
-          </p>
+    <div className="space-y-5 animate-fade-up">
+      {/* ── Welcome + status ── */}
+      <Card className="p-5 sm:p-6 relative overflow-hidden">
+        <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(12,188,173,0.14) 0%, transparent 70%)" }} />
+        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-[12px] font-semibold text-slate-400">{dateLabel}</p>
+            <h2 className="font-display font-extrabold text-[22px] sm:text-[26px] text-slate-900 leading-tight mt-0.5">{greeting}, Dr. {user?.name?.split(" ")[0]}</h2>
+            <p className="text-[13px] text-slate-500 mt-1">
+              {isOnline
+                ? queue.length > 0 ? `${queue.length} patient${queue.length > 1 ? "s are" : " is"} waiting for you.` : "You're live — waiting for patients to join."
+                : "Go online when you're ready to see patients."}
+            </p>
+          </div>
+          <StatusSwitch online={isOnline} busy={toggling} onChange={toggleStatus} />
         </div>
-        <StatusToggle
-          online={isOnline}
-          onChange={toggleStatus}
-          busy={toggling}
-        />
+      </Card>
+
+      {/* ── KPIs ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Kpi icon={Users} label="Waiting now" value={queue.length} sub={isOnline ? "in your queue" : "go online to receive"} tint="#fffbeb" color="#d97706" />
+        <Kpi icon={CheckCircle2} label="Seen today" value={completedToday} sub="consultations" tint="#ecfdf5" color="#059669" />
+        <Kpi icon={Star} label="Rating" value={rating > 0 ? rating.toFixed(1) : "—"} sub={`${profile?.review_count ?? 0} review${profile?.review_count === 1 ? "" : "s"}`} tint="#fef9c3" color="#ca8a04" />
+        <Kpi icon={Activity} label="Patients served" value={(profile?.patients_served ?? 0).toLocaleString()} sub={profile?.experience_years ? `${profile.experience_years} yrs experience` : undefined} tint="#effefb" color={ACCENT} />
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          OFFLINE STATE
-      ═══════════════════════════════════════════════════════════════ */}
-      {!isOnline && (
-        <div className="space-y-5">
-          {/* ── Session Setup ── */}
-          <div
-            className="bg-white border border-slate-200 rounded-2xl p-5"
-            style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}
-          >
-            <div
-              className="h-1 rounded-full mb-5"
-              style={{
-                background: `linear-gradient(90deg, ${NAV_BG}, ${ACCENT}, ${SKY})`,
-              }}
-            />
-            <h2 className="font-extrabold text-slate-900 text-[15px] mb-4">
-              Session Setup
-            </h2>
-
-            <div className="grid sm:grid-cols-3 gap-4 mb-5">
-              {/* Max patients */}
-              <div>
-                <label
-                  className="block text-[10px] font-extrabold uppercase tracking-widest mb-1.5"
-                  style={{ color: ACCENT }}
-                >
-                  Max Patients
-                </label>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setMaxPatients((p) => Math.max(1, p - 1))}
-                    className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 font-bold text-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
-                  >
-                    −
-                  </button>
-                  <span className="flex-1 text-center font-extrabold text-[17px] text-slate-900">
-                    {maxPatients}
-                  </span>
-                  <button
-                    onClick={() => setMaxPatients((p) => p + 1)}
-                    className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 font-bold text-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* Avg time */}
-              <div>
-                <label
-                  className="block text-[10px] font-extrabold uppercase tracking-widest mb-1.5"
-                  style={{ color: ACCENT }}
-                >
-                  Avg. Time (min)
-                </label>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setAvgTime((t) => Math.max(5, t - 5))}
-                    className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 font-bold text-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
-                  >
-                    −
-                  </button>
-                  <span className="flex-1 text-center font-extrabold text-[17px] text-slate-900">
-                    {avgTime}
-                  </span>
-                  <button
-                    onClick={() => setAvgTime((t) => t + 5)}
-                    className="w-8 h-8 rounded-lg border border-slate-200 text-slate-600 font-bold text-lg flex items-center justify-center hover:bg-slate-50 transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              {/* Consultation fee */}
-              <div>
-                <label
-                  className="block text-[10px] font-extrabold uppercase tracking-widest mb-1.5"
-                  style={{ color: ACCENT }}
-                >
-                  Fee (Birr)
-                </label>
-                <input
-                  type="number"
-                  value={sessionFee}
-                  onChange={(e) => setSessionFee(+e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-[15px] font-extrabold text-slate-900 outline-none focus:border-blue-300 transition-colors text-center bg-slate-50"
-                />
-              </div>
-            </div>
-
-            {/* Session estimate */}
-            <div
-              className="rounded-xl p-4 border border-dashed border-slate-200"
-              style={{ background: "#f8fafc" }}
-            >
-              <p className="text-[10px] font-extrabold uppercase tracking-widest mb-3 text-slate-400">
-                Session Estimate
-              </p>
-              <div className="flex items-center gap-6 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <Clock
-                    className="w-4 h-4 flex-shrink-0"
-                    style={{ color: ACCENT }}
-                  />
+      <div className="grid lg:grid-cols-3 gap-5 items-start">
+        {/* ── Main column ── */}
+        <div className="lg:col-span-2 space-y-5 min-w-0">
+          {!isOnline ? (
+            <>
+              <div className="rounded-2xl p-6 sm:p-8 relative overflow-hidden text-white"
+                style={{ background: `linear-gradient(135deg, ${NAV_DARK} 0%, ${NAV_BG} 60%, #17606b 100%)`, boxShadow: "0 12px 32px rgba(26,53,88,0.28)" }}>
+                <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(56,189,248,0.22) 0%, transparent 70%)" }} />
+                <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-5">
                   <div>
-                    <p className="text-[10px] text-slate-400">Est. Duration</p>
-                    <p className="font-extrabold text-[15px] text-slate-900">
-                      {estimatedHours > 0 ? `${estimatedHours}h ` : ""}
-                      {estimatedMins > 0 ? `${estimatedMins}m` : "0m"}
-                    </p>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: SKY }}>Ready to consult?</p>
+                    <h3 className="font-display font-extrabold text-[21px] sm:text-[24px] leading-tight mt-1">Start your consultation session</h3>
+                    <p className="text-[13px] text-white/60 mt-1.5">Up to {maxPatients} patients · {avgTime} min average · {sessionFee.toLocaleString()} Birr per session</p>
+                  </div>
+                  <button onClick={() => toggleStatus(true)} disabled={toggling}
+                    className="shrink-0 flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl font-bold text-[14px] transition-transform active:scale-[0.98] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a3558]"
+                    style={{ background: TEAL, color: NAV_DARK, boxShadow: "0 8px 22px rgba(12,188,173,0.4)" }}>
+                    <Zap className="w-5 h-5" /> Go online now
+                  </button>
+                </div>
+              </div>
+
+              <Card className="p-5 sm:p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="font-display font-bold text-[15px] text-slate-900">Plan your session</h3>
+                  <span className="text-[11px] text-slate-400">Estimates only</span>
+                </div>
+                <div className="grid sm:grid-cols-3 gap-5">
+                  <Stepper label="Max patients" value={maxPatients} onDec={() => setMaxPatients((p) => Math.max(1, p - 1))} onInc={() => setMaxPatients((p) => p + 1)} />
+                  <Stepper label="Avg. minutes" value={avgTime} onDec={() => setAvgTime((t) => Math.max(5, t - 5))} onInc={() => setAvgTime((t) => t + 5)} />
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Fee (Birr)</p>
+                    <input type="number" min={0} value={sessionFee} onChange={(e) => setSessionFee(Math.max(0, +e.target.value))}
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-[16px] font-display font-extrabold text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100" />
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Users
-                    className="w-4 h-4 flex-shrink-0"
-                    style={{ color: ACCENT }}
-                  />
-                  <div>
-                    <p className="text-[10px] text-slate-400">Queue Cap</p>
-                    <p className="font-extrabold text-[15px] text-slate-900">
-                      {maxPatients} patients
-                    </p>
-                  </div>
+                <div className="grid grid-cols-3 gap-3 mt-5">
+                  {[
+                    { icon: Clock, label: "Est. duration", value: `${estH > 0 ? `${estH}h ` : ""}${estM}m` },
+                    { icon: Users, label: "Queue cap", value: `${maxPatients}` },
+                    { icon: TrendingUp, label: "Potential revenue", value: `${(sessionFee * maxPatients).toLocaleString()}` },
+                  ].map(({ icon: Icon, label, value }) => (
+                    <div key={label} className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                      <Icon className="w-4 h-4 mb-1.5" style={{ color: ACCENT }} />
+                      <p className="font-display font-extrabold text-[16px] text-slate-900 tabular-nums">{value}</p>
+                      <p className="text-[10.5px] text-slate-400">{label}</p>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Zap
-                    className="w-4 h-4 flex-shrink-0"
-                    style={{ color: ACCENT }}
-                  />
-                  <div>
-                    <p className="text-[10px] text-slate-400">Total Revenue</p>
-                    <p className="font-extrabold text-[15px] text-slate-900">
-                      {(sessionFee * maxPatients).toLocaleString()} Birr
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Today's Follow-ups + Pending Tasks (2-col) ── */}
-          <div className="grid sm:grid-cols-2 gap-5">
-            {/* Follow-ups */}
-            <div
-              className="bg-white border border-slate-200 rounded-2xl p-5"
-              style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-extrabold text-[14px] text-slate-900 flex items-center gap-1.5">
-                  <CalendarDays className="w-4 h-4" style={{ color: ACCENT }} />{" "}
-                  Today's Follow-Ups
+              </Card>
+            </>
+          ) : (
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display font-bold text-[16px] text-slate-900 flex items-center gap-2">
+                  Live queue
+                  {queue.length > 0 && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: ACCENT }}>{queue.length}</span>}
                 </h3>
-                <Link
-                  href="/doctor-dashboard/followups"
-                  className="text-[11px] font-bold flex items-center gap-0.5"
-                  style={{ color: ACCENT }}
-                >
-                  View all <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
+                <span className="text-[11.5px] text-slate-400">Most urgent first</span>
               </div>
 
-              {followUps.length === 0 ? (
-                <p className="text-[12px] text-slate-400 text-center py-4">
-                  No follow-ups today
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {followUps.slice(0, 3).map((fu) => (
-                    <div
-                      key={fu.id}
-                      className="flex items-center gap-3 p-2.5 rounded-xl"
-                      style={{ background: "#f8fafc" }}
-                    >
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[12px] font-extrabold"
-                        style={{ background: ACCENT }}
-                      >
-                        {fu.patientName[0]}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-bold text-slate-800 truncate">
-                          {fu.patientName}
-                        </p>
-                        <p className="text-[10px] text-slate-400 truncate">
-                          {fu.reason}
-                        </p>
-                      </div>
+              {orderedQueue.length === 0 ? (
+                <Card className="text-center py-14 px-6 border-dashed">
+                  <div className="relative w-16 h-16 mx-auto mb-4">
+                    <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "#effefb" }}>
+                      <Stethoscope className="w-7 h-7" style={{ color: ACCENT }} />
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Pending tasks */}
-            <div
-              className="bg-white border border-slate-200 rounded-2xl p-5"
-              style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}
-            >
-              <h3 className="font-extrabold text-[14px] text-slate-900 flex items-center gap-1.5 mb-4">
-                <AlertCircle className="w-4 h-4 text-amber-500" /> Pending Tasks
-              </h3>
-
-              {pendingTasks.length === 0 ? (
-                <p className="text-[12px] text-slate-400 text-center py-4">
-                  All caught up ✓
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {pendingTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className="flex items-start gap-3 p-2.5 rounded-xl border border-amber-100"
-                      style={{ background: "#fffbeb" }}
-                    >
-                      <div
-                        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ background: "#fef3c7" }}
-                      >
-                        {task.type === "note" ? (
-                          <FileText className="w-3.5 h-3.5 text-amber-600" />
-                        ) : (
-                          <Pill className="w-3.5 h-3.5 text-amber-600" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-bold text-amber-800 capitalize">
-                          {task.type}
-                        </p>
-                        <p className="text-[10px] text-amber-700">
-                          {task.patientName} · {task.details}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Last Session Summary ── */}
-          {(completedToday > 0 || lastConsult) && (
-            <div
-              className="bg-white border border-slate-200 rounded-2xl p-5"
-              style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.06)" }}
-            >
-              <h3 className="font-extrabold text-[14px] text-slate-900 flex items-center gap-1.5 mb-4">
-                <TrendingUp className="w-4 h-4" style={{ color: ACCENT }} />{" "}
-                Last Session Summary
-              </h3>
-              <div className="flex items-center gap-6 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <div>
-                    <p className="text-[10px] text-slate-400">
-                      Completed Today
-                    </p>
-                    <p className="font-extrabold text-[17px] text-slate-900">
-                      {completedToday}
-                    </p>
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 animate-ping opacity-40" />
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white" />
                   </div>
-                </div>
-                {lastConsult && (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4" style={{ color: ACCENT }} />
-                      <div>
-                        <p className="text-[10px] text-slate-400">
-                          Last Duration
-                        </p>
-                        <p className="font-extrabold text-[17px] text-slate-900">
-                          {lastConsult.durationMinutes}m
-                        </p>
-                      </div>
-                    </div>
-                    <div
-                      className="flex-1 min-w-0 p-3 rounded-xl border border-slate-100"
-                      style={{ background: "#f8fafc" }}
-                    >
-                      <p className="text-[10px] text-slate-400">Last Patient</p>
-                      <p className="font-bold text-[12px] text-slate-800 truncate">
-                        {lastConsult.patientName}
-                      </p>
-                      <p className="text-[11px] text-slate-500 truncate">
-                        {lastConsult.issue}
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── Start Session CTA ── */}
-          <div
-            className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-5 relative overflow-hidden"
-            style={{
-              background: NAV_BG,
-              boxShadow: "0 4px 20px rgba(0,53,128,0.3)",
-            }}
-          >
-            <div
-              className="absolute top-0 right-0 w-48 h-48 rounded-full pointer-events-none"
-              style={{
-                background:
-                  "radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%)",
-                transform: "translate(20%, -30%)",
-              }}
-            />
-            <div className="relative z-10">
-              <p
-                className="text-[11px] font-extrabold uppercase tracking-widest mb-1"
-                style={{ color: SKY }}
-              >
-                Ready to consult?
-              </p>
-              <h3 className="font-extrabold text-white text-[18px] sm:text-[20px] leading-tight">
-                Start New Consultation Session
-              </h3>
-              <p
-                className="text-[13px] mt-1"
-                style={{ color: "rgba(255,255,255,0.55)" }}
-              >
-                Go online to accept up to {maxPatients} patients · {avgTime} min
-                avg · {sessionFee} Birr/session
-              </p>
-            </div>
-            <button
-              onClick={() => toggleStatus(true)}
-              className="relative z-10 flex items-center gap-2 px-8 py-3.5 rounded-xl font-extrabold text-[14px] transition-all active:scale-95 hover:opacity-90 flex-shrink-0 w-full sm:w-auto justify-center"
-              style={{ background: SKY, color: "#00224f" }}
-            >
-              <Zap className="w-5 h-5" /> Go Online Now
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════════
-          ONLINE STATE
-      ═══════════════════════════════════════════════════════════════ */}
-      {isOnline && (
-        <div className="space-y-5">
-          {/* Stats row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div
-              className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-3"
-              style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
-            >
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "#fffbeb" }}
-              >
-                <Users className="w-5 h-5 text-amber-500" />
-              </div>
-              <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-                  Queue
-                </p>
-                <div className="flex items-baseline gap-1.5">
-                  <p className="font-extrabold text-[24px] text-slate-900">
-                    {queue.length}
-                  </p>
-                  <span className="text-[12px] text-slate-400">waiting</span>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-3"
-              style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
-            >
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "#f0fdf4" }}
-              >
-                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-              </div>
-              <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-                  Today
-                </p>
-                <div className="flex items-baseline gap-1.5">
-                  <p className="font-extrabold text-[24px] text-slate-900">
-                    {completedToday}
-                  </p>
-                  <span className="text-[12px] text-slate-400">done</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Queue list */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-extrabold text-[15px] text-slate-900 flex items-center gap-2">
-                Waiting Queue
-                {queue.length > 0 && (
-                  <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white"
-                    style={{ background: ACCENT }}
-                  >
-                    {queue.length}
-                  </span>
-                )}
-              </h2>
-              <span className="text-[11px] text-slate-400">
-                Sorted by severity
-              </span>
-            </div>
-
-            {queue.length === 0 ? (
-              <EmptyQueue />
-            ) : (
-              <div className="space-y-3">
-                {queue.map((p, i) => (
-                  <QueueCard
-                    key={p.id}
-                    p={p}
-                    pos={i + 1}
-                    onStart={() =>
-                      (window.location.href = `/doctor-dashboard/consult?patientId=${p.id}`)
-                    }
-                    onSkip={() =>
-                      setQueue((prev) => {
-                        const arr = [...prev];
-                        const [item] = arr.splice(i, 1);
-                        arr.push(item);
-                        return arr.map((x, j) => ({
-                          ...x,
-                          queuePosition: j + 1,
-                        }));
-                      })
-                    }
+                  <p className="font-display font-bold text-slate-800">You're live — no one is waiting yet</p>
+                  <p className="text-[12.5px] text-slate-400 mt-1 max-w-xs mx-auto">New patients appear here the moment they join your queue. This page refreshes automatically.</p>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  <NextUpCard
+                    p={orderedQueue[0]}
+                    canSkip={orderedQueue.length > 1}
+                    onStart={() => startConsult(orderedQueue[0].id)}
+                    onSkip={() => setSkipped((s) => [...s.filter((id) => id !== orderedQueue[0].id), orderedQueue[0].id])}
                   />
+                  {orderedQueue.length > 1 && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 pt-1">Then</p>
+                      {orderedQueue.slice(1).map((p, i) => <QueueRow key={p.id} p={p} pos={i + 2} onStart={() => startConsult(p.id)} />)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+
+        {/* ── Side column (stacks on phones, 2-up on tablets) ── */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-1 gap-5 min-w-0">
+          <SectionCard title="Upcoming follow-ups" icon={CalendarDays} href="/doctor-dashboard/followups">
+            {upcoming.length === 0 ? (
+              <p className="text-[12.5px] text-slate-400 text-center py-5">No follow-ups scheduled</p>
+            ) : (
+              <div className="space-y-2">
+                {upcoming.map((fu) => {
+                  const overdue = new Date(fu.scheduledAt) < new Date();
+                  return (
+                    <div key={fu.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50/80">
+                      <Avatar name={fu.patientName} size={34} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-slate-800 truncate">{fu.patientName}</p>
+                        <p className="text-[11.5px] text-slate-400 truncate">{fu.reason}</p>
+                      </div>
+                      <span className={`text-[10.5px] font-bold px-2 py-1 rounded-full shrink-0 ${overdue ? "bg-rose-50 text-rose-600" : "bg-teal-50 text-teal-700"}`}>
+                        {overdue ? "Overdue" : whenLabel(fu.scheduledAt)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard title="Pending tasks" icon={AlertCircle} iconColor="#d97706">
+            {pendingTasks.length === 0 ? (
+              <p className="text-[12.5px] text-slate-400 text-center py-5">All caught up ✓</p>
+            ) : (
+              <div className="space-y-2">
+                {pendingTasks.slice(0, 5).map((task) => (
+                  <div key={task.id} className="flex items-start gap-3 p-2.5 rounded-xl border border-amber-100 bg-amber-50/60">
+                    <span className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                      {task.type === "note" ? <FileText className="w-4 h-4 text-amber-600" /> : <Pill className="w-4 h-4 text-amber-600" />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-bold text-amber-900 capitalize">{task.type} needed</p>
+                      <p className="text-[11.5px] text-amber-800/80 truncate">{task.patientName} · {task.details}</p>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
-          </div>
+          </SectionCard>
 
-          {/* Floating CTA */}
-          {queue.length > 0 && (
-            <div className="fixed bottom-20 lg:bottom-6 inset-x-0 px-4 pointer-events-none z-50 flex justify-center">
-              <Link
-                href="/doctor-dashboard/consult"
-                className="pointer-events-auto flex items-center gap-3 px-8 py-4 rounded-2xl font-extrabold text-[14px] transition-all active:scale-[0.98] shadow-2xl"
-                style={{
-                  background: NAV_BG,
-                  color: "white",
-                  boxShadow: "0 8px 32px rgba(0,53,128,0.4)",
-                }}
-              >
-                <span className="relative flex h-3.5 w-3.5">
-                  <span
-                    className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-50"
-                    style={{ background: "#22c55e" }}
-                  />
-                  <span
-                    className="relative inline-flex rounded-full h-3.5 w-3.5 border-2 border-white"
-                    style={{ background: "#22c55e" }}
-                  />
-                </span>
-                Start Next Consultation
-                <Video className="w-4 h-4 ml-1" />
-              </Link>
-            </div>
+          {lastConsult && (
+            <SectionCard title="Last session" icon={Video}>
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-3.5">
+                <p className="text-[13px] font-bold text-slate-800 truncate">{lastConsult.patientName}</p>
+                <p className="text-[12px] text-slate-500 mt-0.5 line-clamp-2">{lastConsult.issue}</p>
+                {lastConsult.durationMinutes > 0 && (
+                  <p className="text-[11.5px] text-slate-400 mt-2 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {lastConsult.durationMinutes} min</p>
+                )}
+              </div>
+            </SectionCard>
           )}
+
+          <SectionCard title="Quick actions" icon={Zap}>
+            <div className="grid grid-cols-2 gap-2.5">
+              {[
+                { href: "/doctor-dashboard/schedule", label: "Schedule", icon: CalendarDays },
+                { href: "/doctor-dashboard/analytics", label: "Analytics", icon: BarChart3 },
+                { href: "/doctor-dashboard/messages", label: "Messages", icon: MessageSquare },
+                { href: "/doctor-dashboard/feed", label: "Write a post", icon: BookOpen },
+              ].map(({ href, label, icon: Icon }) => (
+                <Link key={href} href={href} className="flex flex-col items-start gap-2 p-3.5 rounded-xl border border-slate-200 hover:border-teal-300 hover:bg-teal-50/40 transition-colors">
+                  <Icon className="w-[18px] h-[18px]" style={{ color: ACCENT }} />
+                  <span className="text-[12.5px] font-semibold text-slate-700">{label}</span>
+                </Link>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+
+      {/* Phones: always-reachable shortcut while patients are waiting */}
+      {isOnline && queue.length > 0 && (
+        <div className="md:hidden fixed inset-x-0 px-4 pointer-events-none z-30" style={{ bottom: "calc(76px + env(safe-area-inset-bottom))" }}>
+          <Link href="/doctor-dashboard/consult" className="pointer-events-auto flex items-center justify-center gap-3 w-full py-3.5 rounded-2xl font-bold text-[14px] text-white"
+            style={{ background: `linear-gradient(135deg, ${NAV_BG}, ${ACCENT})`, boxShadow: "0 10px 30px rgba(26,53,88,0.4)" }}>
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400 border-2 border-white" />
+            </span>
+            Start next consultation <Video className="w-4 h-4" />
+          </Link>
         </div>
       )}
     </div>

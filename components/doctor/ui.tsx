@@ -1,18 +1,15 @@
 "use client";
 
-/**
- * Doctor-portal design kit — the same look everywhere:
- * white cards, soft borders, blue accent, clear empty/error/loading states.
- * Import what you need:  import { PageHeader, Card, EmptyState } from "@/components/doctor/ui";
- */
-
 import type { ReactNode } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 
-export const NAV_BG = "#003580";
-export const ACCENT = "#0071c2";
+// Nova Health brand — the same navy + teal as the rest of the product
+export const NAV_BG = "#1a3558";   // brand navy
+export const NAV_DARK = "#10243f"; // deep navy (sidebar gradient start)
+export const ACCENT = "#0d7b74";   // teal-700: accessible on white (links, icons)
+export const TEAL = "#0cbcad";     // teal-500: highlights, fills, online glow
+export const SKY = "#38bdf8";
 
-// ── Layout pieces ───────────────────────────────────────────
 export function PageHeader({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
     return (
         <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -24,7 +21,6 @@ export function PageHeader({ title, subtitle, right }: { title: string; subtitle
         </div>
     );
 }
-
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
     return (
         <div className={`bg-white border border-slate-200 rounded-2xl ${className}`} style={{ boxShadow: "0 1px 6px rgba(0,0,0,0.05)" }}>
@@ -32,7 +28,6 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
         </div>
     );
 }
-
 export function StatTile({ icon: Icon, label, value, bg, color }: { icon: any; label: string; value: string | number; bg: string; color: string }) {
     return (
         <Card className="p-3.5 flex items-center gap-2.5">
@@ -46,8 +41,6 @@ export function StatTile({ icon: Icon, label, value, bg, color }: { icon: any; l
         </Card>
     );
 }
-
-// ── States ──────────────────────────────────────────────────
 export function EmptyState({ icon: Icon, title, text, action }: { icon: any; title: string; text?: string; action?: ReactNode }) {
     return (
         <Card className="text-center py-12 px-6">
@@ -60,7 +53,6 @@ export function EmptyState({ icon: Icon, title, text, action }: { icon: any; tit
         </Card>
     );
 }
-
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
     return (
         <Card className="text-center py-10 px-6">
@@ -74,7 +66,6 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
         </Card>
     );
 }
-
 export function SkeletonRows({ count = 4, height = "h-16" }: { count?: number; height?: string }) {
     return (
         <div className="space-y-2.5 animate-pulse">
@@ -82,20 +73,15 @@ export function SkeletonRows({ count = 4, height = "h-16" }: { count?: number; h
         </div>
     );
 }
-
-// ── Small controls ──────────────────────────────────────────
 export function Chip({ active, onClick, children, count }: { active: boolean; onClick: () => void; children: ReactNode; count?: number }) {
     return (
-        <button
-            onClick={onClick}
+        <button onClick={onClick}
             className={`px-3.5 py-1.5 rounded-full text-[12px] font-bold transition-all ${active ? "text-white" : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"}`}
-            style={active ? { background: NAV_BG } : undefined}
-        >
+            style={active ? { background: NAV_BG } : undefined}>
             {children}{count !== undefined && <span className={`ml-1.5 ${active ? "opacity-70" : "text-slate-300"}`}>{count}</span>}
         </button>
     );
 }
-
 export function Avatar({ name, src, size = 40 }: { name: string; src?: string | null; size?: number }) {
     const initials = (name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
     return src ? (
@@ -107,8 +93,6 @@ export function Avatar({ name, src, size = 40 }: { name: string; src?: string | 
         </div>
     );
 }
-
-// ── Helpers ─────────────────────────────────────────────────
 export function timeAgo(iso: string | null | undefined): string {
     if (!iso) return "—";
     const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -118,7 +102,6 @@ export function timeAgo(iso: string | null | undefined): string {
     if (secs < 86400 * 30) return `${Math.floor(secs / 86400)}d ago`;
     return new Date(iso).toLocaleDateString();
 }
-
 /** "Today" / "Yesterday" / "Earlier" — for grouping lists by day. */
 export function dayGroup(iso: string): "Today" | "Yesterday" | "Earlier" {
     const d = new Date(iso);
