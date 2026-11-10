@@ -88,7 +88,7 @@ export function Avatar({ name, src, size = 40 }: { name: string; src?: string | 
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={name} width={size} height={size} className="rounded-xl object-cover shrink-0" style={{ width: size, height: size }} />
     ) : (
-        <div className="rounded-xl flex items-center justify-center font-bold text-white shrink-0" style={{ width: size, height: size, background: `linear-gradient(135deg, ${NAV_BG}, ${ACCENT})`, fontSize: size * 0.34 }}>
+        <div className="rounded-xl flex items-center justify-center font-bold text-white shrink-0" style={{ width: size, height: size, background: `${NAV_BG}`, fontSize: size * 0.34 }}>
             {initials}
         </div>
     );

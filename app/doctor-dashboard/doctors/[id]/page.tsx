@@ -82,7 +82,7 @@ export default function DoctorProfilePage({ params }: { params: { id: string } }
             {/* Main Profile Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden" style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
                 {/* Cover Image */}
-                <div className="h-40 sm:h-48" style={{ background: `linear-gradient(135deg, ${NAV_BG}, ${ACCENT})` }} />
+                <div className="h-40 sm:h-48" style={{ background: `${NAV_BG}` }} />
 
                 <div className="px-6 sm:px-10 -mt-16 sm:-mt-20 pb-8 flex flex-col sm:flex-row sm:items-end gap-5">
                     {/* Avatar */}

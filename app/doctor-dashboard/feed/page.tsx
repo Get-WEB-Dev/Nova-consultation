@@ -1227,7 +1227,7 @@ export default function FeedPage() {
                       className="h-full rounded-full transition-all duration-300"
                       style={{
                         width: `${uploadState.percent}%`,
-                        background: `linear-gradient(90deg, ${ACCENT}, #00a1e4)`,
+                        background: `${ACCENT}`,
                       }}
                     />
                   </div>

@@ -195,10 +195,10 @@ function SidebarContent({ pathname, user, meta, isOnline, collapsed, onClose, on
   };
 
   return (
-    <div className="flex flex-col h-full text-white" style={{ background: `linear-gradient(185deg, ${NAV_DARK} 0%, ${NAV_BG} 100%)` }}>
+    <div className="flex flex-col h-full text-white" style={{ background: `${NAV_DARK}` }}>
       {/* Brand */}
       <div className={`flex items-center gap-3 px-4 h-16 shrink-0 ${drawer ? "" : collapsed ? "justify-center" : "justify-center lg:justify-start"}`}>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: `linear-gradient(135deg, ${TEAL}, ${ACCENT})`, boxShadow: "0 4px 14px rgba(12,188,173,0.35)" }}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${TEAL}`, boxShadow: "0 1px 3px rgba(16,36,63,0.12)" }}>
           <Stethoscope className="w-[18px] h-[18px] text-white" />
         </div>
         <div className={`leading-none ${labelCls}`}>
@@ -342,7 +342,7 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f3f6fa]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${NAV_BG}, ${ACCENT})`, boxShadow: "0 10px 30px rgba(26,53,88,0.25)" }}>
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${NAV_BG}`, boxShadow: "0 1px 3px rgba(16,36,63,0.12)" }}>
             <Stethoscope className="w-7 h-7 text-white" />
           </div>
           <div className="flex gap-1.5">
@@ -364,7 +364,7 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
       </a>
 
       {/* ── Sidebar: icon rail on tablets, full on desktops ── */}
-      <aside className={`hidden md:block fixed top-0 left-0 h-full ${sidebarW} z-40 transition-[width] duration-300`} style={{ boxShadow: "4px 0 24px rgba(16,36,63,0.12)" }}>
+      <aside className={`hidden md:block fixed top-0 left-0 h-full ${sidebarW} z-40 transition-[width] duration-300`} style={{ boxShadow: "0 1px 3px rgba(16,36,63,0.12)" }}>
         <SidebarContent pathname={pathname} user={user} meta={meta} isOnline={isOnline} collapsed={collapsed} onSignOut={handleSignOut} />
       </aside>
 
@@ -380,7 +380,7 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
 
       <div className={`${contentML} min-h-screen flex flex-col transition-[margin] duration-300`}>
         {/* ── Top bar: phones ── */}
-        <header className="md:hidden sticky top-0 z-30 h-14 px-3 flex items-center justify-between text-white" style={{ background: `linear-gradient(90deg, ${NAV_DARK}, ${NAV_BG})`, boxShadow: "0 2px 12px rgba(16,36,63,0.25)" }}>
+        <header className="md:hidden sticky top-0 z-30 h-14 px-3 flex items-center justify-between text-white" style={{ background: `${NAV_DARK}`, boxShadow: "0 1px 3px rgba(16,36,63,0.12)" }}>
           <button onClick={() => setDrawerOpen(true)} aria-label="Open menu" className="relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400">
             <Avatar name={user?.name ?? "D"} src={meta.avatar} size={36} />
             <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 ${isOnline ? "bg-emerald-400" : "bg-slate-400"}`} style={{ borderColor: NAV_DARK }} />
@@ -415,7 +415,7 @@ export default function DoctorDashboardLayout({ children }: { children: React.Re
       </div>
 
       {/* ── Bottom tabs: phones ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200" style={{ paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -4px 20px rgba(16,36,63,0.08)" }} aria-label="Primary">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-slate-200" style={{ paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 1px 3px rgba(16,36,63,0.12)" }} aria-label="Primary">
         <div className="grid grid-cols-5 px-1 pt-1.5 pb-1.5">
           {MOBILE_TABS.map((item) => {
             const active = isActive(pathname, item);

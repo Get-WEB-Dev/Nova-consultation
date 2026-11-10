@@ -75,7 +75,7 @@ function DoctorCard({ doc, onOpen, onMessage }: {
         {/* Photo column */}
         <div
           className="relative flex-shrink-0 w-[105px] sm:w-[120px]"
-          style={{ background: "linear-gradient(160deg, #cfe0ff 0%, #a8c8f8 100%)", minHeight: 150 }}
+          style={{ background: "#cfe0ff", minHeight: 150 }}
         >
           {avatar ? (
             <Image src={avatar} alt={doc.name} width={120} height={160}

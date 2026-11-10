@@ -106,7 +106,7 @@ function NextUpCard({ p, onStart, onSkip, canSkip }: { p: QueuePatient; onStart:
   const mins = waitMinutes(p.joinedAt);
   return (
     <Card className="p-5 relative overflow-hidden">
-      <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${NAV_BG}, ${TEAL})` }} />
+      <div className="absolute inset-x-0 top-0 h-1" style={{ background: `${NAV_BG}` }} />
       <div className="flex items-center justify-between mb-4">
         <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] px-2.5 py-1 rounded-full" style={{ background: "#effefb", color: ACCENT }}>Next up</span>
         <span className="flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: waitTone(mins) }}>
@@ -126,7 +126,7 @@ function NextUpCard({ p, onStart, onSkip, canSkip }: { p: QueuePatient; onStart:
       </div>
       <div className="flex gap-2.5 mt-5">
         <button onClick={onStart} className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-[14px] text-white transition-transform active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2"
-          style={{ background: `linear-gradient(135deg, ${NAV_BG}, ${ACCENT})`, boxShadow: "0 6px 18px rgba(26,53,88,0.28)" }}>
+          style={{ background: `${NAV_BG}`, boxShadow: "0 1px 3px rgba(16,36,63,0.12)" }}>
           <Play className="w-4 h-4 fill-white" /> Start consultation
         </button>
         {canSkip && (
@@ -348,7 +348,7 @@ export default function DoctorHomePage() {
     <div className="space-y-5 animate-fade-up">
       {/* ── Welcome + status ── */}
       <Card className="p-5 sm:p-6 relative overflow-hidden">
-        <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(12,188,173,0.14) 0%, transparent 70%)" }} />
+        <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full pointer-events-none" style={{ background: "transparent" }} />
         <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <p className="text-[12px] font-semibold text-slate-400">{dateLabel}</p>
@@ -377,8 +377,8 @@ export default function DoctorHomePage() {
           {!isOnline ? (
             <>
               <div className="rounded-2xl p-6 sm:p-8 relative overflow-hidden text-white"
-                style={{ background: `linear-gradient(135deg, ${NAV_DARK} 0%, ${NAV_BG} 60%, #17606b 100%)`, boxShadow: "0 12px 32px rgba(26,53,88,0.28)" }}>
-                <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full pointer-events-none" style={{ background: "radial-gradient(circle, rgba(56,189,248,0.22) 0%, transparent 70%)" }} />
+                style={{ background: `${NAV_DARK}`, boxShadow: "0 1px 3px rgba(16,36,63,0.12)" }}>
+                <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full pointer-events-none" style={{ background: "transparent" }} />
                 <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-5">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: SKY }}>Ready to consult?</p>
@@ -387,7 +387,7 @@ export default function DoctorHomePage() {
                   </div>
                   <button onClick={() => toggleStatus(true)} disabled={toggling}
                     className="shrink-0 flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl font-bold text-[14px] transition-transform active:scale-[0.98] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a3558]"
-                    style={{ background: TEAL, color: NAV_DARK, boxShadow: "0 8px 22px rgba(12,188,173,0.4)" }}>
+                    style={{ background: TEAL, color: NAV_DARK, boxShadow: "0 1px 3px rgba(16,36,63,0.12)" }}>
                     <Zap className="w-5 h-5" /> Go online now
                   </button>
                 </div>
@@ -544,7 +544,7 @@ export default function DoctorHomePage() {
       {isOnline && queue.length > 0 && (
         <div className="md:hidden fixed inset-x-0 px-4 pointer-events-none z-30" style={{ bottom: "calc(76px + env(safe-area-inset-bottom))" }}>
           <Link href="/doctor-dashboard/consult" className="pointer-events-auto flex items-center justify-center gap-3 w-full py-3.5 rounded-2xl font-bold text-[14px] text-white"
-            style={{ background: `linear-gradient(135deg, ${NAV_BG}, ${ACCENT})`, boxShadow: "0 10px 30px rgba(26,53,88,0.4)" }}>
+            style={{ background: `${NAV_BG}`, boxShadow: "0 1px 3px rgba(16,36,63,0.12)" }}>
             <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
               <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-400 border-2 border-white" />

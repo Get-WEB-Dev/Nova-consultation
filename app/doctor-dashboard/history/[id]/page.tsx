@@ -136,7 +136,7 @@ export default function HistoryDetailPage({ params }: { params: { id: string } }
 
                 {/* Header Block */}
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 px-6 sm:px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-xl font-bold text-slate-600 flex-shrink-0">
+                    <div className="w-14 h-14 rounded-full bg-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 flex-shrink-0">
                         {c.patientName[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">

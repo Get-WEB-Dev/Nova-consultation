@@ -245,7 +245,7 @@ export default function ProfilePage() {
         <div
           className="h-24 relative"
           style={{
-            background: `linear-gradient(135deg, ${NAV_BG} 0%, ${ACCENT} 60%, ${SKY} 100%)`,
+            background: `${NAV_BG}`,
           }}
         />
 
@@ -255,7 +255,7 @@ export default function ProfilePage() {
             className="relative w-20 h-20 rounded-2xl overflow-hidden border-4 border-white shadow-xl mb-3 cursor-pointer group"
             onClick={() => fileRef.current?.click()}
             style={{
-              background: "linear-gradient(160deg, #cfe0ff 0%, #a8c8f8 100%)",
+              background: "#cfe0ff",
             }}
           >
             {form.profile_picture ? (
