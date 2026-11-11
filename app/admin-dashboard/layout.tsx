@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import {
     LayoutDashboard, Users, Stethoscope, LogOut, Calendar, Newspaper, Menu, X, History, Settings,
-    BarChart3, Star, MessageSquare, Megaphone, ShieldCheck, ChevronDown,
+    BarChart3, Star, MessageSquare, Megaphone, ShieldCheck, ChevronDown, FileBarChart,
 } from "lucide-react";
 import { loadUser, signOut, type AuthUser } from "@/lib/supabase/auth";
 import { ToastProvider } from "@/components/admin/AdminUI";
@@ -19,6 +19,7 @@ const NAV = [
         title: null, items: [
             { href: "/admin-dashboard", label: "Overview", icon: LayoutDashboard },
             { href: "/admin-dashboard/analytics", label: "Analytics", icon: BarChart3 },
+            { href: "/admin-dashboard/reports", label: "Reports", icon: FileBarChart },
         ]
     },
     {
@@ -104,7 +105,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100">
+            <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 print:hidden">
                 <div className="flex items-center justify-between h-14 px-4">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Toggle menu" className="md:hidden p-2 rounded-lg hover:bg-slate-50 text-slate-500">
@@ -150,7 +151,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
             </header>
 
             <div className="flex">
-                <aside className={`fixed md:sticky top-14 left-0 z-40 h-[calc(100vh-3.5rem)] w-60 bg-white border-r border-slate-100 overflow-y-auto transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
+                <aside className={`print:hidden fixed md:sticky top-14 left-0 z-40 h-[calc(100vh-3.5rem)] w-60 bg-white border-r border-slate-100 overflow-y-auto transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
                     <nav className="p-3 space-y-5" aria-label="Main">
                         {NAV.map((group, gi) => (
                             <div key={gi} className="space-y-0.5">
@@ -170,7 +171,7 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
                 {sidebarOpen && <div className="fixed inset-0 bg-black/20 z-30 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
-                <main className="flex-1 min-w-0 max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-10">
+                <main className="flex-1 min-w-0 max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-10 print:max-w-none print:p-0">
                     <ToastProvider>{children}</ToastProvider>
                 </main>
             </div>
