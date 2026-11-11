@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
           title: `New message from ${senderName}`,
           message: text ? (text.length > 60 ? text.substring(0, 60) + '...' : text) : 'Sent an attachment',
           doctorName: senderRole === 'doctor' ? senderName : undefined,
-          actionUrl: '/appointments',
+          actionUrl: senderRole === 'doctor' ? '/appointments' : '/doctor-dashboard/messages',
         });
       }
     } catch (notifErr) {

@@ -104,7 +104,7 @@ export async function POST(
                 if (doctorUserId && doctorUserId !== authorId) {
                     await createNotification({
                         userId: doctorUserId,
-                        type: 'system',
+                        type: 'comment',
                         title: 'New comment on your post',
                         message: `Someone commented on "${(post as any).title}".`,
                         actionUrl: `/posts/${postId}`,

@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
       if (doctorProfile) {
         await createNotification({
           userId: (doctorProfile as any).user_id,
-          type: 'system',
+          type: 'new_consultation',
           title: 'New consultation request',
           message: `${(patient as any)?.name ?? 'A patient'} has requested a consultation.`,
           actionUrl: '/doctor-dashboard',

@@ -103,7 +103,7 @@ function NotifBell({ notifs, onMarkRead, onMarkAll, dark = false }: {
               </div>
             ) : notifs.slice(0, 15).map((n) => {
               const Icon = NOTIF_ICONS[n.type] ?? Bell;
-              const href = n.actionUrl?.startsWith("/doctor-dashboard") ? n.actionUrl : null;
+              const href = `/doctor-dashboard/notifications?id=${n.id}`;
               const inner = (
                 <>
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${n.read ? "bg-slate-100" : "bg-teal-50"}`}>
@@ -118,9 +118,7 @@ function NotifBell({ notifs, onMarkRead, onMarkAll, dark = false }: {
                 </>
               );
               const cls = "w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors";
-              return href
-                ? <Link key={n.id} href={href} onClick={() => { onMarkRead(n.id); setOpen(false); }} className={cls}>{inner}</Link>
-                : <button key={n.id} onClick={() => onMarkRead(n.id)} className={cls}>{inner}</button>;
+              return <Link key={n.id} href={href} onClick={() => setOpen(false)} className={cls}>{inner}</Link>;
             })}
           </div>
           <Link href="/doctor-dashboard/notifications" onClick={() => setOpen(false)}

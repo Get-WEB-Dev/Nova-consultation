@@ -832,6 +832,17 @@ export async function createNotification(params: {
   refTable?: string;
 }) {
   const admin = createAdminClient();
+
+  // Respect the user's preferences (some categories can be muted)
+  try {
+    const { data: prefs } = await (admin as any)
+      .from("notification_preferences")
+      .select("muted_types")
+      .eq("user_id", params.userId)
+      .maybeSingle();
+    if (prefs?.muted_types?.includes(params.type)) return;
+  } catch { /* preferences are optional — deliver normally if the table isn't there yet */ }
+
   const { error } = await admin.from("notifications").insert({
     user_id: params.userId,
     type: params.type,
