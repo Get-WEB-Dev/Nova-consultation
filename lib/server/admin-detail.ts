@@ -100,6 +100,34 @@ export async function getUserMedical(id: string) {
     };
 }
 
+/** Sensitive: a copy of one person's account data. Only through /api/admin/reveal. Chat content is excluded. */
+export async function getUserExport(id: string) {
+    const admin = db();
+    const [user, patient, doctor, consults, reviews, notifs, saved] = await Promise.all([
+        admin.from('users').select('*').eq('id', id).maybeSingle(),
+        admin.from('patients').select('*').eq('user_id', id).maybeSingle(),
+        admin.from('doctor_profiles').select('*').eq('user_id', id).maybeSingle(),
+        admin.from('consultations')
+            .select('id, status, created_at, started_at, ended_at, duration_minutes, patient_rating, is_follow_up')
+            .eq('patient_id', id).order('created_at'),
+        admin.from('reviews').select('*').eq('patient_id', id),
+        admin.from('notifications').select('type, title, message, read, created_at').eq('user_id', id),
+        admin.from('saved_doctors').select('*').eq('patient_id', id),
+    ]);
+    if (!user.data) return null;
+    return {
+        exportedAt: new Date().toISOString(),
+        note: 'Chat message content is not included in this export.',
+        user: user.data,
+        patientRecord: patient.data ?? null,
+        doctorProfile: doctor.data ?? null,
+        consultations: consults.data ?? [],
+        reviews: reviews.data ?? [],
+        notifications: notifs.data ?? [],
+        savedDoctors: saved.data ?? [],
+    };
+}
+
 // ── Doctor 360 ───────────────────────────────────────────────
 export async function getDoctorDetail(id: string) {
     const admin = db();

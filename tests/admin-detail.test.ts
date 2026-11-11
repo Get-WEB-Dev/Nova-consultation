@@ -13,6 +13,7 @@ vi.mock("@/lib/server/admin-queries", () => ({ logAdminAction: vi.fn(async () =>
 vi.mock("@/lib/server/admin-detail", () => ({
     NOTE_ENTITIES: ["user", "doctor", "consultation", "message"],
     getUserMedical: vi.fn(async () => ({ allergies: "penicillin" })),
+    getUserExport: vi.fn(async () => ({ user: { name: "A" } })),
     getConsultationClinical: vi.fn(async () => ({ diagnosis: "flu" })),
     logSensitiveAccess: vi.fn(async () => { }),
     getNote: vi.fn(),

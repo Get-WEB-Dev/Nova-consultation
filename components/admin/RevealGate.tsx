@@ -10,7 +10,7 @@ import { useToast } from "@/components/admin/AdminUI";
  * The reason is saved permanently in the Activity Log BEFORE anything is shown.
  */
 export default function RevealGate<T>({ type, id, title, description, children }: {
-    type: "user_medical" | "consultation_clinical";
+    type: "user_medical" | "consultation_clinical" | "user_export";
     id: string;
     title: string;
     description: string;

@@ -6,6 +6,7 @@ import { Shield, KeyRound, Loader2, CheckCircle2, XCircle, RefreshCw } from "luc
 import { getUser } from "@/lib/supabase/auth";
 import { adminFetch } from "@/lib/admin-api";
 import SignOutEverywhere from "@/components/admin/SignOutEverywhere";
+import PlatformSettingsCard from "@/components/admin/PlatformSettingsCard";
 import { useToast, PageHeader } from "@/components/admin/AdminUI";
 import TwoFactorCard from "@/components/admin/TwoFactorCard";
 
@@ -131,6 +132,7 @@ export default function AdminSettingsPage() {
             </section>
             <SignOutEverywhere />
             <TwoFactorCard />
+            <PlatformSettingsCard />
         </div>
     );
 }

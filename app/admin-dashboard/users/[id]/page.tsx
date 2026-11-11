@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { saveText } from "@/lib/download";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { UserX, UserCheck, Bell, Stethoscope, Calendar, Loader2 } from "lucide-react";
@@ -137,6 +138,19 @@ export default function AdminUserDetailPage() {
                             </Panel>
                         )}
                         {u.bio && <Panel title="Bio"><p className="text-sm text-slate-600 whitespace-pre-wrap">{u.bio}</p></Panel>}
+
+                        <Panel title="Data export">
+                            <RevealGate<Record<string, unknown>> type="user_export" id={u.id} title="Export this person's data"
+                                description="Creates a machine-readable copy of their account data: profile, sessions, reviews and notifications. Chat messages are not included. Requires a reason and is recorded.">
+                                {(bundle) => (
+                                    <button className="btn btn-sm btn-primary"
+                                        onClick={() => saveText(`user-${u.id.slice(0, 8)}-data.json`, JSON.stringify(bundle, null, 2), "application/json")}>
+                                        Download JSON
+                                    </button>
+                                )}
+                            </RevealGate>
+                        </Panel>
+
                         {!u.isSuperAdmin && (
                             <Panel title="Role & danger zone">
                                 <div className="flex items-center gap-2 flex-wrap">

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireUser, isUuid } from '@/lib/server/auth';
 import {
-    getUserMedical, getConsultationClinical, logSensitiveAccess,
+    getUserMedical, getConsultationClinical, logSensitiveAccess, getUserExport
 } from '@/lib/server/admin-detail';
 
 export const dynamic = 'force-dynamic';
@@ -10,6 +10,7 @@ const fail = (m: string, s = 400) => NextResponse.json({ error: m }, { status: s
 const TYPES = {
     user_medical: { action: 'user.medical_viewed', target: 'user', load: getUserMedical },
     consultation_clinical: { action: 'consultation.clinical_viewed', target: 'consultation', load: getConsultationClinical },
+    user_export: { action: 'user.data_exported', target: 'user', load: getUserExport },
 } as const;
 
 /**
