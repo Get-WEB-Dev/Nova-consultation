@@ -790,6 +790,156 @@ from (
 where c.doctor_id = s.doctor_id and c.patient_id = s.patient_id
   and c.last_message_preview is null;
 
+
+
+
+
+  -- ══ A. Reports: one database call returns the whole investor report ══
+create or replace function admin_report(p_from date, p_to date)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  f      timestamptz := p_from::timestamptz;
+  t      timestamptz := (p_to + 1)::timestamptz;   -- end is exclusive, so all of p_to is included
+  span   int         := (p_to - p_from) + 1;
+  pf     timestamptz;                               -- start of the previous period of equal length
+  bucket text;
+  k jsonb; fu jsonb; ser jsonb; spec jsonb; docs jsonb; rat jsonb; st jsonb;
+begin
+  if p_to < p_from or span > 800 then
+    raise exception 'Invalid date range';
+  end if;
+  pf := f - make_interval(days => span);
+  bucket := case when span > 92 then 'week' else 'day' end;
+
+  select jsonb_build_object(
+    'new_users',            (select count(*) from users where created_at >= f and created_at < t),
+    'new_users_prev',       (select count(*) from users where created_at >= pf and created_at < f),
+    'consultations',        (select count(*) from consultations where created_at >= f and created_at < t),
+    'consultations_prev',   (select count(*) from consultations where created_at >= pf and created_at < f),
+    'completed',            (select count(*) from consultations where status = 'completed' and created_at >= f and created_at < t),
+    'completed_prev',       (select count(*) from consultations where status = 'completed' and created_at >= pf and created_at < f),
+    'missed',               (select count(*) from consultations where status = 'missed' and created_at >= f and created_at < t),
+    'cancelled',            (select count(*) from consultations where status = 'cancelled' and created_at >= f and created_at < t),
+    'active_patients',      (select count(distinct patient_id) from consultations where created_at >= f and created_at < t),
+    'active_patients_prev', (select count(distinct patient_id) from consultations where created_at >= pf and created_at < f),
+    'active_doctors',       (select count(distinct doctor_id) from consultations where created_at >= f and created_at < t),
+    'retained_patients',    (select count(distinct patient_id) from consultations
+                              where created_at >= f and created_at < t
+                                and patient_id in (select patient_id from consultations where created_at >= pf and created_at < f)),
+    'avg_wait_minutes',     (select round(avg(extract(epoch from (started_at - created_at)) / 60)::numeric, 1)
+                              from consultations where created_at >= f and created_at < t and started_at is not null),
+    'avg_duration_minutes', (select round(avg(duration_minutes)::numeric, 1)
+                              from consultations where created_at >= f and created_at < t and duration_minutes is not null),
+    'avg_rating',           (select round(avg(patient_rating)::numeric, 2)
+                              from consultations where created_at >= f and created_at < t and patient_rating is not null),
+    -- no payments table yet: this is the sum of doctor fees for completed sessions
+    'estimated_value',      (select coalesce(sum(dp.fee), 0) from consultations c
+                              join doctor_profiles dp on dp.id = c.doctor_id
+                              where c.status = 'completed' and c.created_at >= f and c.created_at < t),
+    'doctors_live',         (select count(*) from doctor_profiles where is_verified and is_published),
+    'total_users',          (select count(*) from users)
+  ) into k;
+
+  -- Of the patients who signed up in this period, how many got care, and how many came back?
+  select jsonb_build_object(
+    'signed_up',          count(*),
+    'first_consultation', count(*) filter (where n >= 1),
+    'repeat',             count(*) filter (where n >= 2)
+  ) into fu
+  from (
+    select u.id,
+           (select count(*) from consultations c where c.patient_id = u.id and c.status = 'completed') as n
+    from users u
+    where u.created_at >= f and u.created_at < t and u.role = 'patient'
+  ) x;
+
+  with g as (
+    select generate_series(date_trunc(bucket, f), date_trunc(bucket, t - interval '1 second'), ('1 ' || bucket)::interval) as d
+  ),
+  nu as (
+    select date_trunc(bucket, created_at) as d, count(*) as n
+    from users where created_at >= f and created_at < t group by 1
+  ),
+  co as (
+    select date_trunc(bucket, created_at) as d, count(*) as n,
+           count(*) filter (where status = 'completed') as done
+    from consultations where created_at >= f and created_at < t group by 1
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'day', to_char(g.d, 'YYYY-MM-DD'),
+           'users', coalesce(nu.n, 0),
+           'consultations', coalesce(co.n, 0),
+           'completed', coalesce(co.done, 0)) order by g.d), '[]'::jsonb)
+  into ser
+  from g left join nu on nu.d = g.d left join co on co.d = g.d;
+
+  -- Supply versus demand, per specialty
+  select coalesce(jsonb_agg(r order by r.consultations desc), '[]'::jsonb) into spec from (
+    select dp.specialty,
+           count(c.id) as consultations,
+           count(c.id) filter (where c.status = 'completed') as completed,
+           count(distinct dp.id) filter (where dp.is_verified and dp.is_published) as doctors_live
+    from doctor_profiles dp
+    left join consultations c on c.doctor_id = dp.id and c.created_at >= f and c.created_at < t
+    group by dp.specialty
+    order by count(c.id) desc
+    limit 12
+  ) r;
+
+  select coalesce(jsonb_agg(r order by r.completed desc, r.rating desc nulls last), '[]'::jsonb) into docs from (
+    select dp.id, u.name, dp.specialty,
+           count(c.id) filter (where c.status = 'completed') as completed,
+           round(avg(c.patient_rating)::numeric, 2) as rating,
+           coalesce(sum(dp.fee) filter (where c.status = 'completed'), 0) as value
+    from doctor_profiles dp
+    join users u on u.id = dp.user_id
+    join consultations c on c.doctor_id = dp.id and c.created_at >= f and c.created_at < t
+    group by dp.id, u.name, dp.specialty
+    order by completed desc, rating desc nulls last
+    limit 10
+  ) r;
+
+  select coalesce(jsonb_object_agg(rating::text, n), '{}'::jsonb) into rat
+  from (select rating, count(*) as n from reviews where created_at >= f and created_at < t group by rating) x;
+
+  select coalesce(jsonb_object_agg(s, n), '{}'::jsonb) into st
+  from (select status::text as s, count(*) as n from consultations where created_at >= f and created_at < t group by 1) x;
+
+  return jsonb_build_object(
+    'period', jsonb_build_object('from', p_from, 'to', p_to, 'days', span, 'bucket', bucket),
+    'kpis', k, 'funnel', fu, 'series', ser, 'by_specialty', spec,
+    'top_doctors', docs, 'ratings', rat, 'statuses', st
+  );
+end $$;
+revoke all on function admin_report(date, date) from public, anon, authenticated;
+grant execute on function admin_report(date, date) to service_role;
+
+-- ══ B. Announcement history (each notification points back to its announcement) ══
+create table if not exists announcements (
+  id               uuid primary key default gen_random_uuid(),
+  title            text not null,
+  message          text not null,
+  audience         text not null check (audience in ('all','patients','doctors')),
+  recipients       int  not null default 0,
+  created_by       uuid references users(id) on delete set null,
+  created_by_email text,
+  created_at       timestamptz not null default now()
+);
+alter table announcements enable row level security;
+create index if not exists idx_announcements_created on announcements (created_at desc);
+create index if not exists idx_notif_ref on notifications (ref_table, ref_id);
+
+-- ══ C. Platform settings that the app actually enforces ══
+create table if not exists platform_settings (
+  key        text primary key,
+  value      jsonb not null,
+  updated_by uuid references users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+alter table platform_settings enable row level security;
+insert into platform_settings (key, value) values ('registrations_open', 'true'::jsonb)
+on conflict (key) do nothing;
+
 -- ============================================================
 -- DONE! Database is ready.
 -- ============================================================

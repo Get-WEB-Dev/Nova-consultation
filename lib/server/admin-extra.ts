@@ -99,9 +99,20 @@ export async function deleteContactMessage(id: string) {
 }
 
 // ── Announcements (system notifications) ─────────────────────
-export async function sendAnnouncement(o: { audience: 'all' | 'patients' | 'doctors'; title: string; message: string }) {
+export async function sendAnnouncement(o: {
+    audience: 'all' | 'patients' | 'doctors'; title: string; message: string;
+    createdBy: { id: string; email: string | null };
+}) {
     const admin: any = createAdminClient();
     const roles = o.audience === 'patients' ? ['patient'] : o.audience === 'doctors' ? ['doctor', 'professional'] : null;
+
+    // 1) Record the announcement first, so every notification can point back to it
+    const { data: ann, error: annErr } = await admin.from('announcements')
+        .insert({ title: o.title, message: o.message, audience: o.audience, created_by: o.createdBy.id, created_by_email: o.createdBy.email })
+        .select('id').single();
+    if (annErr) throw annErr;
+
+    // 2) Deliver in batches of 1000
     let sent = 0;
     for (let from = 0; from < 50000; from += 1000) {
         let q = admin.from('users').select('id').eq('is_suspended', false).order('id').range(from, from + 999);
@@ -109,13 +120,44 @@ export async function sendAnnouncement(o: { audience: 'all' | 'patients' | 'doct
         const { data, error } = await q;
         if (error) throw error;
         if (!data?.length) break;
-        const rows = data.map((u: any) => ({ user_id: u.id, type: 'system', title: o.title, message: o.message }));
+        const rows = data.map((u: any) => ({
+            user_id: u.id, type: 'system', title: o.title, message: o.message,
+            ref_table: 'announcements', ref_id: ann.id,
+        }));
         const { error: insErr } = await admin.from('notifications').insert(rows);
         if (insErr) throw insErr;
         sent += rows.length;
         if (data.length < 1000) break;
     }
-    return sent;
+
+    await admin.from('announcements').update({ recipients: sent }).eq('id', ann.id);
+    return { id: ann.id as string, sent };
+}
+
+export async function listAnnouncements(o: { from: number; to: number }) {
+    const admin: any = createAdminClient();
+    const { data, error, count } = await admin.from('announcements')
+        .select('id, title, message, audience, recipients, created_by_email, created_at', { count: 'exact' })
+        .order('created_at', { ascending: false }).range(o.from, o.to);
+    if (error) throw error;
+    return { data: data ?? [], total: count ?? 0 };
+}
+
+export async function getAnnouncementDetail(id: string) {
+    const admin: any = createAdminClient();
+    const { data: a, error } = await admin.from('announcements')
+        .select('id, title, message, audience, recipients, created_by_email, created_at').eq('id', id).maybeSingle();
+    if (error) throw error;
+    if (!a) return null;
+    const count = (f?: (q: any) => any) => {
+        let q = admin.from('notifications').select('id', { count: 'exact', head: true }).eq('ref_table', 'announcements').eq('ref_id', id);
+        if (f) q = f(q);
+        return q;
+    };
+    const [delivered, read] = await Promise.all([count(), count((q) => q.eq('read', true))]);
+    const d = delivered.count ?? 0;
+    const r = read.count ?? 0;
+    return { ...a, delivered: d, read: r, readRate: d ? Math.round((r / d) * 100) : null };
 }
 
 // ── Admin accounts ───────────────────────────────────────────

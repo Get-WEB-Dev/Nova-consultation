@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { registrationsOpen } from "@/lib/server/platform-settings";
 
 // ── Validate required server env vars at module load time ─────
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -27,6 +28,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "Server configuration error. Please contact support.", code: "server_error" },
       { status: 500 }
+    );
+  }
+
+  // ── Platform switch: admins can pause new registrations ─────
+  if (!(await registrationsOpen())) {
+    return NextResponse.json(
+      { error: "New registrations are temporarily closed. Please try again later.", code: "registrations_closed" },
+      { status: 403 }
     );
   }
 

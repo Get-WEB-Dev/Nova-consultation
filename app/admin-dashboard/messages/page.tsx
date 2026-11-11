@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Search, Mail, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
 import { adminFetch } from "@/lib/admin-api";
 import { useServerList } from "@/lib/use-server-list";
@@ -91,6 +92,7 @@ export default function AdminMessagesPage() {
                                 <div className="mt-3 pl-5 space-y-3">
                                     <p className="text-sm text-slate-600 whitespace-pre-wrap break-words">{m.message}</p>
                                     <div className="flex gap-2 flex-wrap">
+                                        <Link href={`/admin-dashboard/messages/${m.id}`} className="btn btn-sm btn-secondary">Open</Link>
                                         <a href={`mailto:${m.email}?subject=${encodeURIComponent("Re: " + (m.subject || "Your message to Nova Health"))}`} className="btn btn-sm btn-primary">
                                             <Mail className="w-3.5 h-3.5" /> Reply by email
                                         </a>
