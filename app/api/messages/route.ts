@@ -18,6 +18,10 @@ export async function GET(req: NextRequest) {
   const conversationId = searchParams.get('conversationId');
   const doctorId = searchParams.get('doctorId');
   const patientId = searchParams.get('patientId');
+  const validDate = (v: string | null) => (v && !Number.isNaN(Date.parse(v)) ? v : undefined);
+  const after = validDate(searchParams.get('after'));
+  const before = validDate(searchParams.get('before'));
+  const limit = parseInt(searchParams.get('limit') ?? '', 10) || undefined;
 
   // We need at least one way to identify the message thread
   if (!consultationId && !conversationId && (!doctorId || !patientId)) {
@@ -56,6 +60,9 @@ export async function GET(req: NextRequest) {
       consultationId: consultationId ?? undefined,
       doctorId: resolvedDoctorId,
       patientId: resolvedPatientId,
+      after,
+      before,
+      limit,
     });
 
     return NextResponse.json({ data });

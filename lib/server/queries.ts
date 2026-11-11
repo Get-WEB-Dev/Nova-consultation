@@ -276,6 +276,7 @@ export async function fetchMessages(params: {
   doctorId?: string,
   patientId?: string,
   limit?: number,
+  after?: string,
   before?: string,
 }): Promise<MessageRow[]> {
   const admin = createAdminClient();
@@ -294,21 +295,29 @@ export async function fetchMessages(params: {
     return [];
   }
 
-  query = query
-    .order("created_at", { ascending: true })
-    .limit(params.limit ?? 100);
+  const limit = Math.min(params.limit ?? 100, 200);
 
+  if (params.after) {
+    // Incremental refresh: only what arrived since the last message the screen has
+    const { data, error } = await query.gt("created_at", params.after).order("created_at", { ascending: true }).limit(limit);
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  // The NEWEST `limit` messages (older ones via `before`), returned oldest → newest
   if (params.before) query = query.lt("created_at", params.before);
-
-  const { data, error } = await query;
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(limit);
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).reverse();
 }
 
 /**
  * Internal helper to resolve or create a conversation tracking record
  */
-async function resolveConversation(admin: any, doctorId: string, patientId: string) {
+async function resolveConversation(admin: any, doctorId: string, patientId: string, preview?: string) {
+  const touch: Record<string, unknown> = { last_message_time: new Date().toISOString() };
+  if (preview !== undefined) touch.last_message_preview = preview.slice(0, 80);
+
   // Try to find
   const { data: existing } = await admin.from("conversations")
     .select("id")
@@ -317,20 +326,14 @@ async function resolveConversation(admin: any, doctorId: string, patientId: stri
     .maybeSingle();
 
   if (existing?.id) {
-    // Update last_message_time
-    await admin.from("conversations")
-      .update({ last_message_time: new Date().toISOString() })
-      .eq("id", existing.id);
+    // Keep the list's preview + ordering fresh
+    await admin.from("conversations").update(touch).eq("id", existing.id);
     return existing.id;
   }
 
   // Create new
   const { data: newConv } = await admin.from("conversations")
-    .insert({
-      doctor_id: doctorId,
-      patient_id: patientId,
-      last_message_time: new Date().toISOString()
-    })
+    .insert({ doctor_id: doctorId, patient_id: patientId, ...touch })
     .select("id")
     .single();
 
@@ -360,7 +363,7 @@ export async function sendMessage(params: {
   if (params.patientId) insertData.patient_id = params.patientId;
 
   if (params.doctorId && params.patientId) {
-    insertData.conversation_id = await resolveConversation(admin, params.doctorId, params.patientId);
+    insertData.conversation_id = await resolveConversation(admin, params.doctorId, params.patientId, params.body);
   }
 
   const { data, error } = await admin
@@ -402,7 +405,7 @@ export async function sendAttachmentMessage(params: {
   if (params.patientId) insertData.patient_id = params.patientId;
 
   if (params.doctorId && params.patientId) {
-    insertData.conversation_id = await resolveConversation(admin, params.doctorId, params.patientId);
+    insertData.conversation_id = await resolveConversation(admin, params.doctorId, params.patientId, `Attachment: ${params.attachmentName}`);
   }
 
   const { data, error } = await admin

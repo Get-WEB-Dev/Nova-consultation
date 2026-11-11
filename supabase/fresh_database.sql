@@ -764,6 +764,32 @@ $$;
 revoke all on function admin_doctor_metrics(uuid) from public, anon, authenticated;
 grant execute on function admin_doctor_metrics(uuid) to service_role;
 
+
+-- 1) Read tracking
+alter table messages add column if not exists read_at timestamptz;
+
+-- 2) Speed: unread counts and "latest messages" lookups
+create index if not exists messages_unread_idx
+  on messages (doctor_id, patient_id) where read_at is null and deleted_at is null;
+create index if not exists messages_pair_created_idx
+  on messages (doctor_id, patient_id, created_at desc);
+
+-- 3) Existing messages count as already read (so nobody gets a flood of "unread").
+--    RUN ONCE: running it again later would mark real unread messages as read.
+-- update messages set read_at = created_at where read_at is null;
+
+-- 4) Fill the chat-list preview for existing conversations
+update conversations c
+set last_message_preview = s.preview
+from (
+  select distinct on (doctor_id, patient_id) doctor_id, patient_id,
+         coalesce(left(body, 80), 'Attachment: ' || coalesce(attachment_name, 'file')) as preview
+  from messages where deleted_at is null
+  order by doctor_id, patient_id, created_at desc
+) s
+where c.doctor_id = s.doctor_id and c.patient_id = s.patient_id
+  and c.last_message_preview is null;
+
 -- ============================================================
 -- DONE! Database is ready.
 -- ============================================================

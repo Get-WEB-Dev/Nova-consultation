@@ -1,20 +1,15 @@
 /**
- * Conversations API
- *
- * GET /api/conversations?doctorId=<uuid>
- *   Returns all conversations for a doctor, with:
- *   - patient info (name, avatar, user_id)
- *   - last message preview and timestamp
- *   - unread message count
- *
- * GET /api/conversations?patientId=<uuid>
- *   Returns all conversations for a patient.
+ * Conversations
+ *   GET  /api/conversations?doctorId=…   the doctor's chat list (patient, preview, unread)
+ *   GET  /api/conversations?patientId=…  the patient's chats
+ *   POST /api/conversations              a doctor opens (or reuses) a chat with one of their patients
  */
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { requireUser, isSelf, ownsDoctorId, forbidden } from '@/lib/server/auth';
 import { createAdminClient } from '@/lib/supabase/client';
+import { requireUser, isSelf, ownsDoctorId, forbidden, isUuid, resolveDoctorProfileId, doctorHasPatient } from '@/lib/server/auth';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -31,99 +26,109 @@ export async function GET(req: NextRequest) {
   if (!doctorId && !isSelf(auth.user, patientId)) return forbidden();
 
   try {
-    const admin = createAdminClient();
+    const admin: any = createAdminClient();
 
     if (doctorId) {
-      // Resolve: if doctorId is actually a user_id, map it to doctor_profiles.id
-      let resolvedDoctorId = doctorId;
-      try {
-        const { data: profile } = await admin
-          .from('doctor_profiles')
-          .select('id')
-          .eq('user_id', doctorId)
-          .maybeSingle() as { data: { id: string } | null };
-        if (profile) resolvedDoctorId = profile.id;
-      } catch { /* use as-is */ }
+      const profileId = await resolveDoctorProfileId(doctorId);
+      if (!profileId) return NextResponse.json({ data: [] });
 
-      // Fetch all conversations for this doctor
       const { data: convs, error } = await admin
         .from('conversations')
-        .select('*')
-        .eq('doctor_id', resolvedDoctorId)
-        .order('last_message_time', { ascending: false });
-
+        .select('id, patient_id, last_message_preview, last_message_time')
+        .eq('doctor_id', profileId)
+        .order('last_message_time', { ascending: false })
+        .limit(200);
       if (error) throw error;
+      if (!convs || convs.length === 0) return NextResponse.json({ data: [] });
 
-      if (!convs || convs.length === 0) {
-        return NextResponse.json({ data: [] });
-      }
+      const patientIds: string[] = convs.map((c: any) => c.patient_id);
 
-      // Fetch patient info and last message + unread count for each conversation
-      const enriched = await Promise.all(
-        (convs as any[]).map(async (conv: any) => {
-          // Get patient user info
-          const { data: patient } = await admin
-            .from('users')
-            .select('id, name, avatar_url')
-            .eq('id', conv.patient_id)
-            .single() as { data: any };
+      // Two batched queries instead of three queries PER conversation
+      const [patientsRes, unreadRes] = await Promise.all([
+        admin.from('users').select('id, name, avatar_url').in('id', patientIds),
+        admin.from('messages').select('patient_id')
+          .eq('doctor_id', profileId).eq('sender_role', 'patient')
+          .is('read_at', null).is('deleted_at', null)
+          .in('patient_id', patientIds).limit(5000),
+      ]);
 
-          // Get last message
-          const { data: lastMsgs } = await admin
-            .from('messages')
-            .select('body, attachment_name, created_at, sender_role')
-            .eq('doctor_id', resolvedDoctorId)
-            .eq('patient_id', conv.patient_id)
-            .is('deleted_at', null)
-            .order('created_at', { ascending: false })
-            .limit(1) as { data: any[] | null };
+      // If the read-tracking column is missing the migration has not been run yet
+      const needsMigration = !!unreadRes.error && /read_at/.test(unreadRes.error.message);
+      if (unreadRes.error && !needsMigration) throw unreadRes.error;
 
-          const lastMsg = lastMsgs?.[0];
+      const patients = new Map<string, any>((patientsRes.data ?? []).map((p: any) => [p.id, p]));
+      const unread = new Map<string, number>();
+      for (const row of unreadRes.data ?? []) unread.set(row.patient_id, (unread.get(row.patient_id) ?? 0) + 1);
 
-          // Get unread count (messages sent by patient that the doctor hasn't read)
-          // We use a count query on recent messages from patient
-          const { count: unreadCount } = await admin
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('doctor_id', resolvedDoctorId)
-            .eq('patient_id', conv.patient_id)
-            .eq('sender_role', 'patient')
-            .is('deleted_at', null)
-            .gte('created_at', conv.last_message_time) as { count: number | null };
-
-          return {
-            conversationId: conv.id,
-            patientId: conv.patient_id,
-            patientName: patient?.name ?? 'Unknown Patient',
-            patientAvatar: patient?.avatar_url ?? null,
-            lastMessage: lastMsg?.body
-              ? (lastMsg.body.length > 60 ? lastMsg.body.slice(0, 60) + '...' : lastMsg.body)
-              : lastMsg?.attachment_name
-                ? `📎 ${lastMsg.attachment_name}`
-                : '',
-            lastMessageTime: lastMsg?.created_at ?? conv.last_message_time,
-            lastMessageRole: lastMsg?.sender_role ?? null,
-            unreadCount: unreadCount ?? 0,
-          };
-        })
-      );
-
-      return NextResponse.json({ data: enriched });
+      return NextResponse.json({
+        needsMigration,
+        data: convs.map((c: any) => ({
+          conversationId: c.id,
+          patientId: c.patient_id,
+          patientName: patients.get(c.patient_id)?.name ?? 'Unknown patient',
+          patientAvatar: patients.get(c.patient_id)?.avatar_url ?? null,
+          lastMessage: c.last_message_preview ?? '',
+          lastMessageTime: c.last_message_time,
+          unreadCount: unread.get(c.patient_id) ?? 0,
+        })),
+      });
     }
 
-    if (patientId) {
-      const { data: convs, error } = await admin
-        .from('conversations')
-        .select('*')
-        .eq('patient_id', patientId)
-        .order('last_message_time', { ascending: false });
-
-      if (error) throw error;
-      return NextResponse.json({ data: (convs as any[]) ?? [] });
-    }
-
+    const { data: convs, error } = await admin
+      .from('conversations')
+      .select('*')
+      .eq('patient_id', patientId)
+      .order('last_message_time', { ascending: false });
+    if (error) throw error;
+    return NextResponse.json({ data: convs ?? [] });
   } catch (err: any) {
     console.error('[conversations GET]', err.message);
     return NextResponse.json({ data: [], error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const auth = await requireUser(req, ['doctor', 'professional']);
+  if (auth.error) return auth.error;
+  const profileId = auth.user.doctorProfileId;
+  if (!profileId) return forbidden('A doctor profile is required');
+
+  let body: any;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid request' }, { status: 400 }); }
+  const patientId = body?.patientId;
+  if (!isUuid(patientId)) return NextResponse.json({ error: 'patientId is required' }, { status: 400 });
+
+  try {
+    const admin: any = createAdminClient();
+
+    // Doctors can message their own patients (people they have had a consultation with),
+    // or anyone who already started a chat with them.
+    const { data: existing } = await admin.from('conversations').select('id')
+      .eq('doctor_id', profileId).eq('patient_id', patientId).maybeSingle();
+    if (!existing && !(await doctorHasPatient(profileId, patientId))) {
+      return forbidden('You can only message patients you have consulted.');
+    }
+
+    let conversationId: string | undefined = existing?.id;
+    if (!conversationId) {
+      const { data: created, error } = await admin.from('conversations')
+        .upsert({ doctor_id: profileId, patient_id: patientId }, { onConflict: 'doctor_id,patient_id' })
+        .select('id').single();
+      if (error) throw error;
+      conversationId = created.id;
+    }
+
+    const { data: patient } = await admin.from('users').select('id, name, avatar_url').eq('id', patientId).maybeSingle();
+    return NextResponse.json({
+      data: {
+        conversationId,
+        patientId,
+        patientName: patient?.name ?? 'Patient',
+        patientAvatar: patient?.avatar_url ?? null,
+      },
+    });
+  } catch (err: any) {
+    console.error('[conversations POST]', err.message);
+    return NextResponse.json({ error: 'Could not open the conversation' }, { status: 500 });
   }
 }

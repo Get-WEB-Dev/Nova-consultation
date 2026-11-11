@@ -294,3 +294,43 @@ export function subscribeToPresence(
 
   return () => { supabase.removeChannel(channel); };
 }
+
+
+
+// ── Messaging (doctor portal) ─────────────────────────────────
+/** New messages in ONE conversation (filters on conversation_id, which is the same for both people). */
+export function subscribeToThreadMessages(
+  conversationId: string,
+  onNewMessage: (message: MessageRow) => void
+): () => void {
+  const channel = supabase
+    .channel(`messages:thread:${conversationId}`)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `conversation_id=eq.${conversationId}`,
+    }, (payload) => onNewMessage(payload.new as MessageRow))
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+
+/**
+ * Any new message for this doctor — used to refresh the chat list.
+ * `doctorProfileId` must be doctor_profiles.id (NOT the login user id).
+ */
+export function subscribeToDoctorInbox(
+  doctorProfileId: string,
+  onAnyMessage: () => void
+): () => void {
+  const channel = supabase
+    .channel(`messages:inbox:${doctorProfileId}`)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `doctor_id=eq.${doctorProfileId}`,
+    }, () => onAnyMessage())
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
