@@ -1,1080 +1,173 @@
 "use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Search, Download, ChevronRight, AlertCircle, RefreshCw, ClipboardList, Activity, Calendar, Clock, Repeat } from "lucide-react";
 import { startPolling } from "@/lib/polling";
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { getUser } from "@/lib/supabase/auth";
-import {
-  Search,
-  CheckCircle2,
-  Clock,
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  Calendar,
-  RefreshCw,
-  GitFork,
-  Filter,
-  X,
-  AlertCircle,
-  Activity,
-  Thermometer,
-  Heart,
-  Droplets,
-  Pill,
-  Paperclip,
-  Eye,
-  RotateCcw,
-  MessageSquarePlus,
-  CalendarPlus,
-  ShieldAlert,
-  ShieldCheck,
-  Shield,
-  ChevronRight,
-  Stethoscope,
-  ClipboardList,
-  User,
-  Bell,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  FlaskConical,
-  Siren,
-  CheckSquare,
-  MoreHorizontal,
-  ArrowUpRight,
-  ZapOff,
-  Zap,
-  Info,
-  SlidersHorizontal,
-  BarChart3,
-  ListFilter,
-  Waves,
-} from "lucide-react";
+import { getUser, loadUser } from "@/lib/supabase/auth";
+import { Avatar, NAV_BG, ACCENT } from "@/components/doctor/ui";
+import { StatusPill, OutcomeBadge, SEEN, fmtDate, fmtTime } from "@/components/doctor/records";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface Vitals {
-  bp?: string;
-  temp?: number;
-  pulse?: number;
-  spo2?: number;
+interface Row {
+  id: string; patientId: string; patientName: string; patientAvatar: string; status: string; created_at: string;
+  durationMinutes: number | null; diagnosis: string | null; chiefComplaint: string | null; prescription: string | null;
+  outcome: string | null; isFollowUp: boolean;
 }
 
-interface Prescription {
-  drug: string;
-  dose: string;
-  frequency: string;
-  duration: string;
-}
+const STATUS_FILTERS = [["all", "All"], ["completed", "Completed"], ["follow_up", "Follow-up"], ["missed", "Missed"], ["cancelled", "Cancelled"]] as const;
+const PERIODS = [["all", "All time", 0], ["today", "Today", 1], ["7", "Last 7 days", 7], ["30", "Last 30 days", 30], ["90", "Last 90 days", 90]] as const;
+const PAGE = 25;
 
-interface Attachment {
-  name: string;
-  type: "image" | "pdf" | "lab";
-  url: string;
-}
-
-interface C {
-  id: string;
-  patientName: string;
-  patientEmail: string;
-  status: string;
-  created_at: string;
-  durationMinutes: number | null;
-  notes: string | null;
-  summary: string | null;
-  isFollowUp: boolean;
-  followUpScheduledAt: string | null;
-  patientId: string;
-  diagnosis?: string;
-  prescriptions?: Prescription[];
-  vitals?: Vitals;
-  attachments?: Attachment[];
-  severity?: "low" | "medium" | "high" | "critical";
-  reviewed?: boolean;
-  followUpNote?: string;
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<
-  string,
-  {
-    bg: string;
-    border: string;
-    text: string;
-    dot: string;
-    label: string;
-    icon: React.ReactNode;
-  }
-> = {
-  active: {
-    bg: "bg-emerald-50 dark:bg-emerald-950/40",
-    border: "border-emerald-200 dark:border-emerald-800",
-    text: "text-emerald-700 dark:text-emerald-400",
-    dot: "bg-emerald-500",
-    label: "Active",
-    icon: <Zap className="w-3 h-3" />,
-  },
-  waiting: {
-    bg: "bg-amber-50 dark:bg-amber-950/40",
-    border: "border-amber-200 dark:border-amber-800",
-    text: "text-amber-700 dark:text-amber-400",
-    dot: "bg-amber-500",
-    label: "Waiting",
-    icon: <Clock className="w-3 h-3" />,
-  },
-  completed: {
-    bg: "bg-sky-50 dark:bg-sky-950/40",
-    border: "border-sky-200 dark:border-sky-800",
-    text: "text-sky-700 dark:text-sky-400",
-    dot: "bg-sky-500",
-    label: "Completed",
-    icon: <CheckCircle2 className="w-3 h-3" />,
-  },
-  missed: {
-    bg: "bg-rose-50 dark:bg-rose-950/40",
-    border: "border-rose-200 dark:border-rose-800",
-    text: "text-rose-700 dark:text-rose-400",
-    dot: "bg-rose-500",
-    label: "Missed",
-    icon: <ZapOff className="w-3 h-3" />,
-  },
-  follow_up: {
-    bg: "bg-violet-50 dark:bg-violet-950/40",
-    border: "border-violet-200 dark:border-violet-800",
-    text: "text-violet-700 dark:text-violet-400",
-    dot: "bg-violet-500",
-    label: "Follow-up",
-    icon: <GitFork className="w-3 h-3" />,
-  },
-};
-
-const SEVERITY_CONFIG = {
-  low: {
-    bg: "bg-slate-100 dark:bg-slate-800",
-    text: "text-slate-500 dark:text-slate-400",
-    icon: <Shield className="w-3 h-3" />,
-    label: "Low",
-    bar: "bg-slate-400",
-  },
-  medium: {
-    bg: "bg-amber-50 dark:bg-amber-950/40",
-    text: "text-amber-600 dark:text-amber-400",
-    icon: <ShieldCheck className="w-3 h-3" />,
-    label: "Medium",
-    bar: "bg-amber-400",
-  },
-  high: {
-    bg: "bg-orange-50 dark:bg-orange-950/40",
-    text: "text-orange-600 dark:text-orange-400",
-    icon: <ShieldAlert className="w-3 h-3" />,
-    label: "High",
-    bar: "bg-orange-500",
-  },
-  critical: {
-    bg: "bg-rose-50 dark:bg-rose-950/40",
-    text: "text-rose-600 dark:text-rose-400",
-    icon: <Siren className="w-3 h-3" />,
-    label: "Critical",
-    bar: "bg-rose-500",
-  },
-};
-
-// ─── Utilities ────────────────────────────────────────────────────────────────
-
-function timeAgo(d: string) {
-  const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return new Date(d).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function isToday(d: string) {
-  const today = new Date();
-  const dt = new Date(d);
-  return (
-    dt.getFullYear() === today.getFullYear() &&
-    dt.getMonth() === today.getMonth() &&
-    dt.getDate() === today.getDate()
-  );
-}
-
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function statusOrder(s: string) {
-  return (
-    { active: 0, waiting: 1, follow_up: 2, completed: 3, missed: 4 }[s] ?? 5
-  );
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-function Skeleton({ className = "" }: { className?: string }) {
-  return (
-    <div
-      className={`animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800 ${className}`}
-    />
-  );
-}
-
-function SkeletonCard() {
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 space-y-3">
-      <div className="flex items-center gap-3">
-        <Skeleton className="w-10 h-10 rounded-full" />
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-24" />
-        </div>
-        <Skeleton className="h-6 w-16 rounded-full" />
-      </div>
-      <Skeleton className="h-3 w-full" />
-      <Skeleton className="h-3 w-3/4" />
-    </div>
-  );
-}
-
-// ─── Badge Components ─────────────────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_CONFIG[status] || STATUS_CONFIG.missed;
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.bg} ${s.text} ${s.border}`}
-    >
-      {s.icon}
-      {s.label}
-    </span>
-  );
-}
-
-function SeverityBadge({ severity }: { severity: C["severity"] }) {
-  if (!severity) return null;
-  const s = SEVERITY_CONFIG[severity];
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${s.bg} ${s.text}`}
-    >
-      {s.icon}
-      {s.label}
-    </span>
-  );
-}
-
-// ─── Vitals Strip ─────────────────────────────────────────────────────────────
-
-function VitalsStrip({ vitals }: { vitals: Vitals }) {
-  const items = [
-    vitals.bp && {
-      icon: <Activity className="w-3 h-3 text-rose-400" />,
-      label: "BP",
-      value: vitals.bp,
-    },
-    vitals.temp && {
-      icon: <Thermometer className="w-3 h-3 text-amber-400" />,
-      label: "Temp",
-      value: `${vitals.temp}°C`,
-    },
-    vitals.pulse && {
-      icon: <Heart className="w-3 h-3 text-pink-400" />,
-      label: "HR",
-      value: `${vitals.pulse} bpm`,
-    },
-    vitals.spo2 && {
-      icon: <Droplets className="w-3 h-3 text-sky-400" />,
-      label: "SpO₂",
-      value: `${vitals.spo2}%`,
-    },
-  ].filter(Boolean) as {
-    icon: React.ReactNode;
-    label: string;
-    value: string;
-  }[];
-
-  if (!items.length) return null;
-  return (
-    <div className="flex flex-wrap gap-2">
-      {items.map((v) => (
-        <div
-          key={v.label}
-          className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg px-2.5 py-1.5 border border-slate-100 dark:border-slate-700"
-        >
-          {v.icon}
-          <span className="text-[10px] font-semibold text-slate-400 uppercase">
-            {v.label}
-          </span>
-          <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-            {v.value}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Action Menu ─────────────────────────────────────────────────────────────
-
-function ActionMenu({
-  c,
-  onUpdate,
-}: {
-  c: C;
-  onUpdate: (id: string, patch: Partial<C>) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const actions = [
-    {
-      icon: <Eye className="w-3.5 h-3.5" />,
-      label: c.reviewed ? "Mark Unreviewed" : "Mark Reviewed",
-      onClick: () => onUpdate(c.id, { reviewed: !c.reviewed }),
-    },
-    {
-      icon: <MessageSquarePlus className="w-3.5 h-3.5" />,
-      label: "Add Follow-up Note",
-      onClick: () => {
-        const n = prompt("Follow-up note:");
-        if (n) onUpdate(c.id, { followUpNote: n });
-      },
-    },
-    {
-      icon: <RotateCcw className="w-3.5 h-3.5" />,
-      label: "Re-open Consultation",
-      onClick: () => onUpdate(c.id, { status: "active" }),
-    },
-    {
-      icon: <CalendarPlus className="w-3.5 h-3.5" />,
-      label: "Schedule Follow-up",
-      onClick: () => {
-        const d = prompt("Follow-up date (YYYY-MM-DDTHH:MM):");
-        if (d) onUpdate(c.id, { followUpScheduledAt: d });
-      },
-    },
-  ];
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors"
-      >
-        <MoreHorizontal className="w-4 h-4" />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 py-1 min-w-[180px]">
-          {actions.map((a) => (
-            <button
-              key={a.label}
-              onClick={() => {
-                a.onClick();
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
-            >
-              <span className="text-slate-400">{a.icon}</span>
-              {a.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Consultation Card ────────────────────────────────────────────────────────
-
-function HistoryCard({ c }: { c: C }) {
-  const status = STATUS_CONFIG[c.status] || STATUS_CONFIG.missed;
-  const router = useRouter();
-
-  return (
-    <div
-      onClick={() => router.push(`/doctor-dashboard/history/${c.id}`)}
-      className={`mb-3 bg-white dark:bg-slate-900 rounded-2xl border shadow-sm overflow-hidden transition-all hover:shadow-md cursor-pointer ${c.reviewed ? "border-slate-100 dark:border-slate-800" : "border-sky-100 dark:border-sky-900/50"}`}
-    >
-      {c.severity && (
-        <div className={`h-1 w-full ${SEVERITY_CONFIG[c.severity].bar}`} />
-      )}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4">
-        {/* Patient Initial & Basic Info */}
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-slate-100 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center flex-shrink-0 text-sm font-bold text-slate-600 dark:text-slate-300">
-            {c.patientName[0].toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-bold text-slate-800 dark:text-white truncate">{c.patientName}</h3>
-            <div className="flex flex-wrap items-center gap-2 mt-1">
-              <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                <Clock className="w-3 h-3" /> {new Date(c.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-              </span>
-              {c.durationMinutes && (
-                <span className="text-[11px] text-slate-400">· {c.durationMinutes} min</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Diagnosis & Tags */}
-        <div className="w-full sm:w-auto flex flex-col sm:items-end gap-2 mt-2 sm:mt-0 flex-shrink-0">
-          {c.diagnosis && (
-            <span className="text-xs font-semibold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 rounded-lg border border-sky-100 dark:border-sky-900 truncate max-w-[200px]">
-              {c.diagnosis}
-            </span>
-          )}
-          <div className="flex gap-1.5 flex-wrap">
-            <StatusBadge status={c.status} />
-            {c.severity && <SeverityBadge severity={c.severity} />}
-            {c.isFollowUp && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100">
-                <GitFork className="w-2.5 h-2.5" /> Follow-up
-              </span>
-            )}
-            {c.reviewed && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400">
-                <CheckSquare className="w-3 h-3" />
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Date Grouping Component ──────────────────────────────────────────────────
-
-function DateGroup({ date, items }: { date: string; items: C[] }) {
-  const dateObj = new Date(date);
-  const formattedDate = isToday(dateObj.toISOString()) ? "Today, " : "";
-  const displayDate = formattedDate + dateObj.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-
-  return (
-    <div className="mb-6">
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-xs font-extrabold uppercase tracking-widest text-slate-500 pl-1">{displayDate}</h2>
-        <div className="flex-1 h-px bg-slate-200 dark:bg-slate-800" />
-      </div>
-      <div>
-        {items.map(c => (
-          <HistoryCard key={c.id} c={c} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Today's Follow-ups ───────────────────────────────────────────────────────
-
-function TodayFollowUps({ items }: { items: C[] }) {
-  const router = useRouter();
-  if (!items.length) return null;
-  return (
-    <div className="bg-violet-50 dark:from-violet-950/30 dark:to-purple-950/20 rounded-2xl border border-violet-200 dark:border-violet-800/50 overflow-hidden">
-      <div className="px-4 pt-3.5 pb-2 flex items-center gap-2">
-        <div className="w-7 h-7 rounded-xl bg-violet-500 flex items-center justify-center">
-          <Bell className="w-3.5 h-3.5 text-white" />
-        </div>
-        <div>
-          <p className="text-sm font-bold text-violet-800 dark:text-violet-200">
-            Today's Follow-ups
-          </p>
-          <p className="text-[11px] text-violet-500">
-            {items.length} scheduled for today
-          </p>
-        </div>
-        <span className="ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full bg-violet-500 text-white">
-          {items.length}
-        </span>
-      </div>
-      <div className="px-3 pb-3 space-y-2">
-        {items.map((c) => (
-          <div
-            onClick={() => router.push(`/doctor-dashboard/history/${c.id}`)}
-            key={c.id}
-            className="flex items-center gap-3 bg-white dark:bg-slate-900/80 rounded-xl border border-violet-100 dark:border-violet-800/30 px-3 py-2.5 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-          >
-            <div className="w-7 h-7 rounded-full bg-violet-100 dark:from-violet-900/30 dark:to-purple-900/30 flex items-center justify-center flex-shrink-0 text-xs font-bold text-violet-600 dark:text-violet-400">
-              {c.patientName[0]}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
-                {c.patientName}
-              </p>
-              {c.followUpScheduledAt && (
-                <p className="text-[10px] text-violet-500 mt-0.5">
-                  {fmtDate(c.followUpScheduledAt)}
-                </p>
-              )}
-            </div>
-            {c.diagnosis && (
-              <span className="text-[10px] text-slate-400 truncate max-w-[80px]">
-                {c.diagnosis}
-              </span>
-            )}
-            <ArrowUpRight className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Filter Panel ─────────────────────────────────────────────────────────────
-
-interface Filters {
-  status: string;
-  fuFilter: string;
-  search: string;
-  dateFrom: string;
-  dateTo: string;
-  severity: string;
-  hasDiagnosis: boolean;
-  hasPrescriptions: boolean;
-}
-
-function FilterPanel({
-  filters,
-  onChange,
-}: {
-  filters: Filters;
-  onChange: (f: Filters) => void;
-}) {
-  const set = (k: keyof Filters, v: unknown) =>
-    onChange({ ...filters, [k]: v });
-  const STATUS_TABS = [
-    "all",
-    "active",
-    "waiting",
-    "completed",
-    "follow_up",
-    "missed",
-  ];
-  const SEVERITY_TABS = ["all", "low", "medium", "high", "critical"];
-
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-4 space-y-4">
-      {/* Status */}
-      <div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-          Status
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {STATUS_TABS.map((t) => (
-            <button
-              key={t}
-              onClick={() => set("status", t)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${filters.status === t ? "bg-sky-600 text-white border-sky-600" : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100"}`}
-            >
-              {t === "all" ? "All" : STATUS_CONFIG[t]?.label || t}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Severity */}
-      <div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-          Severity
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {SEVERITY_TABS.map((t) => (
-            <button
-              key={t}
-              onClick={() => set("severity", t)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all capitalize ${filters.severity === t ? "bg-sky-600 text-white border-sky-600" : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100"}`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Row: Follow-up + Has Diagnosis + Has Rx */}
-      <div className="flex flex-wrap items-end gap-4">
-        <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-            Follow-up
-          </p>
-          <div className="flex gap-1.5">
-            {["all", "yes", "no"].map((f) => (
-              <button
-                key={f}
-                onClick={() => set("fuFilter", f)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border capitalize transition-all ${filters.fuFilter === f ? "bg-sky-600 text-white border-sky-600" : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100"}`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={filters.hasDiagnosis}
-            onChange={(e) => set("hasDiagnosis", e.target.checked)}
-            className="w-3.5 h-3.5 accent-sky-600"
-          />
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-            Has Diagnosis
-          </span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={filters.hasPrescriptions}
-            onChange={(e) => set("hasPrescriptions", e.target.checked)}
-            className="w-3.5 h-3.5 accent-sky-600"
-          />
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-            Has Prescription
-          </span>
-        </label>
-      </div>
-
-      {/* Date range */}
-      <div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-          Date Range
-        </p>
-        <div className="flex gap-2 flex-wrap">
-          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5">
-            <span className="text-[10px] text-slate-400 font-semibold uppercase">
-              From
-            </span>
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => set("dateFrom", e.target.value)}
-              className="text-xs text-slate-600 dark:text-slate-300 focus:outline-none bg-transparent"
-            />
-          </div>
-          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-1.5">
-            <span className="text-[10px] text-slate-400 font-semibold uppercase">
-              To
-            </span>
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => set("dateTo", e.target.value)}
-              className="text-xs text-slate-600 dark:text-slate-300 focus:outline-none bg-transparent"
-            />
-          </div>
-          {(filters.dateFrom || filters.dateTo) && (
-            <button
-              onClick={() => onChange({ ...filters, dateFrom: "", dateTo: "" })}
-              className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-3 h-3" />
-              Clear
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main Page ─────────────────────────────────────────────────────────────────
-
-const DEFAULT_FILTERS: Filters = {
-  status: "all",
-  fuFilter: "all",
-  search: "",
-  dateFrom: "",
-  dateTo: "",
-  severity: "all",
-  hasDiagnosis: false,
-  hasPrescriptions: false,
+// CSV cells that start with = + - @ can run as formulas in Excel — neutralise them
+const csvCell = (v: unknown) => {
+  let s = String(v ?? "").replace(/\r?\n/g, " ");
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return `"${s.replace(/"/g, '""')}"`;
 };
 
 export default function HistoryPage() {
-  const [items, setItems] = useState<C[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [showFilters, setShowFilters] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number][0]>("all");
+  const [period, setPeriod] = useState<(typeof PERIODS)[number][0]>("all");
+  const [newestFirst, setNewestFirst] = useState(true);
+  const [shown, setShown] = useState(PAGE);
 
-  const load = useCallback(async (manual = false) => {
-    const u = getUser();
-    if (!u) return;
-    if (manual) setRefreshing(true);
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) { setLoading(true); setError(null); }
     try {
-      const j = await fetch(`/api/doctor/consultations?doctorId=${u.id}`).then(
-        (x) => x.json(),
-      );
-      const mapped = (j.data || []).map((row: any) => ({
-        ...row,
-        patientName: row.patientName || 'Unknown',
-        patientEmail: row.patientEmail || '',
-        durationMinutes: row.durationMinutes ?? null,
-        diagnosis: row.diagnosis ?? row.summary ?? null,
-        notes: row.clinicalNotes ?? row.notes ?? null,
-        summary: row.summary ?? null,
-        prescriptions: row.prescription
-          ? [{ drug: row.prescription, dose: '', frequency: '', duration: '' }]
-          : undefined,
-        followUpNote: row.followUpPlan ?? null,
-      }));
-      setItems(mapped);
-    } catch { }
-    if (manual) setRefreshing(false);
-    setLoading(false);
+      const u = getUser() ?? (await loadUser());
+      if (!u) throw new Error("Please sign in again");
+      const res = await fetch(`/api/doctor/consultations?doctorId=${u.id}`);
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || "Could not load your history");
+      setRows((j.data ?? []).filter((r: Row) => r.status !== "waiting" && r.status !== "active"));
+      setError(null);
+    } catch (e: any) { if (!quiet) setError(e.message); } finally { setLoading(false); }
   }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  // Real-time: attempt WebSocket, fall back to polling
-  useEffect(() => {
-    const u = getUser();
-    if (!u) return;
-    try {
-      const ws = new WebSocket(
-        `${process.env.NEXT_PUBLIC_WS_URL || "wss://localhost:3001"}/consultations?doctorId=${u.id}`,
-      );
-      wsRef.current = ws;
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === "consultation_update") {
-            setItems((prev) => {
-              const idx = prev.findIndex((c) => c.id === msg.data.id);
-              if (idx >= 0) {
-                const n = [...prev];
-                n[idx] = { ...n[idx], ...msg.data };
-                return n;
-              }
-              return [msg.data, ...prev];
-            });
-          }
-        } catch { }
-      };
-      ws.onerror = () => {
-        ws.close();
-      };
-      return () => {
-        ws.close();
-      };
-    } catch {
-      // Fall back to polling
-      return startPolling(load, 10000);
-    }
-  }, [load]);
-
-  const handleUpdate = useCallback((id: string, patch: Partial<C>) => {
-    setItems((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    // Persist to backend
-    const u = getUser();
-    if (!u) return;
-    fetch('/api/doctor/consultations', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        consultationId: id,
-        status: patch.status || 'completed',
-        notes: patch.notes,
-        summary: patch.diagnosis,
-        followUpPlan: patch.followUpNote,
-        followUpScheduledAt: patch.followUpScheduledAt,
-      }),
-    }).catch(() => { });
-  }, []);
+  useEffect(() => { load(); return startPolling(() => load(true), 30000); }, [load]);
 
   const filtered = useMemo(() => {
-    const f = items
-      .filter((c) => filters.status === "all" || c.status === filters.status)
-      .filter(
-        (c) =>
-          filters.fuFilter === "all" ||
-          (filters.fuFilter === "yes" ? c.isFollowUp : !c.isFollowUp),
-      )
-      .filter(
-        (c) =>
-          !filters.search ||
-          c.patientName.toLowerCase().includes(filters.search.toLowerCase()) ||
-          (c.diagnosis || "")
-            .toLowerCase()
-            .includes(filters.search.toLowerCase()),
-      )
-      .filter((c) => !filters.dateFrom || c.created_at >= filters.dateFrom)
-      .filter(
-        (c) => !filters.dateTo || c.created_at <= filters.dateTo + "T23:59:59",
-      )
-      .filter(
-        (c) => filters.severity === "all" || c.severity === filters.severity,
-      )
-      .filter((c) => !filters.hasDiagnosis || !!c.diagnosis)
-      .filter(
-        (c) =>
-          !filters.hasPrescriptions ||
-          (c.prescriptions && c.prescriptions.length > 0),
-      );
+    const term = q.trim().toLowerCase();
+    const days = PERIODS.find((p) => p[0] === period)![2];
+    const since = days ? (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (days - 1)); return d.getTime(); })() : 0;
+    return rows
+      .filter((r) => status === "all" || r.status === status)
+      .filter((r) => !since || new Date(r.created_at).getTime() >= since)
+      .filter((r) => !term || [r.patientName, r.diagnosis, r.chiefComplaint, r.prescription].some((f) => f?.toLowerCase().includes(term)))
+      .sort((a, b) => (newestFirst ? 1 : -1) * (+new Date(b.created_at) - +new Date(a.created_at)));
+  }, [rows, q, status, period, newestFirst]);
+  useEffect(() => setShown(PAGE), [q, status, period, newestFirst]);
 
-    const groups: Record<string, C[]> = {};
-    for (const c of f) {
-      const dKey = c.created_at.slice(0, 10);
-      if (!groups[dKey]) groups[dKey] = [];
-      groups[dKey].push(c);
-    }
+  const seen = rows.filter((r) => SEEN.includes(r.status));
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+  const durations = seen.map((r) => r.durationMinutes).filter((n): n is number => !!n);
+  const avg = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+  const counts = Object.fromEntries(STATUS_FILTERS.map(([k]) => [k, k === "all" ? rows.length : rows.filter((r) => r.status === k).length]));
 
-    const sortedGroups = Object.entries(groups).sort(
-      (a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime()
-    );
-
-    return sortedGroups;
-  }, [items, filters]);
-
-  const todayFollowUps = useMemo(
-    () =>
-      items
-        .filter((c) => c.followUpScheduledAt && isToday(c.followUpScheduledAt))
-        .sort(
-          (a, b) =>
-            new Date(a.followUpScheduledAt!).getTime() -
-            new Date(b.followUpScheduledAt!).getTime(),
-        ),
-    [items],
-  );
-
-  const stats = useMemo(
-    () => ({
-      total: items.length,
-      done: items.filter((c) => c.status === "completed").length,
-      active: items.filter(
-        (c) => c.status === "active" || c.status === "waiting",
-      ).length,
-      fu: items.filter((c) => c.isFollowUp).length,
-      missed: items.filter((c) => c.status === "missed").length,
-      critical: items.filter(
-        (c) => c.severity === "critical" || c.severity === "high",
-      ).length,
-    }),
-    [items],
-  );
-
-  const activeFilterCount =
-    Object.entries(filters).filter(
-      ([k, v]) =>
-        k !== "status" &&
-        k !== "fuFilter" &&
-        v &&
-        v !== "all" &&
-        v !== false &&
-        v !== "",
-    ).length +
-    (filters.status !== "all" ? 1 : 0) +
-    (filters.fuFilter !== "all" ? 1 : 0);
+  const exportCsv = () => {
+    const head = ["Date", "Time", "Patient", "Status", "Outcome", "Duration (min)", "Chief complaint", "Diagnosis", "Prescription"];
+    const lines = filtered.map((r) => [fmtDate(r.created_at), fmtTime(r.created_at), r.patientName, r.status, r.outcome ?? "", r.durationMinutes ?? "", r.chiefComplaint ?? "", r.diagnosis ?? "", r.prescription ?? ""].map(csvCell).join(","));
+    const blob = new Blob(["\uFEFF" + [head.map(csvCell).join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `consultation-history-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div className="animate-fade-up space-y-4 pb-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div className="space-y-5 pb-10">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="font-bold text-xl text-slate-800 dark:text-white tracking-tight">
-            Patient History
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {stats.total} total consultations across {filtered.length} days
-          </p>
+          <h2 className="font-display font-extrabold text-[20px] text-slate-900">Consultation history</h2>
+          <p className="text-[12.5px] text-slate-400 mt-0.5">Every consultation you have held, with full clinical records.</p>
         </div>
-        <button
-          onClick={() => load(true)}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 shadow-sm transition-all"
-        >
-          <RefreshCw
-            className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`}
-          />
-          <span className="hidden sm:block">Refresh</span>
+        <button onClick={exportCsv} disabled={filtered.length === 0} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40">
+          <Download className="w-4 h-4" /> Export CSV
         </button>
       </div>
 
-      {/* Stats */}
       {loading ? (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 rounded-2xl" />
-          ))}
+        <div className="space-y-3 animate-pulse"><div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[1, 2, 3, 4].map((i) => <div key={i} className="h-24 rounded-2xl bg-white border border-slate-200" />)}</div>{[1, 2, 3, 4].map((i) => <div key={i} className="h-20 rounded-2xl bg-white border border-slate-200" />)}</div>
+      ) : error ? (
+        <div className="bg-white border border-slate-200 rounded-2xl text-center py-14 px-6 max-w-md mx-auto">
+          <AlertCircle className="w-9 h-9 text-rose-400 mx-auto" /><p className="font-display font-bold text-slate-800 mt-3">{error}</p>
+          <button onClick={() => load()} className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold" style={{ background: NAV_BG }}><RefreshCw className="w-4 h-4" /> Try again</button>
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl text-center py-16 px-6">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3"><ClipboardList className="w-7 h-7 text-slate-300" /></div>
+          <p className="font-display font-bold text-slate-800">No consultations yet</p>
+          <p className="text-[13px] text-slate-400 mt-1">Completed consultations and their records will appear here.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {[
-            {
-              l: "Total",
-              v: stats.total,
-              c: "text-slate-700 dark:text-slate-200",
-              sub: "consultations",
-            },
-            {
-              l: "Active",
-              v: stats.active,
-              c: "text-emerald-600 dark:text-emerald-400",
-              sub: "in session",
-            },
-            {
-              l: "Completed",
-              v: stats.done,
-              c: "text-sky-600 dark:text-sky-400",
-              sub: "sessions",
-            },
-            {
-              l: "Follow-ups",
-              v: stats.fu,
-              c: "text-violet-600 dark:text-violet-400",
-              sub: "scheduled",
-            },
-            {
-              l: "Missed",
-              v: stats.missed,
-              c: "text-rose-500 dark:text-rose-400",
-              sub: "sessions",
-            },
-            {
-              l: "High Risk",
-              v: stats.critical,
-              c: "text-orange-600 dark:text-orange-400",
-              sub: "critical+high",
-            },
-          ].map((s) => (
-            <div
-              key={s.l}
-              className="bg-white dark:bg-slate-900 rounded-2xl p-3 shadow-sm border border-slate-100 dark:border-slate-800 text-center"
-            >
-              <p className={`font-bold text-lg leading-none ${s.c}`}>{s.v}</p>
-              <p className="text-[10px] font-semibold text-slate-400 mt-1 uppercase tracking-wide">
-                {s.l}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Today's Follow-ups */}
-      {!loading && todayFollowUps.length > 0 && (
-        <TodayFollowUps items={todayFollowUps} />
-      )}
-
-      {/* Search + filter toggle */}
-      <div className="flex gap-2">
-        <div className="flex-1 flex items-center gap-2 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 px-3.5 py-2.5 shadow-sm">
-          <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
-          <input
-            value={filters.search}
-            onChange={(e) =>
-              setFilters((f) => ({ ...f, search: e.target.value }))
-            }
-            placeholder="Search patient, diagnosis…"
-            className="flex-1 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none bg-transparent"
-          />
-          {filters.search && (
-            <button
-              onClick={() => setFilters((f) => ({ ...f, search: "" }))}
-              className="text-slate-400 hover:text-slate-600 flex-shrink-0"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-all shadow-sm relative ${showFilters || activeFilterCount > 0 ? "bg-sky-600 text-white border-sky-600" : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800"}`}
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-          <span className="hidden sm:block">Filters</span>
-          {activeFilterCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-        {activeFilterCount > 0 && (
-          <button
-            onClick={() => setFilters(DEFAULT_FILTERS)}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 px-2.5 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 transition-all"
-          >
-            <X className="w-3.5 h-3.5" />
-            Clear
-          </button>
-        )}
-      </div>
-
-      {/* Filter panel */}
-      {showFilters && <FilterPanel filters={filters} onChange={setFilters} />}
-
-      {/* Results */}
-      {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-          <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
-            <Stethoscope className="w-7 h-7 text-slate-300 dark:text-slate-600" />
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { icon: Activity, label: "Consultations held", value: seen.length },
+              { icon: Calendar, label: "This month", value: seen.filter((r) => new Date(r.created_at).getTime() >= monthStart).length },
+              { icon: Clock, label: "Average length", value: avg ? `${avg} min` : "—" },
+              { icon: Repeat, label: "Need follow-up", value: rows.filter((r) => r.status === "follow_up").length },
+            ].map(({ icon: Icon, label, value }) => (
+              <div key={label} className="bg-white border border-slate-200 rounded-2xl p-4">
+                <Icon className="w-4 h-4 text-slate-400" />
+                <p className="font-display font-extrabold text-[24px] text-slate-900 mt-2 leading-none tabular-nums">{value}</p>
+                <p className="text-[12px] text-slate-400 mt-1.5">{label}</p>
+              </div>
+            ))}
           </div>
-          <p className="font-bold text-slate-500 dark:text-slate-400">
-            No consultations found
-          </p>
-          <p className="text-xs text-slate-300 dark:text-slate-600 mt-1.5 max-w-xs mx-auto">
-            Try adjusting your search terms or filters to find what you're
-            looking for
-          </p>
-          {activeFilterCount > 0 && (
-            <button
-              onClick={() => setFilters(DEFAULT_FILTERS)}
-              className="mt-4 text-xs font-semibold text-sky-600 hover:underline"
-            >
-              Clear all filters
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between px-0.5">
-            <p className="text-xs text-slate-400 font-medium">
-              {filtered.length} date{filtered.length !== 1 ? "s" : ""} ·{" "}
-              {filtered.reduce((a, [d, g]) => a + g.length, 0)} session
-              {filtered.reduce((a, [d, g]) => a + g.length, 0) !== 1 ? "s" : ""}
-            </p>
-            <div className="flex items-center gap-1 text-[11px] text-slate-400">
-              <ListFilter className="w-3 h-3" />
-              Sorted by date
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+            <div className="flex gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search patient, diagnosis, complaint, prescription…"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-[13px] outline-none focus:border-teal-500" />
+              </div>
+              <select value={period} onChange={(e) => setPeriod(e.target.value as any)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-[13px] font-semibold text-slate-600 outline-none">
+                {PERIODS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+              </select>
+              <button onClick={() => setNewestFirst((v) => !v)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-[13px] font-semibold text-slate-600 hover:bg-slate-50">{newestFirst ? "Newest first" : "Oldest first"}</button>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {STATUS_FILTERS.map(([k, label]) => (
+                <button key={k} onClick={() => setStatus(k)} className={`px-3 py-1 rounded-full text-[12px] font-bold ${status === k ? "text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`} style={status === k ? { background: NAV_BG } : undefined}>
+                  {label} <span className="opacity-70">· {counts[k]}</span>
+                </button>
+              ))}
             </div>
           </div>
-          {filtered.map(([date, group]) => (
-            <DateGroup
-              key={date}
-              date={date}
-              items={group}
-            />
-          ))}
-        </div>
+
+          {filtered.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-2xl text-center py-14 px-6">
+              <Search className="w-8 h-8 text-slate-300 mx-auto" /><p className="font-display font-bold text-slate-700 mt-3">No consultations match</p><p className="text-[13px] text-slate-400 mt-1">Try a different search, status or period.</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 overflow-hidden">
+              {filtered.slice(0, shown).map((r) => (
+                <Link key={r.id} href={`/doctor-dashboard/history/${r.id}`} className="flex items-center gap-3.5 px-4 py-3.5 hover:bg-slate-50 transition-colors">
+                  <Avatar name={r.patientName} src={r.patientAvatar} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-display font-bold text-[14.5px] text-slate-900 truncate">{r.patientName}</p>
+                      {r.isFollowUp && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">Follow-up visit</span>}
+                    </div>
+                    <p className="text-[13px] text-slate-600 truncate mt-0.5">{r.diagnosis || r.chiefComplaint || <span className="text-slate-300">No clinical notes recorded</span>}</p>
+                    <p className="text-[11.5px] text-slate-400 mt-0.5">{fmtDate(r.created_at)} · {fmtTime(r.created_at)}{r.durationMinutes ? ` · ${r.durationMinutes} min` : ""}</p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1.5 shrink-0"><OutcomeBadge outcome={r.outcome} /><StatusPill status={r.status} /></div>
+                  <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                </Link>
+              ))}
+            </div>
+          )}
+          {filtered.length > shown && (
+            <div className="text-center"><button onClick={() => setShown((n) => n + PAGE)} className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-[13px] font-bold text-slate-700 hover:bg-slate-50">Show more ({filtered.length - shown} remaining)</button></div>
+          )}
+          <p className="text-[11.5px] text-slate-400" style={{ color: ACCENT }}>{filtered.length} of {rows.length} records</p>
+        </>
       )}
     </div>
   );

@@ -47,6 +47,8 @@ export async function GET(req: NextRequest) {
             followUpPlan: row.follow_up_plan ?? null,
             outcome: row.outcome ?? null,
             followUpPriority: row.follow_up_priority ?? null,
+            symptoms: row.symptoms ?? null,
+            rating: row.patient_rating ?? null,
         }));
 
         return NextResponse.json({ data: formatted });

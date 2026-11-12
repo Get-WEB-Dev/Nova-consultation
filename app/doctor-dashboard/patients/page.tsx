@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Users, Search, Mail, Phone, ChevronDown, Activity, Repeat, Pill } from "lucide-react";
+import Link from "next/link";
+import { Users, Search, Mail, Phone, ChevronDown, Activity, Repeat, Pill, MessageSquare, FolderOpen } from "lucide-react";
 import { getUser, loadUser } from "@/lib/supabase/auth";
-import { PageHeader, Card, StatTile, EmptyState, ErrorState, SkeletonRows, Chip, Avatar, ACCENT, timeAgo } from "@/components/doctor/ui";
+import { PageHeader, Card, StatTile, EmptyState, ErrorState, SkeletonRows, Chip, Avatar, ACCENT, timeAgo, NAV_BG } from "@/components/doctor/ui";
 
 interface Patient { id: string; name: string; email: string; avatar_url: string | null; phone: string | null; dob: string | null }
 interface Consult {
@@ -161,6 +162,10 @@ export default function PatientsPage() {
                         <div className="flex gap-4 flex-wrap text-[12px] text-slate-500">
                           {p.email && <a href={`mailto:${p.email}`} className="flex items-center gap-1.5 hover:text-blue-600"><Mail className="w-3.5 h-3.5" />{p.email}</a>}
                           {p.phone && <a href={`tel:${p.phone}`} className="flex items-center gap-1.5 hover:text-blue-600"><Phone className="w-3.5 h-3.5" />{p.phone}</a>}
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          <Link href={`/doctor-dashboard/patients/${p.id}`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-white text-[12.5px] font-bold" style={{ background: NAV_BG }}><FolderOpen className="w-3.5 h-3.5" /> Open patient record</Link>
+                          <Link href={`/doctor-dashboard/messages?patient=${p.id}`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-[12.5px] font-bold text-slate-700 hover:bg-slate-50"><MessageSquare className="w-3.5 h-3.5" /> Message</Link>
                         </div>
                         <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Recent consultations</p>
                         <div className="space-y-2">

@@ -1,345 +1,197 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import {
-    ChevronLeft, Activity, Thermometer, Heart, Droplets, Stethoscope, ClipboardList, Info, Pill, Paperclip, MessageSquarePlus, Calendar, CheckSquare, RotateCcw, Loader2, GitFork, ShieldCheck, ShieldAlert, Siren, Shield, CheckCircle2, ZapOff, Zap, Clock
+    ArrowLeft, Printer, MessageSquare, User, Star, AlertCircle, RefreshCw, AlertTriangle, Calendar, ChevronRight,
 } from "lucide-react";
-import { getUser } from "@/lib/supabase/auth";
+import { NAV_BG, ACCENT, Avatar } from "@/components/doctor/ui";
+import { StatusPill, OutcomeBadge, fmtDate, fmtTime, fmtDateTime, ageFrom } from "@/components/doctor/records";
 
-const NAV_BG = "#003580";
-const ACCENT = "#0071c2";
+interface Record_ {
+    id: string; status: string; isFollowUp: boolean; followUpScheduledAt: string | null; followUpPriority: string | null; followUpPlan: string | null;
+    outcome: string | null; createdAt: string; startedAt: string | null; endedAt: string | null; durationMinutes: number | null;
+    chiefComplaint: string | null; symptoms: string | null; symptomsDuration: string | null; clinicalNotes: string | null;
+    diagnosis: string | null; prescription: string | null; summary: string | null; rating: number | null;
+    visitNumber: number | null; totalVisits: number; previousVisit: { id: string; date: string; diagnosis: string | null } | null;
+    patient: { id: string; name: string; email: string | null; avatar: string | null; phone: string | null; dob: string | null; bloodType: string | null; allergies: string | null };
+    doctor: { name: string | null; specialty: string | null; hospital: string | null };
+}
 
-const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string; icon: any }> = {
-    active: { bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700", label: "Active", icon: Zap },
-    waiting: { bg: "bg-amber-50 border-amber-200", text: "text-amber-700", label: "Waiting", icon: Clock },
-    completed: { bg: "bg-sky-50 border-sky-200", text: "text-sky-700", label: "Completed", icon: CheckCircle2 },
-    missed: { bg: "bg-rose-50 border-rose-200", text: "text-rose-700", label: "Missed", icon: ZapOff },
-    follow_up: { bg: "bg-violet-50 border-violet-200", text: "text-violet-700", label: "Follow-up", icon: GitFork },
-};
+// Print: hide the app shell and print only the record
+const PRINT_CSS = `
+@media print {
+  aside, header, nav, a[href="#main"], [data-noprint] { display: none !important; }
+  div[class*="md:ml-"] { margin-left: 0 !important; }
+  main { padding: 0 !important; max-width: none !important; }
+  body { background: #fff !important; }
+  article, section { break-inside: avoid; }
+}`;
 
-const SEVERITY_CONFIG: Record<string, { bg: string; text: string; icon: any; label: string }> = {
-    low: { bg: "bg-slate-100", text: "text-slate-500", icon: Shield, label: "Low Risk" },
-    medium: { bg: "bg-amber-50", text: "text-amber-600", icon: ShieldCheck, label: "Medium Risk" },
-    high: { bg: "bg-orange-50", text: "text-orange-600", icon: ShieldAlert, label: "High Risk" },
-    critical: { bg: "bg-rose-50", text: "text-rose-600", icon: Siren, label: "Critical Risk" },
-};
-
-function StatusBadge({ status }: { status: string }) {
-    const s = STATUS_CONFIG[status] || STATUS_CONFIG.missed;
-    const Icon = s.icon;
+function Section({ title, value, tall = false }: { title: string; value: string | null; tall?: boolean }) {
     return (
-        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border ${s.bg} ${s.text}`}>
-            <Icon className="w-3.5 h-3.5" /> {s.label}
-        </span>
+        <section className="py-4 first:pt-0 last:pb-0">
+            <h4 className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{title}</h4>
+            <p className={`mt-1.5 text-[14.5px] leading-relaxed whitespace-pre-wrap break-words ${value ? "text-slate-800" : "text-slate-300"} ${tall ? "min-h-[3rem]" : ""}`}>{value || "Not recorded"}</p>
+        </section>
     );
 }
 
-function SeverityBadge({ severity }: { severity: string }) {
-    if (!severity) return null;
-    const s = SEVERITY_CONFIG[severity];
-    if (!s) return null;
-    const Icon = s.icon;
-    return (
-        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border border-transparent ${s.bg} ${s.text}`}>
-            <Icon className="w-3.5 h-3.5" /> {s.label}
-        </span>
-    );
-}
-
-export default function HistoryDetailPage({ params }: { params: { id: string } }) {
-    const router = useRouter();
-    const [c, setC] = useState<any>(null);
+export default function ConsultationRecordPage() {
+    const { id } = useParams<{ id: string }>();
+    const [rec, setRec] = useState<Record_ | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const fetchC = async () => {
-            try {
-                const u = getUser();
-                if (!u) return;
-                const res = await fetch(`/api/doctor/consultations?doctorId=${u.id}`);
-                if (res.ok) {
-                    const j = await res.json();
-                    const items = j.data || [];
-                    const row = items.find((x: any) => x.id === params.id);
-                    if (row) {
-                        setC({
-                            ...row,
-                            patientName: row.patientName || 'Unknown',
-                            patientEmail: row.patientEmail || '',
-                            durationMinutes: row.durationMinutes ?? null,
-                            diagnosis: row.diagnosis ?? row.summary ?? null,
-                            notes: row.clinicalNotes ?? row.notes ?? null,
-                            summary: row.summary ?? null,
-                            prescriptions: row.prescription ? [{ drug: row.prescription, dose: '', frequency: '', duration: '' }] : undefined,
-                            followUpNote: row.followUpPlan ?? null,
-                        });
-                    }
-                }
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchC();
-    }, [params.id]);
-
-    const updateConsultation = async (patch: any) => {
-        if (!c) return;
-        setC({ ...c, ...patch });
+    const load = useCallback(async () => {
+        setLoading(true); setError(null);
         try {
-            await fetch('/api/doctor/consultations', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    consultationId: c.id,
-                    status: patch.status || c.status,
-                    notes: patch.notes !== undefined ? patch.notes : c.notes,
-                    summary: patch.diagnosis !== undefined ? patch.diagnosis : c.summary,
-                    followUpPlan: patch.followUpNote !== undefined ? patch.followUpNote : c.followUpNote,
-                    followUpScheduledAt: patch.followUpScheduledAt !== undefined ? patch.followUpScheduledAt : c.followUpScheduledAt,
-                    reviewed: patch.reviewed !== undefined ? patch.reviewed : c.reviewed
-                })
-            });
-        } catch (e) { }
-    };
+            const res = await fetch(`/api/doctor/consultations/${id}`);
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(res.status === 403 ? "You don't have access to this record." : res.status === 404 ? "This consultation doesn't exist." : j.error || "Could not load this record");
+            setRec(j.data);
+        } catch (e: any) { setError(e.message); } finally { setLoading(false); }
+    }, [id]);
+    useEffect(() => { load(); }, [load]);
 
-    if (loading) {
+    const back = (
+        <Link href="/doctor-dashboard/history" data-noprint className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-500 hover:text-slate-800">
+            <ArrowLeft className="w-4 h-4" /> History
+        </Link>
+    );
+
+    if (loading) return <div className="space-y-4 animate-pulse">{back}<div className="h-28 rounded-2xl bg-white border border-slate-200" /><div className="h-96 rounded-2xl bg-white border border-slate-200" /></div>;
+    if (error || !rec) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh]">
-                <Loader2 className="w-8 h-8 animate-spin text-slate-300 mb-4" />
-                <p className="text-slate-500 font-medium">Loading details...</p>
+            <div className="space-y-4">{back}
+                <div className="bg-white border border-slate-200 rounded-2xl text-center py-14 px-6 max-w-md mx-auto">
+                    <AlertCircle className="w-9 h-9 text-rose-400 mx-auto" /><p className="font-display font-bold text-slate-800 mt-3">{error ?? "Something went wrong"}</p>
+                    <button onClick={load} className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold" style={{ background: NAV_BG }}><RefreshCw className="w-4 h-4" /> Try again</button>
+                </div>
             </div>
         );
     }
 
-    if (!c) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Record Not Found</h2>
-                <p className="text-slate-500 mb-6">This consultation record is missing or deleted.</p>
-                <button onClick={() => router.back()} className="px-5 py-2.5 bg-blue-50 text-blue-700 font-semibold rounded-xl hover:bg-blue-100 transition-colors">
-                    Go Back
-                </button>
-            </div>
-        );
-    }
+    const p = rec.patient, age = ageFrom(p.dob);
+    const hasFollowUp = !!(rec.followUpScheduledAt || rec.followUpPlan || rec.outcome === "follow_up");
+    const timeline = [
+        { label: "Patient joined the queue", at: rec.createdAt },
+        { label: "Consultation started", at: rec.startedAt },
+        { label: "Consultation ended", at: rec.endedAt },
+    ].filter((t) => t.at);
 
     return (
-        <div className="max-w-4xl mx-auto pb-10">
-            <button onClick={() => router.back()} className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors mb-4">
-                <ChevronLeft className="w-4 h-4" />
-                Back to History
-            </button>
+        <div className="space-y-5 pb-10 max-w-4xl">
+            <style>{PRINT_CSS}</style>
+            {back}
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden" style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
+            {/* Printed letterhead (hidden on screen) */}
+            <div className="hidden print:block border-b-2 border-slate-800 pb-3 mb-2">
+                <p className="text-[20px] font-extrabold text-slate-900">Nova Health — Consultation Record</p>
+                <p className="text-[12px] text-slate-600">{[rec.doctor.name && `Dr. ${rec.doctor.name}`, rec.doctor.specialty, rec.doctor.hospital].filter(Boolean).join(" · ")}</p>
+            </div>
 
-                {/* Header Block */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4 px-6 sm:px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-                    <div className="w-14 h-14 rounded-full bg-slate-200 flex items-center justify-center text-xl font-bold text-slate-600 flex-shrink-0">
-                        {c.patientName[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h1 className="font-extrabold text-slate-900 text-xl sm:text-2xl">{c.patientName}</h1>
-                        <div className="flex flex-wrap items-center gap-3 mt-2">
-                            <span className="text-[13px] text-slate-500 flex items-center gap-1.5 font-medium">
-                                <Calendar className="w-4 h-4 text-slate-400" />
-                                {new Date(c.created_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                            {c.durationMinutes && (
-                                <span className="text-[13px] text-slate-500 flex items-center gap-1.5 font-medium">
-                                    <Clock className="w-4 h-4 text-slate-400" />
-                                    {c.durationMinutes} minutes
-                                </span>
-                            )}
+            {/* Header */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <p className="text-[12px] font-bold uppercase tracking-wide text-slate-400">Consultation record</p>
+                        <h2 className="font-display font-extrabold text-[22px] text-slate-900 mt-1">{fmtDate(rec.createdAt)} · {fmtTime(rec.createdAt)}</h2>
+                        <div className="flex items-center gap-2 mt-2.5 flex-wrap"><StatusPill status={rec.status} /><OutcomeBadge outcome={rec.outcome} />
+                            {rec.isFollowUp && <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-violet-50 text-violet-700">Follow-up visit</span>}
                         </div>
                     </div>
-                    <div className="flex flex-wrap sm:flex-col items-center sm:items-end gap-2 shrink-0">
-                        <StatusBadge status={c.status} />
-                        {c.severity && <SeverityBadge severity={c.severity} />}
+                    <button onClick={() => window.print()} data-noprint className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-bold" style={{ background: NAV_BG }}>
+                        <Printer className="w-4 h-4" /> Print / Save PDF
+                    </button>
+                </div>
+
+                <div className="mt-5 pt-5 border-t border-slate-100 grid sm:grid-cols-[1fr_auto] gap-4 items-center">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                        <Avatar name={p.name} src={p.avatar} size={52} />
+                        <div className="min-w-0">
+                            <p className="font-display font-bold text-[16px] text-slate-900 truncate">{p.name}</p>
+                            <p className="text-[12.5px] text-slate-500">{[age ? `${age} years` : null, p.bloodType ? `Blood type ${p.bloodType}` : null, p.phone].filter(Boolean).join(" · ") || p.email || "—"}</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap" data-noprint>
+                        <Link href={`/doctor-dashboard/patients/${p.id}`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50"><User className="w-3.5 h-3.5" /> Patient record</Link>
+                        <Link href={`/doctor-dashboard/messages?patient=${p.id}`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50"><MessageSquare className="w-3.5 h-3.5" /> Message</Link>
                     </div>
                 </div>
 
-                {/* Content Block */}
-                <div className="p-6 sm:p-8 space-y-8">
-
-                    {/* Vitals Strip */}
-                    {c.vitals && Object.values(c.vitals).some(Boolean) && (
-                        <section>
-                            <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">
-                                <Activity className="w-4 h-4" /> Patient Vitals
-                            </h3>
-                            <div className="flex flex-wrap gap-3">
-                                {[
-                                    c.vitals.bp && { icon: <Activity className="text-rose-400" />, label: "Blood Pressure", val: c.vitals.bp },
-                                    c.vitals.temp && { icon: <Thermometer className="text-amber-400" />, label: "Temperature", val: `${c.vitals.temp}°C` },
-                                    c.vitals.pulse && { icon: <Heart className="text-pink-400" />, label: "Heart Rate", val: `${c.vitals.pulse} bpm` },
-                                    c.vitals.spo2 && { icon: <Droplets className="text-sky-400" />, label: "SpO2 Level", val: `${c.vitals.spo2}%` },
-                                ].filter(Boolean).map((v: any) => (
-                                    <div key={v.label} className="flex items-center gap-3 bg-white rounded-xl px-4 py-2 border border-slate-200 shadow-sm flex-1 min-w-[140px]">
-                                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center">{v.icon}</div>
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{v.label}</p>
-                                            <p className="text-sm font-bold text-slate-800">{v.val}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-                    )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-8">
-                            {/* Diagnosis */}
-                            {c.diagnosis && (
-                                <section>
-                                    <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">
-                                        <Stethoscope className="w-4 h-4" /> Diagnosis
-                                    </h3>
-                                    <div className="bg-sky-50 rounded-xl p-4 border border-sky-100 shadow-sm">
-                                        <p className="text-base font-bold text-sky-800 leading-relaxed">{c.diagnosis}</p>
-                                    </div>
-                                </section>
-                            )}
-
-                            {/* Notes */}
-                            {c.notes && (
-                                <section>
-                                    <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">
-                                        <ClipboardList className="w-4 h-4" /> Clinical Notes
-                                    </h3>
-                                    <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                                        <p className="text-sm text-slate-700 leading-loose whitespace-pre-wrap">{c.notes}</p>
-                                    </div>
-                                </section>
-                            )}
+                <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                        { label: "Duration", value: rec.durationMinutes ? `${rec.durationMinutes} min` : "—" },
+                        { label: "Visit number", value: rec.visitNumber ? `${rec.visitNumber} of ${rec.totalVisits}` : "—" },
+                        { label: "Started", value: fmtTime(rec.startedAt) },
+                        { label: "Ended", value: fmtTime(rec.endedAt) },
+                    ].map((x) => (
+                        <div key={x.label} className="rounded-xl bg-slate-50 border border-slate-100 px-3.5 py-3">
+                            <p className="text-[11px] text-slate-400 font-semibold">{x.label}</p>
+                            <p className="font-display font-extrabold text-[16px] text-slate-900 mt-0.5">{x.value}</p>
                         </div>
-
-                        <div className="space-y-8">
-                            {/* Prescriptions */}
-                            {c.prescriptions?.length > 0 && (
-                                <section>
-                                    <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">
-                                        <Pill className="w-4 h-4" /> Prescriptions & Medications
-                                    </h3>
-                                    <div className="space-y-3">
-                                        {c.prescriptions.map((p: any, i: number) => (
-                                            <div key={i} className="flex items-center justify-between bg-white rounded-xl p-3 border border-slate-200 shadow-sm">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-                                                        <Pill className="w-4 h-4 text-blue-500" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-slate-800">{p.drug}</p>
-                                                        {(p.dose || p.frequency) && (
-                                                            <p className="text-[11px] text-slate-500 mt-0.5">{p.dose} {p.dose && p.frequency ? "·" : ""} {p.frequency}</p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                {p.duration && <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{p.duration}</span>}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
-
-                            {/* Attachments */}
-                            {c.attachments?.length > 0 && (
-                                <section>
-                                    <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">
-                                        <Paperclip className="w-4 h-4" /> Files & Attachments ({c.attachments.length})
-                                    </h3>
-                                    <div className="flex flex-wrap gap-2">
-                                        {c.attachments.map((a: any, i: number) => (
-                                            <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[12px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl px-3 py-2 transition-colors">
-                                                <Paperclip className="w-4 h-4 opacity-70" /> {a.name}
-                                            </a>
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="h-px bg-slate-200 w-full" />
-
-                    {/* Follow-ups */}
-                    <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">
-                                <MessageSquarePlus className="w-4 h-4" /> Follow-up Note
-                            </h3>
-                            {c.followUpNote ? (
-                                <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
-                                    <p className="text-sm text-violet-900">{c.followUpNote}</p>
-                                </div>
-                            ) : (
-                                <p className="text-sm text-slate-400 italic">No note added.</p>
-                            )}
-                        </div>
-
-                        {c.followUpScheduledAt && (
-                            <div>
-                                <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">
-                                    <Calendar className="w-4 h-4" /> Next Follow-up
-                                </h3>
-                                <div className="flex items-center gap-3 bg-white rounded-xl p-4 border border-violet-200 shadow-sm relative overflow-hidden">
-                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-violet-400" />
-                                    <GitFork className="w-5 h-5 text-violet-400 shrink-0" />
-                                    <div>
-                                        <p className="text-[13px] font-bold text-slate-800">
-                                            {new Date(c.followUpScheduledAt).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </section>
-                </div>
-
-                {/* Action Bar */}
-                <div className="p-6 border-t border-slate-200 flex flex-wrap items-center gap-3 bg-slate-50">
-                    <button
-                        onClick={() => updateConsultation({ reviewed: !c.reviewed })}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border transition-all ${c.reviewed ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-100"}`}
-                    >
-                        <CheckSquare className="w-4 h-4" />
-                        {c.reviewed ? "Reviewed" : "Mark as Reviewed"}
-                    </button>
-
-                    {c.status === "completed" && (
-                        <button
-                            onClick={() => updateConsultation({ status: "active" })}
-                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-white text-sky-600 border border-sky-200 hover:bg-sky-50 transition-all"
-                        >
-                            <RotateCcw className="w-4 h-4" /> Re-open Consultation
-                        </button>
-                    )}
-
-                    <div className="flex-1" />
-
-                    <button
-                        onClick={() => {
-                            const d = prompt("Enter next follow-up date (YYYY-MM-DDTHH:MM):", c.followUpScheduledAt ? c.followUpScheduledAt.slice(0, 16) : "");
-                            if (d) updateConsultation({ followUpScheduledAt: new Date(d).toISOString() });
-                        }}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition-all"
-                    >
-                        <Calendar className="w-4 h-4" /> Schedule Follow-up
-                    </button>
-
-                    <button
-                        onClick={() => {
-                            const n = prompt("Follow-up note:", c.followUpNote || "");
-                            if (n) updateConsultation({ followUpNote: n });
-                        }}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all shadow-sm hover:opacity-90"
-                        style={{ background: NAV_BG }}
-                    >
-                        <MessageSquarePlus className="w-4 h-4" /> Add Note
-                    </button>
+                    ))}
                 </div>
             </div>
+
+            {p.allergies && (
+                <div role="alert" className="flex items-start gap-3 p-4 rounded-2xl bg-rose-50 border border-rose-200">
+                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                    <div><p className="text-[13px] font-extrabold text-rose-800">Patient allergies</p><p className="text-[13.5px] text-rose-900 mt-0.5 whitespace-pre-wrap">{p.allergies}</p></div>
+                </div>
+            )}
+
+            {/* Clinical record */}
+            <article className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 divide-y divide-slate-100">
+                <Section title="Chief complaint" value={rec.chiefComplaint} />
+                {(rec.symptoms || rec.symptomsDuration) && <Section title="Reported by the patient" value={[rec.symptoms, rec.symptomsDuration && `For ${rec.symptomsDuration}`].filter(Boolean).join("\n")} />}
+                <Section title="Clinical notes" value={rec.clinicalNotes} tall />
+                <Section title="Diagnosis" value={rec.diagnosis} />
+                <Section title="Prescription" value={rec.prescription} />
+                {rec.summary && rec.summary !== rec.diagnosis && <Section title="Summary" value={rec.summary} />}
+            </article>
+
+            {hasFollowUp && (
+                <section className="bg-amber-50 border border-amber-200 rounded-2xl p-5 sm:p-6">
+                    <h3 className="font-display font-bold text-[15px] text-amber-900 flex items-center gap-2"><Calendar className="w-4 h-4" /> Follow-up</h3>
+                    <div className="grid sm:grid-cols-3 gap-3 mt-3 text-[13.5px]">
+                        <div><p className="text-[11px] font-bold uppercase text-amber-700/70">Scheduled</p><p className="text-amber-950 font-semibold mt-0.5">{rec.followUpScheduledAt ? fmtDateTime(rec.followUpScheduledAt) : "Not scheduled"}</p></div>
+                        <div><p className="text-[11px] font-bold uppercase text-amber-700/70">Priority</p><p className="text-amber-950 font-semibold mt-0.5 capitalize">{rec.followUpPriority || "—"}</p></div>
+                    </div>
+                    {rec.followUpPlan && <p className="mt-3 text-[14px] text-amber-950 whitespace-pre-wrap">{rec.followUpPlan}</p>}
+                    <Link href={`/doctor-dashboard/followups/${rec.id}`} data-noprint className="inline-flex items-center gap-1 mt-3 text-[12.5px] font-bold text-amber-900 hover:underline">Manage this follow-up <ChevronRight className="w-3.5 h-3.5" /></Link>
+                </section>
+            )}
+
+            <div className="grid sm:grid-cols-2 gap-5">
+                <section className="bg-white border border-slate-200 rounded-2xl p-5">
+                    <h3 className="font-display font-bold text-[14.5px] text-slate-900">Timeline</h3>
+                    <ol className="mt-3 space-y-3 border-l-2 border-slate-100 ml-1.5">
+                        {timeline.map((t) => (
+                            <li key={t.label} className="pl-4 relative"><span className="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full border-2 border-white" style={{ background: ACCENT }} />
+                                <p className="text-[13px] font-semibold text-slate-700">{t.label}</p><p className="text-[12px] text-slate-400">{fmtDateTime(t.at)}</p></li>
+                        ))}
+                    </ol>
+                </section>
+                <section className="bg-white border border-slate-200 rounded-2xl p-5">
+                    <h3 className="font-display font-bold text-[14.5px] text-slate-900">Patient feedback & history</h3>
+                    <div className="mt-3 flex items-center gap-1">
+                        {rec.rating ? [1, 2, 3, 4, 5].map((n) => <Star key={n} className={`w-5 h-5 ${n <= rec.rating! ? "fill-amber-400 text-amber-400" : "text-slate-200"}`} />) : <span className="text-[13px] text-slate-300">No rating given</span>}
+                    </div>
+                    {rec.previousVisit ? (
+                        <Link href={`/doctor-dashboard/history/${rec.previousVisit.id}`} data-noprint className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 p-3 hover:bg-slate-50">
+                            <div className="min-w-0 flex-1"><p className="text-[11px] font-bold uppercase text-slate-400">Previous visit</p><p className="text-[13px] font-semibold text-slate-800 truncate">{fmtDate(rec.previousVisit.date)}{rec.previousVisit.diagnosis ? ` · ${rec.previousVisit.diagnosis}` : ""}</p></div>
+                            <ChevronRight className="w-4 h-4 text-slate-300" />
+                        </Link>
+                    ) : <p className="mt-4 text-[12.5px] text-slate-400">This is the first recorded visit with this patient.</p>}
+                </section>
+            </div>
+
+            <p className="hidden print:block text-[11px] text-slate-500 border-t border-slate-300 pt-3">
+                Confidential medical record · Printed {new Date().toLocaleString()} · Record ID {rec.id}
+            </p>
         </div>
     );
 }
