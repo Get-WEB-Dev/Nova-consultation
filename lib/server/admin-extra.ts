@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/client';
+import { normalizePermissions, presetOf } from '@/lib/admin-permissions';
 
 type CountDefs = Record<string, ((q: any) => any) | null>;
 
@@ -165,23 +166,27 @@ export async function listAdmins() {
     const admin: any = createAdminClient();
     const [byRole, byRow] = await Promise.all([
         admin.from('users').select('id, name, email, role, created_at').eq('role', 'admin'),
-        admin.from('admins').select('user_id, is_super_admin, created_at, users(id, name, email, role)'),
+        admin.from('admins').select('user_id, is_super_admin, permissions, created_at, users(id, name, email, role)'),
     ]);
     if (byRole.error) throw byRole.error;
     if (byRow.error) throw byRow.error;
 
     const map = new Map<string, any>();
     for (const u of byRole.data ?? []) {
-        map.set(u.id, { id: u.id, name: u.name, email: u.email, role: u.role, isSuperAdmin: false, since: u.created_at });
+        // Role "admin" without an admins row = legacy full access
+        map.set(u.id, { id: u.id, name: u.name, email: u.email, role: u.role, isSuperAdmin: false, since: u.created_at, permissions: ['all'] });
     }
     // Anyone with an `admins` row has admin access even if their role differs
     for (const a of byRow.data ?? []) {
         if (!a.users) continue;
         const cur = map.get(a.user_id) ?? { id: a.user_id, name: a.users.name, email: a.users.email, role: a.users.role, since: a.created_at };
         cur.isSuperAdmin = !!a.is_super_admin;
+        cur.permissions = normalizePermissions(a.permissions);
         map.set(a.user_id, cur);
     }
-    return Array.from(map.values()).sort((a, b) => Number(b.isSuperAdmin) - Number(a.isSuperAdmin));
+    return Array.from(map.values())
+        .map((a) => ({ ...a, access: a.isSuperAdmin ? 'super' : presetOf(a.permissions) }))
+        .sort((a, b) => Number(b.isSuperAdmin) - Number(a.isSuperAdmin));
 }
 
 // ── Analytics (computed by the admin_analytics() SQL function) ──

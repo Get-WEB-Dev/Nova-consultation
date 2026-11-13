@@ -940,6 +940,48 @@ alter table platform_settings enable row level security;
 insert into platform_settings (key, value) values ('registrations_open', 'true'::jsonb)
 on conflict (key) do nothing;
 
+
+-- ══ A. Security posture check (read-only; used by the System page) ══
+create or replace function admin_security_check()
+returns jsonb language sql stable security definer set search_path = public, pg_catalog as $$
+  select jsonb_build_object(
+    'table_count',
+      (select count(*) from pg_tables where schemaname = 'public'),
+    'tables_without_rls',
+      coalesce((select jsonb_agg(tablename order by tablename)
+                from pg_tables where schemaname = 'public' and not rowsecurity), '[]'::jsonb),
+    -- policies that let a signed-in browser WRITE to a table directly (expected: none)
+    'browser_write_policies',
+      coalesce((select jsonb_agg(jsonb_build_object('table', tablename, 'policy', policyname, 'command', cmd)
+                                 order by tablename, policyname)
+                from pg_policies
+                where schemaname = 'public' and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')), '[]'::jsonb)
+  );
+$$;
+revoke all on function admin_security_check() from public, anon, authenticated;
+grant execute on function admin_security_check() to service_role;
+
+-- ══ B. Data requests (privacy: access / deletion / correction), tracked against a 30-day deadline ══
+create table if not exists data_requests (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid references users(id) on delete set null,
+  requester_email  text not null,
+  request_type     text not null check (request_type in ('export', 'deletion', 'correction')),
+  status           text not null default 'received' check (status in ('received', 'in_progress', 'completed', 'rejected')),
+  details          text check (details is null or char_length(details) <= 1000),
+  due_at           timestamptz not null default (now() + interval '30 days'),
+  created_by       uuid references users(id) on delete set null,
+  created_by_email text,
+  handled_by_email text,
+  completed_at     timestamptz,
+  created_at       timestamptz not null default now()
+);
+alter table data_requests enable row level security;
+create index if not exists idx_data_requests_status on data_requests (status, due_at);
+
+-- Make the API see new tables and functions immediately
+notify pgrst, 'reload schema';
+
 -- ============================================================
 -- DONE! Database is ready.
 -- ============================================================

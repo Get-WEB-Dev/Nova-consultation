@@ -18,6 +18,7 @@
 
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/client';
+import { requiredPermission, isAllowed, normalizePermissions } from '@/lib/admin-permissions';
 
 export type DbRole = 'patient' | 'doctor' | 'professional' | 'admin';
 
@@ -26,6 +27,8 @@ export interface AuthedUser {
   email: string | null;
   role: DbRole;
   isAdmin: boolean;
+    /** What this admin may do. ['all'] = everything except super-admin actions */
+  permissions: string[];
   isSuperAdmin: boolean;
   /** doctor_profiles.id for this user, or null if they have no doctor profile */
   doctorProfileId: string | null;
@@ -82,7 +85,7 @@ export async function getAuthUser(req: Request): Promise<AuthedUser | null> {
   const [userRes, doctorRes, adminRes] = await Promise.all([
     admin.from('users').select('role, is_suspended').eq('id', uid).maybeSingle(),
     admin.from('doctor_profiles').select('id').eq('user_id', uid).maybeSingle(),
-    admin.from('admins').select('is_super_admin').eq('user_id', uid).maybeSingle(),
+    admin.from('admins').select('is_super_admin, permissions').eq('user_id', uid).maybeSingle(),
   ]);
 
   if (userRes.error) throw userRes.error; // database hiccup ≠ signed out
@@ -98,6 +101,7 @@ export async function getAuthUser(req: Request): Promise<AuthedUser | null> {
     role,
     isAdmin,
     isSuperAdmin: !!adminRes.data?.is_super_admin,
+    permissions: normalizePermissions(adminRes.data?.permissions),
     doctorProfileId: doctorRes.data?.id ?? null,
     aal: tokenAal(token),
   };
@@ -137,6 +141,17 @@ export async function requireUser(req: Request, roles?: DbRole[]): Promise<Guard
       return {
         error: NextResponse.json(
           { error: 'Two-factor authentication required', code: 'mfa_required', data: [] },
+          { status: 403 },
+        ),
+      };
+      
+    }
+    
+    // Granular permissions: what this admin is allowed to do on THIS endpoint
+    if (roles.includes('admin') && user.isAdmin && !isAllowed(user, requiredPermission(req.method, req.url))) {
+      return {
+        error: NextResponse.json(
+          { error: 'You do not have permission to do this', code: 'permission_denied', data: [] },
           { status: 403 },
         ),
       };

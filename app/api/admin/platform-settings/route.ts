@@ -1,15 +1,18 @@
 import { NextResponse } from 'next/server';
 import { requireUser, requireSuperAdmin } from '@/lib/server/auth';
 import { logAdminAction } from '@/lib/server/admin-queries';
-import { SETTING_KEYS, getSettings, setSetting, type SettingKey } from '@/lib/server/platform-settings';
+import { countSuperAdmins } from '@/lib/server/admin-access';
+import { SETTING_KEYS, getSettingsStatus, setSetting, classifySettingsError, type SettingKey } from '@/lib/server/platform-settings';
 
 export const dynamic = 'force-dynamic';
 const fail = (m: string, s = 400) => NextResponse.json({ error: m }, { status: s });
 
+// Everything the Settings card needs, including WHY it might not be changeable
 export async function GET(req: Request) {
     const auth = await requireUser(req, ['admin']);
     if (auth.error) return auth.error;
-    return NextResponse.json({ data: await getSettings(), canEdit: !!auth.user.isSuperAdmin });
+    const [{ settings, problem }, superAdminCount] = await Promise.all([getSettingsStatus(), countSuperAdmins().catch(() => 0)]);
+    return NextResponse.json({ data: settings, canEdit: !!auth.user.isSuperAdmin, problem, superAdminCount });
 }
 
 // Changing platform behaviour is a super-admin decision
@@ -24,7 +27,8 @@ export async function PUT(req: Request) {
         await logAdminAction(auth.user, 'settings.changed', 'settings', auth.user.id, `${key} → ${value ? 'on' : 'off'}`);
         return NextResponse.json({ success: true });
     } catch (err: any) {
-        const missing = /platform_settings|does not exist/i.test(err.message);
-        return fail(missing ? 'Run the Phase 2 SQL (platform_settings table is missing).' : err.message, 500);
+        const problem = classifySettingsError(err.message ?? '');
+        const text = problem.code === 'read_failed' ? err.message : problem.message;
+        return fail(text, 500);
     }
 }
