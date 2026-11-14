@@ -1,606 +1,276 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  GitFork,
-  Clock,
-  Calendar,
-  ChevronRight,
-  FileText,
-  Video,
-  AlertCircle,
-  X,
-  MessageSquare,
-  Plus,
-  Search,
-  Filter,
-  Check,
-  Edit3,
-  Trash2,
-  Bell,
-  ChevronDown,
-  Loader2,
-  RefreshCw,
-  User,
-  Stethoscope,
-  Pill,
-  ClipboardList,
-  RotateCcw,
-  Phone,
-  CheckCircle2,
-  XCircle,
-  Timer,
-  SlidersHorizontal,
+  Search, CalendarCheck, CalendarClock, Check, MessageSquare, FolderOpen, ChevronLeft, ChevronRight, List,
+  CalendarDays, AlertCircle, RefreshCw, Clock, AlertTriangle, CheckCircle2, Loader2, ArrowRight,
 } from "lucide-react";
-import { getUser } from "@/lib/supabase/auth";
+import { startPolling } from "@/lib/polling";
+import { getUser, loadUser } from "@/lib/supabase/auth";
 import { notifyError } from "@/lib/auth-fetch";
-import { useRouter } from "next/navigation";
-
-const NAV_BG = "#003580";
-const ACCENT = "#0071c2";
-
-type Priority = "low" | "medium" | "high";
-type FUStatus = "pending" | "completed" | "missed" | "cancelled";
+import { Avatar, NAV_BG, ACCENT } from "@/components/doctor/ui";
+import { PriorityPill, RescheduleDialog, dueInfo, dayKey, TONE_STYLE, type RescheduleValues } from "@/components/doctor/followup";
 
 interface FollowUp {
-  id: string;
-  patientId: string;
-  patientName: string;
-  patientEmail: string;
-  reason: string;
-  instructions: string;
-  scheduledAt: string;
-  priority: Priority;
-  status: FUStatus;
-  notes: string | null;
-  diagnosis: string | null;
-  prescriptions: string[];
-  createdAt: string;
-  consultationId: string | null;
-  chat?: { from: string; text: string; time: string }[];
+  id: string; patientId: string; patientName: string; patientAvatar: string; status: string; reason: string;
+  instructions: string; scheduledAt: string | null; priority: string; consultationId: string;
 }
 
-const MOCK: FollowUp[] = [];
+const JSON_HEADERS = { "Content-Type": "application/json" };
+const CHIPS = [["open", "Open"], ["overdue", "Overdue"], ["completed", "Completed"], ["all", "All"]] as const;
+type Chip = (typeof CHIPS)[number][0];
 
-const PRIORITY_CONFIG = {
-  high: { bg: "#fff1f2", text: "#be123c", border: "#fecdd3", label: "High" },
-  medium: {
-    bg: "#fffbeb",
-    text: "#b45309",
-    border: "#fde68a",
-    label: "Medium",
-  },
-  low: { bg: "#f0fdf4", text: "#15803d", border: "#bbf7d0", label: "Low" },
-};
+const isOpen = (f: FollowUp) => f.status === "pending" || f.status === "missed";
+const isOverdue = (f: FollowUp) => isOpen(f) && !!f.scheduledAt && new Date(f.scheduledAt).getTime() < Date.now();
+const startOfDay = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
 
-const STATUS_CONFIG = {
-  pending: { bg: "#eff6ff", text: ACCENT, icon: Timer, label: "Pending" },
-  completed: {
-    bg: "#f0fdf4",
-    text: "#15803d",
-    icon: CheckCircle2,
-    label: "Completed",
-  },
-  missed: { bg: "#fff1f2", text: "#be123c", icon: XCircle, label: "Missed" },
-  cancelled: { bg: "#f8fafc", text: "#64748b", icon: X, label: "Cancelled" },
-};
-
-function timeUntil(iso: string) {
-  const ms = new Date(iso).getTime() - Date.now();
-  if (ms < 0) {
-    const ago = Math.abs(ms);
-    const h = Math.floor(ago / 3600000);
-    if (h < 1) return `${Math.floor(ago / 60000)}m ago`;
-    if (h < 24) return `${h}h ago`;
-    return `${Math.floor(h / 24)}d ago`;
-  }
-  const h = Math.floor(ms / 3600000);
-  if (h < 1) return `in ${Math.floor(ms / 60000)}m`;
-  if (h < 24) return `in ${h}h`;
-  return `in ${Math.floor(h / 24)}d`;
+function bucket(f: FollowUp): string {
+  if (!isOpen(f)) return f.status === "completed" ? "Completed" : "Cancelled";
+  if (isOverdue(f)) return "Overdue";
+  const diff = Math.round((startOfDay(new Date(f.scheduledAt!)) - startOfDay(new Date())) / 86400000);
+  return diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : diff < 7 ? "This week" : "Later";
 }
-
-function PriorityBadge({ priority }: { priority: Priority }) {
-  const c = PRIORITY_CONFIG[priority];
-  return (
-    <span
-      className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border"
-      style={{ background: c.bg, color: c.text, borderColor: c.border }}
-    >
-      {c.label}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: FUStatus }) {
-  const c = STATUS_CONFIG[status];
-  const Icon = c.icon;
-  return (
-    <span
-      className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full"
-      style={{ background: c.bg, color: c.text }}
-    >
-      <Icon className="w-3 h-3" />
-      {c.label}
-    </span>
-  );
-}
-
-function FollowUpCard({
-  fu,
-  onClick,
-  onComplete,
-  onReschedule,
-}: {
-  fu: FollowUp;
-  onClick: () => void;
-  onComplete: () => void;
-  onReschedule: () => void;
-}) {
-  const overdue =
-    fu.status === "pending" && new Date(fu.scheduledAt) < new Date();
-  const soon =
-    fu.status === "pending" &&
-    !overdue &&
-    new Date(fu.scheduledAt).getTime() - Date.now() < 6 * 3600000;
-
-  return (
-    <div
-      className={`bg-white border rounded-2xl p-4 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${overdue ? "border-rose-200" : soon ? "border-amber-200" : "border-slate-200"}`}
-      style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
-      onClick={onClick}
-    >
-      <div className="flex items-start gap-3">
-        {/* Avatar */}
-        <div
-          className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 text-white font-extrabold text-base"
-          style={{
-            background: overdue ? "#be123c" : soon ? "#b45309" : NAV_BG,
-          }}
-        >
-          {fu.patientName[0]}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <p className="font-extrabold text-[14px] text-slate-900">
-              {fu.patientName}
-            </p>
-            <PriorityBadge priority={fu.priority} />
-            <StatusBadge status={fu.status} />
-          </div>
-          <p className="text-[12px] text-slate-600 line-clamp-1">{fu.reason}</p>
-
-          <div className="flex items-center gap-3 mt-2 flex-wrap">
-            <span className="flex items-center gap-1 text-[11px] text-slate-400">
-              <Calendar className="w-3 h-3" />
-              {new Date(fu.scheduledAt).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-            <span
-              className={`flex items-center gap-1 text-[11px] font-bold ${overdue ? "text-rose-600" : soon ? "text-amber-600" : "text-blue-600"}`}
-            >
-              <Clock className="w-3 h-3" />
-              {timeUntil(fu.scheduledAt)}
-            </span>
-          </div>
-
-          {fu.diagnosis && (
-            <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1">
-              <Stethoscope className="w-3 h-3 flex-shrink-0" />
-              {fu.diagnosis}
-            </p>
-          )}
-        </div>
-
-        <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0 mt-1" />
-      </div>
-
-      {/* Quick actions */}
-      {fu.status === "pending" && (
-        <div
-          className="flex gap-2 mt-3 pt-3 border-t border-slate-100"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Link
-            href={`/doctor-dashboard/consult?followUpId=${fu.id}&patientId=${fu.patientId}`}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-extrabold text-white transition-all active:scale-95"
-            style={{ background: NAV_BG }}
-          >
-            <Video className="w-3.5 h-3.5" /> Start Consultation
-          </Link>
-          <button
-            onClick={onComplete}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border transition-all active:scale-95"
-            style={{
-              borderColor: "#bbf7d0",
-              color: "#15803d",
-              background: "#f0fdf4",
-            }}
-          >
-            <Check className="w-3.5 h-3.5" /> Done
-          </button>
-          <button
-            onClick={onReschedule}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold border border-slate-200 text-slate-500 bg-slate-50 transition-all active:scale-95"
-          >
-            <RotateCcw className="w-3.5 h-3.5" /> Reschedule
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Section({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2">
-        {label}
-      </p>
-      {children}
-    </div>
-  );
-}
+const ORDER = ["Overdue", "Today", "Tomorrow", "This week", "Later", "Completed", "Cancelled"];
 
 export default function FollowUpsPage() {
-  const router = useRouter();
-  const [items, setItems] = useState<FollowUp[]>(MOCK);
-  const [sel, setSel] = useState<FollowUp | null>(null);
-  const [rescheduleItem, setRescheduleItem] = useState<FollowUp | null>(null);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<FUStatus | "all">("all");
-  const [priorityFilter, setPriorityFilter] = useState<Priority | "all">("all");
+  const [items, setItems] = useState<FollowUp[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"agenda" | "calendar">("agenda");
+  const [chip, setChip] = useState<Chip>("open");
+  const [q, setQ] = useState("");
+  const [priority, setPriority] = useState("all");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [resched, setResched] = useState<FollowUp | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [selectedDay, setSelectedDay] = useState<string>(() => dayKey(new Date().toISOString()));
 
-  useEffect(() => {
-    const user = getUser();
-    if (!user) return;
-    const fetchFollowUps = async () => {
-      try {
-        const res = await fetch(`/api/follow-ups?doctorId=${user.id}`);
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Could not load follow-ups");
-        // Anything still pending whose time has passed counts as missed
-        setItems((json.data ?? []).map((fu: FollowUp) =>
-          fu.status === "pending" && new Date(fu.scheduledAt) < new Date() ? { ...fu, status: "missed" as FUStatus } : fu,
-        ));
-      } catch (err: any) {
-        notifyError(err?.message || "Could not load follow-ups");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFollowUps();
-  }, []);
-
-  // // Auto-mark missed
-  // useEffect(() => {
-  //   setItems((prev) =>
-  //     prev.map((fu) =>
-  //       fu.status === "pending" && new Date(fu.scheduledAt) < new Date()
-  //         ? { ...fu, status: "missed" as FUStatus }
-  //         : fu,
-  //     ),
-  //   );
-  // }, []);
-
-  const handleComplete = useCallback(async (id: string) => {
-    let previous: FollowUp[] = [];
-    setItems((prev) => {
-      previous = prev;
-      return prev.map((fu) => (fu.id === id ? { ...fu, status: "completed" as FUStatus } : fu));
-    });
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) { setLoading(true); setError(null); }
     try {
-      const res = await fetch("/api/follow-ups", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consultationId: id, status: "completed" }),
-      });
-      if (!res.ok) throw new Error("update failed");
-    } catch {
-      setItems(previous); // the server didn't save it — put the card back
-    }
+      const u = getUser() ?? (await loadUser());
+      if (!u) throw new Error("Please sign in again");
+      const res = await fetch(`/api/follow-ups?doctorId=${u.id}`);
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || "Could not load your follow-ups");
+      setItems((j.data ?? []).filter((f: FollowUp) => f.scheduledAt));
+      setError(null);
+    } catch (e: any) { if (!quiet) setError(e.message); } finally { setLoading(false); }
   }, []);
+  useEffect(() => { load(); return startPolling(() => load(true), 30000); }, [load]);
 
-  const handleReschedule = useCallback(
-    (id: string, date: string, instructions: string, priority: Priority) => {
-      setItems((prev) =>
-        prev.map((fu) =>
-          fu.id === id
-            ? {
-              ...fu,
-              scheduledAt: new Date(date).toISOString(),
-              instructions,
-              priority,
-              status: "pending" as FUStatus,
-            }
-            : fu,
-        ),
-      );
-      setRescheduleItem(null);
-      fetch("/api/follow-ups", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          consultationId: id,
-          scheduledAt: new Date(date).toISOString(),
-          instructions,
-          priority,
-          status: "pending",
-        }),
-      }).catch(console.error);
-    },
-    [],
-  );
-
-  const filtered = items.filter((fu) => {
-    const matchSearch =
-      fu.patientName.toLowerCase().includes(search.toLowerCase()) ||
-      fu.reason.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || fu.status === statusFilter;
-    const matchPriority =
-      priorityFilter === "all" || fu.priority === priorityFilter;
-    return matchSearch && matchStatus && matchPriority;
-  });
-
-  const grouped = {
-    missed: filtered.filter((f) => f.status === "missed"),
-    pending: filtered
-      .filter((f) => f.status === "pending")
-      .sort((a, b) => {
-        const pOrder = { high: 0, medium: 1, low: 2 };
-        return pOrder[a.priority] - pOrder[b.priority];
-      }),
-    completed: filtered.filter((f) => f.status === "completed"),
-    cancelled: filtered.filter((f) => f.status === "cancelled"),
+  // ── Actions ──
+  const complete = async (f: FollowUp) => {
+    const before = items; setBusyId(f.id);
+    setItems((l) => l.map((x) => (x.id === f.id ? { ...x, status: "completed" } : x)));
+    try {
+      const res = await fetch("/api/follow-ups", { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ consultationId: f.consultationId, status: "completed" }) });
+      if (!res.ok) throw new Error();
+    } catch { setItems(before); notifyError("Couldn't mark it as completed. Please try again."); }
+    finally { setBusyId(null); }
   };
 
-  const counts = {
-    pending: items.filter((f) => f.status === "pending").length,
-    missed: items.filter((f) => f.status === "missed").length,
-    completed: items.filter((f) => f.status === "completed").length,
+  const reschedule = async (f: FollowUp, v: RescheduleValues) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/follow-ups", { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ consultationId: f.consultationId, ...v }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || "Couldn't reschedule");
+      setItems((l) => l.map((x) => (x.id === f.id ? { ...x, status: "pending", scheduledAt: v.scheduledAt, priority: v.priority, instructions: v.instructions } : x)));
+      setResched(null);
+    } catch { /* the red toast shows the server's reason; keep the dialog open to try again */ }
+    finally { setSaving(false); }
+  };
+
+  // ── Derived ──
+  const todayKey = dayKey(new Date().toISOString());
+  const stats = useMemo(() => ({
+    upcoming: items.filter((f) => isOpen(f) && !isOverdue(f)).length,
+    today: items.filter((f) => isOpen(f) && f.scheduledAt && dayKey(f.scheduledAt) === todayKey).length,
+    overdue: items.filter(isOverdue).length,
+    done: items.filter((f) => { const d = new Date(f.scheduledAt!); const n = new Date(); return f.status === "completed" && d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length,
+  }), [items, todayKey]);
+
+  const counts = useMemo(() => ({
+    open: items.filter(isOpen).length, overdue: items.filter(isOverdue).length,
+    completed: items.filter((f) => f.status === "completed").length, all: items.length,
+  }), [items]);
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return items
+      .filter((f) => chip === "all" ? true : chip === "open" ? isOpen(f) : chip === "overdue" ? isOverdue(f) : f.status === chip)
+      .filter((f) => priority === "all" || f.priority === priority)
+      .filter((f) => !term || f.patientName.toLowerCase().includes(term) || f.reason.toLowerCase().includes(term))
+      .sort((a, b) => +new Date(a.scheduledAt!) - +new Date(b.scheduledAt!));
+  }, [items, chip, priority, q]);
+
+  const groups = ORDER.map((g) => ({ label: g, rows: filtered.filter((f) => bucket(f) === g) })).filter((g) => g.rows.length);
+
+  // calendar
+  const byDay = useMemo(() => { const m = new Map<string, FollowUp[]>(); filtered.forEach((f) => { const k = dayKey(f.scheduledAt!); m.set(k, [...(m.get(k) ?? []), f]); }); return m; }, [filtered]);
+  const cells = useMemo(() => {
+    const first = new Date(month.getFullYear(), month.getMonth(), 1);
+    const lead = (first.getDay() + 6) % 7; // Monday first
+    const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    return [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => new Date(month.getFullYear(), month.getMonth(), i + 1))];
+  }, [month]);
+  const dayList = byDay.get(selectedDay) ?? [];
+
+  const renderCard = (f: FollowUp) => {
+    const info = dueInfo(f.scheduledAt, f.status === "missed" ? "pending" : f.status);
+    const tone = TONE_STYLE[isOverdue(f) ? "overdue" : info.tone];
+    const open = isOpen(f);
+    return (
+      <div className="bg-white border border-slate-200 rounded-2xl p-4">
+        <div className="flex items-start gap-3.5">
+          <Avatar name={f.patientName} src={f.patientAvatar} size={46} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link href={`/doctor-dashboard/followups/${f.id}`} className="font-display font-bold text-[15px] text-slate-900 hover:underline">{f.patientName}</Link>
+              <PriorityPill priority={f.priority} />
+            </div>
+            <p className="text-[13px] text-slate-500 mt-0.5 line-clamp-1">{f.reason}</p>
+            {f.instructions && <p className="text-[12px] text-slate-400 mt-1 line-clamp-1">Note: {f.instructions}</p>}
+          </div>
+          <span className="text-[11.5px] font-bold px-2.5 py-1 rounded-full whitespace-nowrap" style={{ background: tone.bg, color: tone.fg }}>{info.label}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap mt-3.5 pt-3.5 border-t border-slate-100">
+          {open && (<>
+            <button onClick={() => complete(f)} disabled={busyId === f.id} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-white text-[12.5px] font-bold disabled:opacity-60" style={{ background: ACCENT }}>
+              {busyId === f.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Mark done
+            </button>
+            <button onClick={() => setResched(f)} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50"><CalendarClock className="w-3.5 h-3.5" /> Reschedule</button>
+          </>)}
+          <Link href={`/doctor-dashboard/messages?patient=${f.patientId}`} aria-label="Message patient" className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center"><MessageSquare className="w-4 h-4" /></Link>
+          <Link href={`/doctor-dashboard/history/${f.consultationId}`} aria-label="Open consultation record" className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center"><FolderOpen className="w-4 h-4" /></Link>
+          <Link href={`/doctor-dashboard/followups/${f.id}`} className="ml-auto inline-flex items-center gap-1 text-[12.5px] font-bold hover:underline" style={{ color: ACCENT }}>Details <ArrowRight className="w-3.5 h-3.5" /></Link>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="space-y-5 max-w-2xl pb-10">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="space-y-5 pb-10">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="font-extrabold text-slate-900 text-[20px]">
-            Follow-Up Manager
-          </h1>
-          <p className="text-[12px] text-slate-400 mt-0.5">
-            {counts.pending} pending ·{" "}
-            {counts.missed > 0 && (
-              <span className="text-rose-600 font-semibold">
-                {counts.missed} missed ·{" "}
-              </span>
-            )}
-            {counts.completed} completed
-          </p>
+          <h2 className="font-display font-extrabold text-[20px] text-slate-900">Follow-ups</h2>
+          <p className="text-[12.5px] text-slate-400 mt-0.5">Patients you asked to come back. Reminders go to you and the patient 24 hours before.</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-[13px] text-white transition-all active:scale-95"
-          style={{ background: NAV_BG }}
-        >
-          <Plus className="w-4 h-4" /> Schedule Follow-up
-        </button>
-      </div>
-
-      {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          {
-            label: "Pending",
-            count: counts.pending,
-            color: ACCENT,
-            bg: "#eff6ff",
-          },
-          {
-            label: "Missed",
-            count: counts.missed,
-            color: "#be123c",
-            bg: "#fff1f2",
-          },
-          {
-            label: "Completed",
-            count: counts.completed,
-            color: "#15803d",
-            bg: "#f0fdf4",
-          },
-        ].map(({ label, count, color, bg }) => (
-          <div
-            key={label}
-            className="rounded-xl p-3 text-center"
-            style={{ background: bg }}
-          >
-            <p className="font-extrabold text-[22px]" style={{ color }}>
-              {count}
-            </p>
-            <p className="text-[10px] font-bold text-slate-500">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search patients or reasons…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-[12px] outline-none focus:border-blue-400 bg-white transition-colors"
-          />
-        </div>
-        <div className="flex gap-1.5">
-          {(["all", "pending", "missed", "completed"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all capitalize"
-              style={
-                statusFilter === s
-                  ? { background: NAV_BG, color: "white", borderColor: NAV_BG }
-                  : {
-                    background: "white",
-                    color: "#475569",
-                    borderColor: "#e2e8f0",
-                  }
-              }
-            >
-              {s}
-            </button>
+        <div className="flex gap-1 p-1 rounded-xl bg-slate-100">
+          {([["agenda", "Agenda", List], ["calendar", "Calendar", CalendarDays]] as const).map(([k, label, Icon]) => (
+            <button key={k} onClick={() => setView(k)} className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12.5px] font-bold ${view === k ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}><Icon className="w-3.5 h-3.5" />{label}</button>
           ))}
         </div>
-        <div className="flex gap-1.5">
-          {(["all", "high", "medium", "low"] as const).map((p) => {
-            const c = p !== "all" ? PRIORITY_CONFIG[p] : null;
-            return (
-              <button
-                key={p}
-                onClick={() => setPriorityFilter(p)}
-                className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all capitalize"
-                style={
-                  priorityFilter === p
-                    ? c
-                      ? {
-                        background: c.bg,
-                        color: c.text,
-                        borderColor: c.border,
-                      }
-                      : {
-                        background: NAV_BG,
-                        color: "white",
-                        borderColor: NAV_BG,
-                      }
-                    : {
-                      background: "white",
-                      color: "#475569",
-                      borderColor: "#e2e8f0",
-                    }
-                }
-              >
-                {p}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
-      {/* Missed */}
-      {grouped.missed.length > 0 && (
-        <GroupSection title="Missed" count={grouped.missed.length} urgent>
-          {grouped.missed.map((fu) => (
-            <FollowUpCard
-              key={fu.id}
-              fu={fu}
-              onClick={() => setSel(fu)}
-              onComplete={() => handleComplete(fu.id)}
-              onReschedule={() => setRescheduleItem(fu)}
-            />
-          ))}
-        </GroupSection>
-      )}
-      {/* Pending */}
-      <GroupSection title="Upcoming" count={grouped.pending.length}>
-        {grouped.pending.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 bg-white border border-dashed border-slate-200 rounded-2xl">
-            <GitFork className="w-9 h-9 text-slate-200 mb-2" />
-            <p className="font-bold text-slate-500">No pending follow-ups</p>
-            <p className="text-[12px] text-slate-400 mt-1">
-              Schedule follow-ups from consultation records
-            </p>
+      {loading ? (
+        <div className="space-y-3 animate-pulse"><div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[1, 2, 3, 4].map((i) => <div key={i} className="h-24 rounded-2xl bg-white border border-slate-200" />)}</div>{[1, 2, 3].map((i) => <div key={i} className="h-32 rounded-2xl bg-white border border-slate-200" />)}</div>
+      ) : error ? (
+        <div className="bg-white border border-slate-200 rounded-2xl text-center py-14 px-6 max-w-md mx-auto">
+          <AlertCircle className="w-9 h-9 text-rose-400 mx-auto" /><p className="font-display font-bold text-slate-800 mt-3">{error}</p>
+          <button onClick={() => load()} className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold" style={{ background: NAV_BG }}><RefreshCw className="w-4 h-4" /> Try again</button>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl text-center py-16 px-6">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3"><CalendarCheck className="w-7 h-7 text-slate-300" /></div>
+          <p className="font-display font-bold text-slate-800">No follow-ups yet</p>
+          <p className="text-[13px] text-slate-400 mt-1 max-w-sm mx-auto">When you finish a consultation and choose &ldquo;Needs follow-up&rdquo;, it will be scheduled here.</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { icon: Clock, label: "Upcoming", value: stats.upcoming, color: "#0d7b74" },
+              { icon: CalendarClock, label: "Due today", value: stats.today, color: "#b45309" },
+              { icon: AlertTriangle, label: "Overdue", value: stats.overdue, color: stats.overdue ? "#be123c" : "#64748b" },
+              { icon: CheckCircle2, label: "Done this month", value: stats.done, color: "#15803d" },
+            ].map(({ icon: Icon, label, value, color }) => (
+              <div key={label} className="bg-white border border-slate-200 rounded-2xl p-4">
+                <Icon className="w-4 h-4" style={{ color }} />
+                <p className="font-display font-extrabold text-[26px] text-slate-900 mt-2 leading-none tabular-nums">{value}</p>
+                <p className="text-[12px] text-slate-400 mt-1.5">{label}</p>
+              </div>
+            ))}
           </div>
-        ) : (
-          Object.entries(grouped).map(([g, blockItems]) => {
-            if (!blockItems.length) return null;
-            return (
-              <div key={g} className="space-y-3">
-                <h2 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400 pl-1 capitalize">
-                  {g} Follow-ups ({blockItems.length})
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
-                  {blockItems.map((fu) => (
-                    <FollowUpCard
-                      key={fu.id}
-                      fu={fu}
-                      onClick={() => router.push(`/doctor-dashboard/followups/${fu.id}`)}
-                      onComplete={() => handleComplete(fu.id)}
-                      onReschedule={() => setRescheduleItem(fu)}
-                    />
-                  ))}
+
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+            <div className="flex gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search patient or reason…" className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-[13px] outline-none focus:border-teal-500" />
+              </div>
+              <select value={priority} onChange={(e) => setPriority(e.target.value)} className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-[13px] font-semibold text-slate-600 outline-none">
+                <option value="all">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+              </select>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {CHIPS.map(([k, label]) => (
+                <button key={k} onClick={() => setChip(k)} className={`px-3 py-1 rounded-full text-[12px] font-bold ${chip === k ? "text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`} style={chip === k ? { background: NAV_BG } : undefined}>
+                  {label} <span className="opacity-70">· {counts[k]}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {view === "agenda" ? (
+            filtered.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-2xl text-center py-14 px-6"><Search className="w-8 h-8 text-slate-300 mx-auto" /><p className="font-display font-bold text-slate-700 mt-3">Nothing here</p><p className="text-[13px] text-slate-400 mt-1">Try a different filter.</p></div>
+            ) : (
+              <div className="space-y-6">
+                {groups.map((g) => (
+                  <section key={g.label}>
+                    <h3 className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wide mb-2.5" style={{ color: g.label === "Overdue" ? "#be123c" : "#64748b" }}>{g.label}<span className="text-slate-300">· {g.rows.length}</span></h3>
+                    <div className="space-y-3">{g.rows.map((f) => <div key={f.id}>{renderCard(f)}</div>)}</div>
+                  </section>
+                ))}
+              </div>
+            )
+          ) : (
+            <div className="grid lg:grid-cols-[minmax(0,1fr)_380px] gap-5 items-start">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-display font-extrabold text-[16px] text-slate-900">{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h3>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Previous month" className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50"><ChevronLeft className="w-4 h-4" /></button>
+                    <button onClick={() => { const d = new Date(); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); setSelectedDay(todayKey); }} className="px-3 h-9 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-600 hover:bg-slate-50">Today</button>
+                    <button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label="Next month" className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center hover:bg-slate-50"><ChevronRight className="w-4 h-4" /></button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center mb-1">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d} className="text-[11px] font-bold text-slate-400 py-1">{d}</div>)}</div>
+                <div className="grid grid-cols-7 gap-1">
+                  {cells.map((d, i) => {
+                    if (!d) return <div key={`b${i}`} />;
+                    const k = dayKey(d.toISOString()), list = byDay.get(k) ?? [], sel = k === selectedDay, isToday = k === todayKey;
+                    return (
+                      <button key={k} onClick={() => setSelectedDay(k)} aria-label={`${d.toDateString()}, ${list.length} follow-ups`}
+                        className={`aspect-square sm:aspect-[4/3] rounded-xl border text-left p-1.5 flex flex-col transition-colors ${sel ? "border-teal-600 bg-teal-50" : "border-slate-100 hover:bg-slate-50"}`}>
+                        <span className={`text-[12.5px] font-bold w-6 h-6 rounded-full flex items-center justify-center ${isToday ? "text-white" : "text-slate-700"}`} style={isToday ? { background: NAV_BG } : undefined}>{d.getDate()}</span>
+                        {list.length > 0 && (
+                          <span className="mt-auto flex items-center gap-0.5 flex-wrap">
+                            {list.slice(0, 3).map((f) => <span key={f.id} className="w-1.5 h-1.5 rounded-full" style={{ background: f.status === "completed" ? "#94a3b8" : isOverdue(f) ? "#e11d48" : f.priority === "high" ? "#e11d48" : f.priority === "low" ? "#16a34a" : "#d97706" }} />)}
+                            {list.length > 3 && <span className="text-[10px] font-bold text-slate-500">+{list.length - 3}</span>}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })
-        )}
-      </GroupSection>
-
-      {/* Modals */}
-      {rescheduleItem && (
-        <div className="fixed inset-0 bg-black/40 z-[60] backdrop-blur-sm" onClick={() => setRescheduleItem(null)}>
-          {/* Note: In a real app we would build a dedicated reschedule modal here or on the details page. */}
-          <div className="fixed inset-x-4 top-1/2 -translate-y-1/2 z-[60] bg-white rounded-2xl shadow-2xl p-6 max-w-sm mx-auto" onClick={e => e.stopPropagation()}>
-            <p className="text-center font-bold text-slate-800">Visit the detail page to reschedule.</p>
-            <button className="w-full mt-4 py-2 bg-slate-100 rounded-xl" onClick={() => setRescheduleItem(null)}>Close</button>
-          </div>
-        </div>
+              <div className="space-y-3">
+                <h3 className="font-display font-bold text-[14.5px] text-slate-900">{new Date(selectedDay + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</h3>
+                {dayList.length === 0 ? <div className="bg-white border border-slate-200 rounded-2xl text-center py-10 text-[13px] text-slate-400">No follow-ups on this day</div>
+                  : dayList.map((f) => <div key={f.id}>{renderCard(f)}</div>)}
+              </div>
+            </div>
+          )}
+        </>
       )}
-    </div>
-  );
-}
 
-function GroupSection({
-  title,
-  count,
-  children,
-  urgent,
-  collapsed: defaultCollapsed,
-}: {
-  title: string;
-  count: number;
-  children: React.ReactNode;
-  urgent?: boolean;
-  collapsed?: boolean;
-}) {
-  const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false);
-  return (
-    <div>
-      <button
-        className="flex items-center gap-2 mb-3 w-full text-left"
-        onClick={() => setCollapsed(!collapsed)}
-      >
-        {urgent && (
-          <div
-            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ background: "#fff1f2" }}
-          >
-            <AlertCircle className="w-3 h-3" style={{ color: "#be123c" }} />
-          </div>
-        )}
-        <h2 className="font-extrabold text-[14px] text-slate-900">
-          {title} ({count})
-        </h2>
-        <ChevronDown
-          className={`w-4 h-4 text-slate-400 ml-auto transition-transform ${collapsed ? "-rotate-90" : ""}`}
-        />
-      </button>
-      {!collapsed && <div className="space-y-2.5">{children}</div>}
+      <RescheduleDialog open={!!resched} patientName={resched?.patientName ?? ""} initialAt={resched?.scheduledAt} initialPriority={resched?.priority} initialPlan={resched?.instructions}
+        saving={saving} onSave={(v) => resched && reschedule(resched, v)} onClose={() => setResched(null)} />
     </div>
   );
 }

@@ -152,7 +152,7 @@ export default function HistoryPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-display font-bold text-[14.5px] text-slate-900 truncate">{r.patientName}</p>
-                      {r.isFollowUp && <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700">Follow-up visit</span>}
+                     
                     </div>
                     <p className="text-[13px] text-slate-600 truncate mt-0.5">{r.diagnosis || r.chiefComplaint || <span className="text-slate-300">No clinical notes recorded</span>}</p>
                     <p className="text-[11.5px] text-slate-400 mt-0.5">{fmtDate(r.created_at)} · {fmtTime(r.created_at)}{r.durationMinutes ? ` · ${r.durationMinutes} min` : ""}</p>

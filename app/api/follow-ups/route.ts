@@ -77,9 +77,15 @@ export async function POST(req: NextRequest) {
         );
     }
 
+        // The time must be a real date, in the future
+    const when = Date.parse(scheduledAt);
+    if (Number.isNaN(when)) return NextResponse.json({ error: 'scheduledAt is not a valid date' }, { status: 400 });
+    if (when < Date.now() - 60_000) return NextResponse.json({ error: 'Choose a time in the future.' }, { status: 400 });
+
     // Only the consultation's doctor can schedule a follow-up
     const access = await getConsultationAccess(auth.user, consultationId);
     if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
+   
 
     try {
         const { createFollowUp, createNotification } = await import('@/lib/server/queries');
@@ -137,25 +143,81 @@ export async function PATCH(req: NextRequest) {
     const access = await getConsultationAccess(auth.user, consultationId);
     if (!access || (!access.asDoctor && !auth.user.isAdmin)) return forbidden();
 
+    // ── Validate every field before touching the database ──
+    const updates: Record<string, unknown> = {};
+    if (status !== undefined) {
+        if (!['completed', 'cancelled', 'missed', 'follow_up'].includes(status)) {
+            return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+        }
+        updates.status = status;
+        if (status === 'cancelled') {
+            // Cancelling the FOLLOW-UP does not cancel the consultation that already happened:
+            // it goes back to "completed" and drops off the follow-up list.
+            updates.status = 'completed';
+            updates.is_follow_up = false;
+            updates.follow_up_scheduled_at = null;
+            updates.follow_up_reminded_at = null;
+        }
+    }
+    if (scheduledAt !== undefined) {
+        const when = Date.parse(scheduledAt);
+        if (Number.isNaN(when)) return NextResponse.json({ error: 'scheduledAt is not a valid date' }, { status: 400 });
+        if (when < Date.now() - 60_000) return NextResponse.json({ error: 'Choose a time in the future.' }, { status: 400 });
+        updates.follow_up_scheduled_at = new Date(when).toISOString();
+        updates.follow_up_reminded_at = null; // a new time means a fresh reminder
+        updates.is_follow_up = true;
+        if (status === undefined) updates.status = 'follow_up'; // rescheduling re-opens a missed/cancelled one
+    }
+    if (instructions !== undefined) updates.follow_up_plan = String(instructions).slice(0, 4000); // NOT the consultation notes
+    if (priority !== undefined) {
+        if (!['low', 'medium', 'high'].includes(priority)) return NextResponse.json({ error: 'Invalid priority' }, { status: 400 });
+        updates.follow_up_priority = priority;
+    }
+    if (Object.keys(updates).length === 0) {
+        return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+    }
+
     try {
         const { createAdminClient } = await import('@/lib/supabase/client');
-        const admin = createAdminClient();
+        const admin: any = createAdminClient();
 
-        const updates: any = {};
-        if (status) updates.status = status;
-        if (scheduledAt) updates.follow_up_scheduled_at = scheduledAt;
-        if (instructions) updates.notes = instructions;
-
-        const { error } = await admin
-            .from('consultations')
-            .update(updates as never)
-            .eq('id', consultationId);
-
+        let { error } = await admin.from('consultations').update(updates).eq('id', consultationId);
+        // If the reminders column has not been added yet, save everything else anyway
+        if (error && /follow_up_reminded_at/.test(error.message)) {
+            delete updates.follow_up_reminded_at;
+            ({ error } = await admin.from('consultations').update(updates).eq('id', consultationId));
+        }
         if (error) throw error;
+
+        // Tell the patient when their appointment moves or is cancelled
+        if (updates.follow_up_scheduled_at || status === 'cancelled') {
+            try {
+                const { createNotification } = await import('@/lib/server/queries');
+                const { data: c } = await admin.from('consultations')
+                    .select('patient_id, doctor_profiles!doctor_id(users!user_id(name))').eq('id', consultationId).maybeSingle();
+                if (c?.patient_id) {
+                    const doctorName = c.doctor_profiles?.users?.name ?? 'Your doctor';
+                    await createNotification({
+                        userId: c.patient_id,
+                        type: 'follow_up',
+                        title: status === 'cancelled' ? 'Follow-up cancelled' : 'Follow-up rescheduled',
+                        message: status === 'cancelled'
+                            ? `${doctorName} cancelled your follow-up consultation.`
+                            : `${doctorName} moved your follow-up consultation. Open the app to see the new time.`,
+                        doctorName,
+                        actionUrl: '/appointments',
+                        refId: consultationId,
+                        refTable: 'consultations',
+                    });
+                }
+            } catch (notifErr) {
+                console.warn('[follow-ups PATCH] notification error:', notifErr);
+            }
+        }
 
         return NextResponse.json({ success: true });
     } catch (err: any) {
         console.error('[follow-ups PATCH]', err.message);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        return NextResponse.json({ error: 'Could not update the follow-up' }, { status: 500 });
     }
 }

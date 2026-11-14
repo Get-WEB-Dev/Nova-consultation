@@ -1,289 +1,186 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import {
-    ChevronLeft, Calendar, AlertCircle, Stethoscope, Pill, FileText, Video, Check, RotateCcw, Loader2, Clock, CheckCircle2, XCircle, X
+  ArrowLeft, CalendarClock, Check, X, MessageSquare, User, FolderOpen, AlertCircle, RefreshCw, Loader2, Pill, Stethoscope, CalendarPlus, Save,
 } from "lucide-react";
-import { getUser } from "@/lib/supabase/auth";
+import { Avatar, NAV_BG, ACCENT } from "@/components/doctor/ui";
+import { fmtDate, fmtTime } from "@/components/doctor/records";
+import { PriorityPill, RescheduleDialog, dueInfo, TONE_STYLE, PRIORITIES, type RescheduleValues, type Priority } from "@/components/doctor/followup";
 
-const NAV_BG = "#003580";
-const ACCENT = "#0071c2";
-
-type Priority = "low" | "medium" | "high";
-type FUStatus = "pending" | "completed" | "missed" | "cancelled";
-
-interface FollowUp {
-    id: string;
-    patientId: string;
-    patientName: string;
-    patientEmail: string;
-    reason: string;
-    instructions: string;
-    scheduledAt: string;
-    priority: Priority;
-    status: FUStatus;
-    notes: string | null;
-    diagnosis: string | null;
-    prescriptions: string[];
-    createdAt: string;
-    consultationId: string | null;
-    chat?: { from: string; text: string; time: string }[];
+interface Rec {
+  id: string; status: string; isFollowUp: boolean; followUpScheduledAt: string | null; followUpPriority: string | null; followUpPlan: string | null;
+  createdAt: string; chiefComplaint: string | null; diagnosis: string | null; prescription: string | null; clinicalNotes: string | null;
+  patient: { id: string; name: string; avatar: string | null };
 }
+const JSON_HEADERS = { "Content-Type": "application/json" };
 
-const PRIORITY_CONFIG = {
-    high: { bg: "#fff1f2", text: "#be123c", border: "#fecdd3", label: "High" },
-    medium: { bg: "#fffbeb", text: "#b45309", border: "#fde68a", label: "Medium" },
-    low: { bg: "#f0fdf4", text: "#15803d", border: "#bbf7d0", label: "Low" },
-};
+export default function FollowUpDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [rec, setRec] = useState<Rec | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [dialog, setDialog] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [plan, setPlan] = useState("");
+  const [priority, setPriority] = useState<Priority>("medium");
+  const [savedAt, setSavedAt] = useState<number | null>(null);
 
-const STATUS_CONFIG = {
-    pending: { bg: "#eff6ff", text: ACCENT, icon: Clock, label: "Pending" },
-    completed: { bg: "#f0fdf4", text: "#15803d", icon: CheckCircle2, label: "Completed" },
-    missed: { bg: "#fff1f2", text: "#be123c", icon: XCircle, label: "Missed" },
-    cancelled: { bg: "#f8fafc", text: "#64748b", icon: X, label: "Cancelled" },
-};
+  const load = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const res = await fetch(`/api/doctor/consultations/${id}`);
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(res.status === 403 ? "You don't have access to this follow-up." : res.status === 404 ? "This follow-up doesn't exist." : j.error || "Could not load this follow-up");
+      setRec(j.data);
+      setPlan(j.data.followUpPlan ?? "");
+      setPriority((PRIORITIES as readonly string[]).includes(j.data.followUpPriority) ? j.data.followUpPriority : "medium");
+    } catch (e: any) { setError(e.message); } finally { setLoading(false); }
+  }, [id]);
+  useEffect(() => { load(); }, [load]);
 
-function PriorityBadge({ priority }: { priority: Priority }) {
-    const c = PRIORITY_CONFIG[priority];
-    return (
-        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border" style={{ background: c.bg, color: c.text, borderColor: c.border }}>
-            {c.label}
-        </span>
-    );
-}
+  const patch = async (body: object, key: string): Promise<boolean> => {
+    setBusy(key);
+    try {
+      const res = await fetch("/api/follow-ups", { method: "PATCH", headers: JSON_HEADERS, body: JSON.stringify({ consultationId: id, ...body }) });
+      return res.ok; // a failed save already shows the red error toast (lib/auth-fetch.ts)
+    } catch { return false; } finally { setBusy(null); }
+  };
 
-function StatusBadge({ status }: { status: FUStatus }) {
-    const c = STATUS_CONFIG[status];
-    const Icon = c.icon;
-    return (
-        <span className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full" style={{ background: c.bg, color: c.text }}>
-            <Icon className="w-3 h-3" />
-            {c.label}
-        </span>
-    );
-}
+  const back = <Link href="/doctor-dashboard/followups" className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-500 hover:text-slate-800"><ArrowLeft className="w-4 h-4" /> Follow-ups</Link>;
 
-function Section({ label, children }: { label: string; children: React.ReactNode; }) {
-    return (
-        <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2">{label}</p>
-            {children}
+  if (loading) return <div className="space-y-4 animate-pulse">{back}<div className="h-32 rounded-2xl bg-white border border-slate-200" /><div className="h-64 rounded-2xl bg-white border border-slate-200" /></div>;
+  if (error || !rec) return (
+    <div className="space-y-4">{back}
+      <div className="bg-white border border-slate-200 rounded-2xl text-center py-14 px-6 max-w-md mx-auto">
+        <AlertCircle className="w-9 h-9 text-rose-400 mx-auto" /><p className="font-display font-bold text-slate-800 mt-3">{error ?? "Something went wrong"}</p>
+        <button onClick={load} className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold" style={{ background: NAV_BG }}><RefreshCw className="w-4 h-4" /> Try again</button>
+      </div>
+    </div>
+  );
+
+  const hasFollowUp = rec.isFollowUp && !!rec.followUpScheduledAt;
+  const open = hasFollowUp && (rec.status === "follow_up" || rec.status === "missed");
+  const done = hasFollowUp && rec.status === "completed";
+  const info = dueInfo(rec.followUpScheduledAt, done ? "completed" : "pending");
+  const tone = TONE_STYLE[info.tone];
+  const dirty = plan !== (rec.followUpPlan ?? "") || priority !== (rec.followUpPriority ?? "medium");
+
+  const savePlan = async () => {
+    if (await patch({ instructions: plan.trim(), priority }, "plan")) { setRec({ ...rec, followUpPlan: plan.trim(), followUpPriority: priority }); setSavedAt(Date.now()); setTimeout(() => setSavedAt(null), 2500); }
+  };
+  const doReschedule = async (v: RescheduleValues) => {
+    if (await patch(v, "resched")) { setDialog(false); await load(); }
+  };
+  const markDone = async () => { if (await patch({ status: "completed" }, "done")) await load(); };
+  const cancelFollowUp = async () => { if (await patch({ status: "cancelled" }, "cancel")) router.replace("/doctor-dashboard/followups"); };
+
+  return (
+    <div className="space-y-5 pb-10 max-w-4xl">
+      {back}
+
+      {/* Header */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6">
+        <div className="flex items-start gap-4 flex-wrap">
+          <Avatar name={rec.patient.name} src={rec.patient.avatar} size={60} />
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-bold uppercase tracking-wide text-slate-400">Follow-up</p>
+            <h2 className="font-display font-extrabold text-[22px] text-slate-900 leading-tight">{rec.patient.name}</h2>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {hasFollowUp ? (<><span className="text-[11.5px] font-bold px-2.5 py-1 rounded-full" style={{ background: tone.bg, color: tone.fg }}>{info.label}</span><PriorityPill priority={rec.followUpPriority} /></>)
+                : <span className="text-[11.5px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">No follow-up scheduled</span>}
+            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Link href={`/doctor-dashboard/patients/${rec.patient.id}`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50"><User className="w-3.5 h-3.5" /> Patient</Link>
+            <Link href={`/doctor-dashboard/messages?patient=${rec.patient.id}`} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-[12.5px] font-bold text-slate-700 hover:bg-slate-50"><MessageSquare className="w-3.5 h-3.5" /> Message</Link>
+          </div>
         </div>
-    );
-}
+      </div>
 
-export default function FollowUpDetailPage({ params }: { params: { id: string } }) {
-    const router = useRouter();
-    const [fu, setFu] = useState<FollowUp | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchFU = async () => {
-            try {
-                const user = getUser();
-                if (!user) return;
-                const res = await fetch(`/api/follow-ups?doctorId=${user.id}`);
-                if (res.ok) {
-                    const j = await res.json();
-                    const items = j.data || [];
-                    const found = items.find((f: any) => f.id === params.id);
-                    if (found) setFu(found);
-                }
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchFU();
-    }, [params.id]);
-
-    const handleComplete = async () => {
-        if (!fu) return;
-        setFu({ ...fu, status: "completed" });
-        try {
-            await fetch("/api/follow-ups", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ consultationId: fu.id, status: "completed" }),
-            });
-        } catch (err) { console.error(err); }
-    };
-
-    const handleReschedule = async () => {
-        const d = prompt("Enter new date/time (YYYY-MM-DDTHH:MM):", fu?.scheduledAt.slice(0, 16));
-        if (!d || !fu) return;
-        setFu({ ...fu, scheduledAt: new Date(d).toISOString(), status: "pending" });
-        try {
-            await fetch("/api/follow-ups", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ consultationId: fu.id, scheduledAt: new Date(d).toISOString(), status: "pending" }),
-            });
-        } catch (err) { console.error(err); }
-    };
-
-    if (loading) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh]">
-                <Loader2 className="w-8 h-8 animate-spin text-slate-300 mb-4" />
-                <p className="text-slate-500 font-medium">Loading details...</p>
+      <div className="grid md:grid-cols-2 gap-5 items-start">
+        {/* Schedule */}
+        <section className="bg-white border border-slate-200 rounded-2xl p-5">
+          <h3 className="font-display font-bold text-[14.5px] text-slate-900">Appointment</h3>
+          {hasFollowUp ? (
+            <>
+              <p className="font-display font-extrabold text-[24px] text-slate-900 mt-3 leading-tight">{new Date(rec.followUpScheduledAt!).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}</p>
+              <p className="text-[15px] font-semibold mt-0.5" style={{ color: ACCENT }}>{fmtTime(rec.followUpScheduledAt)}</p>
+              {done && <p className="mt-3 text-[13px] font-semibold text-emerald-700">✓ This follow-up has been completed.</p>}
+              {open && (
+                <div className="mt-5 space-y-2">
+                  <button onClick={markDone} disabled={!!busy} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl text-white text-[13.5px] font-bold disabled:opacity-60" style={{ background: ACCENT }}>
+                    {busy === "done" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Mark as done
+                  </button>
+                  <button onClick={() => setDialog(true)} disabled={!!busy} className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 text-[13.5px] font-bold text-slate-700 hover:bg-slate-50"><CalendarClock className="w-4 h-4" /> Reschedule</button>
+                  {confirmCancel ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                      <p className="text-[12.5px] text-rose-900 font-semibold">Cancel this follow-up? The patient will be told. The original consultation stays in your history.</p>
+                      <div className="flex gap-2 mt-2.5">
+                        <button onClick={cancelFollowUp} disabled={!!busy} className="flex-1 py-2 rounded-lg bg-rose-600 text-white text-[12.5px] font-bold">{busy === "cancel" ? "Cancelling…" : "Yes, cancel it"}</button>
+                        <button onClick={() => setConfirmCancel(false)} className="flex-1 py-2 rounded-lg border border-rose-200 bg-white text-[12.5px] font-bold text-rose-700">Keep it</button>
+                      </div>
+                    </div>
+                  ) : <button onClick={() => setConfirmCancel(true)} className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-bold text-slate-500 hover:text-rose-600"><X className="w-4 h-4" /> Cancel follow-up</button>}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="mt-4 text-center py-4">
+              <p className="text-[13px] text-slate-500">This consultation has no follow-up yet.</p>
+              <button onClick={() => setDialog(true)} className="mt-3 inline-flex items-center gap-2 px-5 py-3 rounded-xl text-white text-[13.5px] font-bold" style={{ background: NAV_BG }}><CalendarPlus className="w-4 h-4" /> Schedule a follow-up</button>
             </div>
-        );
-    }
+          )}
+        </section>
 
-    if (!fu) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Follow-up Not Found</h2>
-                <p className="text-slate-500 mb-6">This record may have been deleted or is unavailable.</p>
-                <button onClick={() => router.back()} className="px-5 py-2.5 bg-blue-50 text-blue-700 font-semibold rounded-xl hover:bg-blue-100 transition-colors">
-                    Go Back
-                </button>
-            </div>
-        );
-    }
-
-    return (
-        <div className="max-w-4xl mx-auto pb-10">
-            <button onClick={() => router.back()} className="flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors mb-4">
-                <ChevronLeft className="w-4 h-4" />
-                Back to Follow-ups
+        {/* Plan */}
+        <section className="bg-white border border-slate-200 rounded-2xl p-5">
+          <h3 className="font-display font-bold text-[14.5px] text-slate-900">Instructions &amp; priority</h3>
+          <label className="block mt-3 text-[11px] font-bold uppercase tracking-wide text-slate-400">Priority</label>
+          <div className="grid grid-cols-3 gap-2 mt-1.5">
+            {PRIORITIES.map((p) => (
+              <button key={p} type="button" onClick={() => setPriority(p)} disabled={!hasFollowUp} className={`py-2.5 rounded-xl text-[13px] font-bold capitalize border disabled:opacity-50 ${priority === p ? "text-white border-transparent" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"}`} style={priority === p ? { background: NAV_BG } : undefined}>{p}</button>
+            ))}
+          </div>
+          <label className="block mt-4 text-[11px] font-bold uppercase tracking-wide text-slate-400">Instructions for the visit</label>
+          <textarea value={plan} onChange={(e) => setPlan(e.target.value)} disabled={!hasFollowUp} rows={5} maxLength={4000} placeholder={hasFollowUp ? "e.g. Bring recent blood test results. Fast for 8 hours before." : "Schedule a follow-up first"}
+            className="mt-1.5 w-full px-3.5 py-3 rounded-xl border border-slate-200 text-[14px] text-slate-800 outline-none focus:border-teal-500 resize-none disabled:bg-slate-50" />
+          <div className="flex items-center gap-3 mt-3">
+            <button onClick={savePlan} disabled={!dirty || busy === "plan" || !hasFollowUp} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold disabled:opacity-40" style={{ background: NAV_BG }}>
+              {busy === "plan" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save changes
             </button>
+            {savedAt && <span className="text-[12.5px] font-semibold text-emerald-700">Saved ✓</span>}
+          </div>
+        </section>
+      </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden" style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
-                {/* Header */}
-                <div className="flex items-center gap-4 px-6 sm:px-8 py-6 flex-shrink-0" style={{ background: NAV_BG }}>
-                    <div className="w-14 h-14 rounded-full flex items-center justify-center text-white font-extrabold text-2xl flex-shrink-0" style={{ background: ACCENT }}>
-                        {fu.patientName[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h1 className="font-extrabold text-white text-xl sm:text-2xl leading-tight truncate">{fu.patientName}</h1>
-                        <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.7)" }}>{fu.patientEmail}</p>
-                    </div>
-                </div>
-
-                {/* Content */}
-                <div className="p-6 sm:p-8 space-y-8" style={{ background: "#f8fafc" }}>
-
-                    {/* Schedule box */}
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-5 rounded-2xl border border-blue-100 bg-white" style={{ boxShadow: "0 2px 10px rgba(0,0,0,0.02)" }}>
-                        <div className="flex items-center gap-3 flex-1">
-                            <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: "#eff6ff" }}>
-                                <Calendar className="w-6 h-6" style={{ color: ACCENT }} />
-                            </div>
-                            <div>
-                                <p className="font-bold text-sm" style={{ color: ACCENT }}>Scheduled Follow-up</p>
-                                <p className="text-base font-bold text-slate-800 mt-0.5">
-                                    {new Date(fu.scheduledAt).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex sm:flex-col items-center sm:items-end gap-2">
-                            <PriorityBadge priority={fu.priority} />
-                            <StatusBadge status={fu.status} />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-6">
-                            <Section label="Reason for Follow-up">
-                                <div className="flex items-start gap-3 p-4 rounded-xl border border-rose-100 bg-rose-50">
-                                    <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />
-                                    <p className="text-sm font-medium text-rose-800 leading-relaxed">{fu.reason}</p>
-                                </div>
-                            </Section>
-
-                            {fu.instructions && (
-                                <Section label="Doctor Instructions">
-                                    <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
-                                        <p className="text-sm text-slate-700 leading-relaxed">{fu.instructions}</p>
-                                    </div>
-                                </Section>
-                            )}
-
-                            {fu.diagnosis && (
-                                <Section label="Diagnosis">
-                                    <div className="flex items-center gap-3 p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
-                                        <Stethoscope className="w-5 h-5 text-slate-400 flex-shrink-0" />
-                                        <p className="text-sm font-bold text-slate-800">{fu.diagnosis}</p>
-                                    </div>
-                                </Section>
-                            )}
-                        </div>
-
-                        <div className="space-y-6">
-                            {fu.prescriptions?.length > 0 && (
-                                <Section label={`Prescriptions (${fu.prescriptions.length})`}>
-                                    <div className="space-y-3">
-                                        {fu.prescriptions.map((rx, i) => (
-                                            <div key={i} className="flex items-center gap-3 p-3.5 rounded-xl bg-white border border-slate-200 shadow-sm">
-                                                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                                                    <Pill className="w-4 h-4 text-blue-500" />
-                                                </div>
-                                                <p className="text-sm font-semibold text-slate-700">{rx}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </Section>
-                            )}
-
-                            {fu.notes && (
-                                <Section label="Consultation Notes">
-                                    <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-100 bg-amber-50">
-                                        <FileText className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-                                        <p className="text-sm font-medium text-amber-900 leading-relaxed">{fu.notes}</p>
-                                    </div>
-                                </Section>
-                            )}
-                        </div>
-                    </div>
-
-                    {(fu.chat?.length ?? 0) > 0 && (
-                        <Section label="Previous Messages">
-                            <div className="space-y-3 p-5 rounded-2xl bg-slate-100 border border-slate-200">
-                                {fu.chat!.map((m, i) => (
-                                    <div key={i} className={`flex ${m.from === "doctor" ? "justify-end" : "justify-start"}`}>
-                                        <div className="max-w-[80%] px-4 py-3 rounded-2xl text-sm shadow-sm" style={m.from === "doctor" ? { background: NAV_BG, color: "white", borderBottomRightRadius: 4 } : { background: "white", color: "#1e293b", border: "1px solid #e2e8f0", borderBottomLeftRadius: 4 }}>
-                                            <p>{m.text}</p>
-                                            <p className="text-[10px] mt-1 opacity-70 text-right">{m.time}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </Section>
-                    )}
-
-                </div>
-
-                {/* Action Footer */}
-                {fu.status === "pending" && (
-                    <div className="p-6 border-t border-slate-200 bg-white flex flex-col sm:flex-row gap-3">
-                        <Link
-                            href={`/doctor-dashboard/consult?followUpId=${fu.id}&patientId=${fu.patientId}`}
-                            className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-extrabold text-white transition-all hover:opacity-90 shadow-sm"
-                            style={{ background: NAV_BG }}
-                        >
-                            <Video className="w-5 h-5" /> Start Follow-up Consultation
-                        </Link>
-                        <div className="flex gap-3">
-                            <button
-                                onClick={handleComplete}
-                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm font-bold border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-all"
-                            >
-                                <Check className="w-5 h-5" /> Mark as Done
-                            </button>
-                            <button
-                                onClick={handleReschedule}
-                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm font-bold border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 transition-all"
-                            >
-                                <RotateCcw className="w-5 h-5" /> Reschedule
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </div>
+      {/* Clinical context */}
+      <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h3 className="font-display font-bold text-[14.5px] text-slate-900">From the consultation on {fmtDate(rec.createdAt)}</h3>
+          <Link href={`/doctor-dashboard/history/${rec.id}`} className="inline-flex items-center gap-1.5 text-[12.5px] font-bold hover:underline" style={{ color: ACCENT }}><FolderOpen className="w-3.5 h-3.5" /> Open full record</Link>
         </div>
-    );
+        <div className="grid sm:grid-cols-2 gap-x-6 gap-y-4 mt-4">
+          {[
+            { icon: Stethoscope, label: "Chief complaint", value: rec.chiefComplaint },
+            { icon: Stethoscope, label: "Diagnosis", value: rec.diagnosis },
+            { icon: Pill, label: "Prescription", value: rec.prescription },
+            { icon: Stethoscope, label: "Clinical notes", value: rec.clinicalNotes },
+          ].map(({ icon: Icon, label, value }) => (
+            <div key={label}>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 flex items-center gap-1.5"><Icon className="w-3 h-3" /> {label}</p>
+              <p className={`text-[14px] mt-1 whitespace-pre-wrap break-words line-clamp-5 ${value ? "text-slate-800" : "text-slate-300"}`}>{value || "Not recorded"}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <RescheduleDialog open={dialog} patientName={rec.patient.name} initialAt={rec.followUpScheduledAt} initialPriority={rec.followUpPriority} initialPlan={rec.followUpPlan}
+        saving={busy === "resched"} onSave={doReschedule} onClose={() => setDialog(false)} />
+    </div>
+  );
 }

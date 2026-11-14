@@ -180,7 +180,7 @@ export default function PatientsPage() {
                                   </p>
                                   <p className="text-[11px] text-slate-400">
                                     {new Date(c.created_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-                                    {c.durationMinutes ? ` · ${c.durationMinutes} min` : ""}{c.isFollowUp ? " · follow-up visit" : ""}
+                                    {c.durationMinutes ? ` · ${c.durationMinutes} min` : ""}
                                   </p>
                                 </div>
                               </div>

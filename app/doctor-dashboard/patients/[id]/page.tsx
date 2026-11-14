@@ -149,7 +149,7 @@ export default function PatientRecordPage() {
                                         <li key={c.id}>
                                             <Link href={`/doctor-dashboard/history/${c.id}`} className="group block rounded-xl border border-slate-200 p-4 hover:border-teal-300 hover:bg-teal-50/30 transition-colors">
                                                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                                                    <p className="text-[12.5px] font-bold text-slate-500">{fmtDate(c.createdAt)} · {fmtTime(c.createdAt)}{c.durationMinutes ? ` · ${c.durationMinutes} min` : ""}{c.isFollowUp ? " · follow-up visit" : ""}</p>
+                                                    <p className="text-[12.5px] font-bold text-slate-500">{fmtDate(c.createdAt)} · {fmtTime(c.createdAt)}{c.durationMinutes ? ` · ${c.durationMinutes} min` : ""}</p>
                                                     <span className="flex items-center gap-1.5"><OutcomeBadge outcome={c.outcome} /><StatusPill status={c.status} /></span>
                                                 </div>
                                                 <p className="font-display font-bold text-[15px] text-slate-900 mt-2">{c.diagnosis || "No diagnosis recorded"}</p>

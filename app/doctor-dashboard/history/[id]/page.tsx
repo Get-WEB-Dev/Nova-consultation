@@ -99,7 +99,7 @@ export default function ConsultationRecordPage() {
                         <p className="text-[12px] font-bold uppercase tracking-wide text-slate-400">Consultation record</p>
                         <h2 className="font-display font-extrabold text-[22px] text-slate-900 mt-1">{fmtDate(rec.createdAt)} · {fmtTime(rec.createdAt)}</h2>
                         <div className="flex items-center gap-2 mt-2.5 flex-wrap"><StatusPill status={rec.status} /><OutcomeBadge outcome={rec.outcome} />
-                            {rec.isFollowUp && <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-violet-50 text-violet-700">Follow-up visit</span>}
+                        
                         </div>
                     </div>
                     <button onClick={() => window.print()} data-noprint className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-[13px] font-bold" style={{ background: NAV_BG }}>
