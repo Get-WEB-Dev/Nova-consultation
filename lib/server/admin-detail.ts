@@ -3,6 +3,7 @@
  * plus internal notes, global search and the alerts bell.
  */
 import { createAdminClient } from '@/lib/supabase/client';
+import { countOverdueDataRequests } from '@/lib/server/data-requests';
 import { isUuid } from '@/lib/server/auth';
 
 const db = () => createAdminClient() as any;
@@ -333,15 +334,17 @@ export async function globalSearch(q: string): Promise<SearchHit[]> {
 // ── Alerts bell ──────────────────────────────────────────────
 export async function fetchAttention() {
     const iso = (ms: number) => new Date(ms).toISOString();
-    const [licenses, messages, lowReviews, stuck] = await Promise.all([
+    const [licenses, messages, lowReviews, stuck, overdueRequests] = await Promise.all([
         countOf('doctor_credentials', (q) => q.eq('status', 'pending')),
         countOf('contact_messages', (q) => q.eq('status', 'new')),
         countOf('reviews', (q) => q.lte('rating', 2).eq('is_published', true).gte('created_at', iso(Date.now() - 7 * 86_400_000))),
         countOf('consultations', (q) => q.in('status', ['active', 'waiting']).lt('created_at', iso(Date.now() - 6 * 3_600_000))),
+        countOverdueDataRequests().catch(() => 0),
     ]);
     const items = [
         { key: 'stuck', label: 'Consultations stuck over 6 hours', count: n(stuck), href: '/admin-dashboard/consultations' },
         { key: 'licenses', label: 'Doctor licenses to review', count: n(licenses), href: '/admin-dashboard/doctors' },
+        { key: 'privacy', label: 'Overdue data requests', count: overdueRequests, href: '/admin-dashboard/data-requests' },
         { key: 'messages', label: 'New contact messages', count: n(messages), href: '/admin-dashboard/messages' },
         { key: 'reviews', label: 'Low-rated reviews this week', count: n(lowReviews), href: '/admin-dashboard/reviews' },
     ].filter((i) => i.count > 0);

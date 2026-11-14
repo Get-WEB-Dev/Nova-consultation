@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import {
     LayoutDashboard, Users, Stethoscope, LogOut, Calendar, Newspaper, Menu, X, History, Settings,
-    BarChart3, Star, MessageSquare, Megaphone, ShieldCheck, ChevronDown, FileBarChart,
+    BarChart3, Star, MessageSquare, Megaphone, ShieldCheck, ChevronDown, FileBarChart,HeartPulse, ClipboardList,
 } from "lucide-react";
 import { loadUser, signOut, type AuthUser } from "@/lib/supabase/auth";
 import { ToastProvider } from "@/components/admin/AdminUI";
@@ -27,6 +27,7 @@ const NAV = [
             { href: "/admin-dashboard/users", label: "Users", icon: Users },
             { href: "/admin-dashboard/doctors", label: "Doctors", icon: Stethoscope },
             { href: "/admin-dashboard/admins", label: "Admins", icon: ShieldCheck },
+             { href: "/admin-dashboard/data-requests", label: "Data requests", icon: ClipboardList },
         ]
     },
     {
@@ -44,6 +45,7 @@ const NAV = [
     },
     {
         title: "System", items: [
+             { href: "/admin-dashboard/system", label: "System health", icon: HeartPulse },
             { href: "/admin-dashboard/activity", label: "Activity log", icon: History },
             { href: "/admin-dashboard/settings", label: "Settings", icon: Settings },
         ]

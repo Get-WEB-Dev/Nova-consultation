@@ -531,7 +531,7 @@ export function exportUsers(o: { q: string; role?: string; status?: string }) {
 }
 
 // ── Audit log ────────────────────────────────────────────────
-const AUDIT_CATEGORIES = ['user', 'doctor', 'consultation', 'post', 'export', 'review', 'message', 'announcement', 'note'];
+const AUDIT_CATEGORIES = ['user', 'doctor', 'consultation', 'post', 'export', 'review', 'message', 'announcement', 'note', 'settings', 'admin', 'data_request'];
 
 function auditQuery(o: { q: string; category?: string; since?: string; until?: string }, withCount = false) {
     const admin: any = createAdminClient();
